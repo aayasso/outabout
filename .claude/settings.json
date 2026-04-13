@@ -1,0 +1,44 @@
+{
+  "agent": {
+    "planning_mode": true,
+    "require_plan_approval": true,
+    "prompt_on_decision": true,
+    "prompt_on_ambiguity": true
+  },
+  "session_start": {
+    "verify_env_vars": true,
+    "read_claude_md": true,
+    "read_agents_md": true,
+    "confirm_build_status": true
+  },
+  "quality": {
+    "require_tests": true,
+    "require_simulator_build": true,
+    "enforce_design_system": true,
+    "no_spinners": true,
+    "no_blank_empty_states": true,
+    "no_hardcoded_values": true
+  },
+  "instrumentation": {
+    "behavioral_events_required": true,
+    "all_jsonb_fields_required": true,
+    "coordinate_bucketing_required": true,
+    "never_store_precise_coordinates": true
+  },
+  "professionalism": {
+    "no_personal_info_in_output": true,
+    "no_developer_names_in_comments": true,
+    "no_internal_references_in_ui": true,
+    "no_placeholder_copy_in_production": true,
+    "user_friendly_errors_only": true
+  },
+  "skills": [
+    "frontend-design",
+    "supabase",
+    "supabase-postgres-best-practices",
+    "security-guidance",
+    "Skill Development",
+    "Agent Development",
+    "find-skills"
+  ]
+}
