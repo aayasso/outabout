@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -9,6 +10,7 @@ import 'package:outabout/core/theme.dart';
 import 'package:outabout/core/weather_theme_provider.dart';
 import 'package:outabout/core/providers.dart';
 import 'package:outabout/features/onboarding/onboarding_screen.dart';
+import 'package:outabout/features/home/home_screen.dart';
 import 'package:outabout/services/behavioral_event_service.dart';
 import 'package:outabout/services/location_service.dart';
 import 'package:outabout/services/notification_service.dart';
@@ -97,6 +99,20 @@ Widget _buildApp({
   final authService = mockAuthService ?? _buildMockAuthService();
   final supabaseClient = mockSupabaseClient ?? _buildMockSupabaseClient();
 
+  final router = GoRouter(
+    initialLocation: '/onboarding',
+    routes: [
+      GoRoute(
+        path: '/onboarding',
+        builder: (_, __) => const OnboardingScreen(),
+      ),
+      GoRoute(
+        path: '/home',
+        builder: (_, __) => const HomeScreen(),
+      ),
+    ],
+  );
+
   return ProviderScope(
     overrides: [
       sharedPreferencesProvider.overrideWithValue(prefs),
@@ -110,9 +126,7 @@ Widget _buildApp({
       authServiceProvider.overrideWithValue(authService),
       supabaseClientProvider.overrideWithValue(supabaseClient),
     ],
-    child: const MaterialApp(
-      home: OnboardingScreen(),
-    ),
+    child: MaterialApp.router(routerConfig: router),
   );
 }
 
@@ -280,17 +294,28 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 100));
 
-      // Tap "Add to Wishlist" — this will try supabase insert which will
-      // throw since we don't mock the full chain, but the try/catch in
-      // _handleAddToWishlist handles it gracefully.
+      // Tap "Add to Wishlist" — the Supabase insert throws (unmocked
+      // from().insert() chain), but the isolated try/catch lets the rest
+      // of the flow complete: events are logged and navigation occurs.
       await tester.tap(find.text('Add to Wishlist'));
       await tester.pump(const Duration(milliseconds: 500));
 
-      // The Supabase insert throws (unmocked from().insert()), so the
-      // behavioral events after the insert call are not reached.
-      // In production the insert succeeds and events are logged.
-      // The wishlist_added and onboarding_completed step:6 events are
-      // verified in the unit-level first_activity_page_test.dart.
+      // Verify behavioral events were logged despite insert failure
+      verify(
+        () => mockEventService.log(
+          'wishlist_added',
+          extra: any(named: 'extra'),
+        ),
+      ).called(1);
+      verify(
+        () => mockEventService.log(
+          'onboarding_completed',
+          extra: {'step': 6},
+        ),
+      ).called(1);
+
+      // Verify onboarding_complete flag was set
+      expect(prefs.getBool('onboarding_complete'), isTrue);
     });
 
     // -------------------------------------------------------------------

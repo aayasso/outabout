@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -280,6 +281,85 @@ void main() {
 
       textField = tester.widget<TextField>(find.byType(TextField));
       expect(textField.controller?.text, 'Beach');
+    });
+
+    testWidgets(
+        'completes onboarding even when Supabase insert throws (RLS failure)',
+        (tester) async {
+      final prefs = await mockPrefs();
+      final mockEventService = buildMockEventService();
+      final mockSupabase = MockSupabaseClient();
+      final mockAuth = MockGoTrueClient();
+      when(() => mockSupabase.auth).thenReturn(mockAuth);
+      when(() => mockAuth.currentUser).thenReturn(null);
+
+      // Simulate RLS policy denial — from().insert() throws
+      when(() => mockSupabase.from(any())).thenThrow(
+        Exception('new row violates row-level security policy'),
+      );
+
+      // Track navigation to /home
+      var navigatedToHome = false;
+
+      final router = GoRouter(
+        initialLocation: '/onboarding',
+        routes: [
+          GoRoute(
+            path: '/onboarding',
+            builder: (_, __) => const Scaffold(body: FirstActivityPage()),
+          ),
+          GoRoute(
+            path: '/home',
+            builder: (_, __) {
+              navigatedToHome = true;
+              return const Scaffold(body: Text('Home'));
+            },
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          behavioralEventServiceProvider.overrideWithValue(mockEventService),
+          supabaseClientProvider.overrideWithValue(mockSupabase),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ));
+      // Use pump instead of pumpAndSettle (flutter_animate never settles)
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Select a category
+      await tester.tap(find.text('Hiking'));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Scroll down to reveal the CTA
+      await tester.scrollUntilVisible(
+        find.text('Add to Wishlist'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Tap "Add to Wishlist"
+      await tester.tap(find.text('Add to Wishlist'));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Verify behavioral events were still logged despite insert failure
+      verify(() => mockEventService.log(
+            'wishlist_added',
+            extra: any(named: 'extra'),
+          )).called(1);
+      verify(() => mockEventService.log(
+            'onboarding_completed',
+            extra: any(named: 'extra'),
+          )).called(1);
+
+      // Verify onboarding_complete was set in SharedPreferences
+      expect(prefs.getBool('onboarding_complete'), isTrue);
+
+      // Verify navigation to /home occurred
+      expect(navigatedToHome, isTrue);
     });
 
     // Parameterized test for all 5 weather themes

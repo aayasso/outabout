@@ -66,45 +66,47 @@ class _FirstActivityPageState extends ConsumerState<FirstActivityPage> {
 
     setState(() => _isLoading = true);
 
-    try {
-      final supabase = ref.read(supabaseClientProvider);
-      final userId = supabase.auth.currentUser?.id ?? 'anonymous';
-      final name = _nameController.text.trim().isEmpty
-          ? _selectedCategory!
-          : _nameController.text.trim();
+    final supabase = ref.read(supabaseClientProvider);
+    final userId = supabase.auth.currentUser?.id ?? 'anonymous';
+    final name = _nameController.text.trim().isEmpty
+        ? _selectedCategory!
+        : _nameController.text.trim();
 
-      // Insert activity
+    // Attempt Supabase insert — non-blocking for onboarding completion.
+    // Anonymous auth sessions may lack RLS INSERT privileges, so this
+    // must not prevent the user from finishing onboarding.
+    try {
       await supabase.from('activities').insert({
         'user_id': userId,
         'name': name,
         'category': _selectedCategory!,
         'created_at': DateTime.now().toIso8601String(),
       });
-
-      // Log behavioral events
-      final eventService = ref.read(behavioralEventServiceProvider);
-      eventService.log(
-        'wishlist_added',
-        extra: {'activity_name': name, 'category': _selectedCategory!},
-      );
-      eventService.log(
-        'onboarding_completed',
-        extra: {'step': 6},
-      );
-
-      // Mark onboarding complete
-      await ref
-          .read(sharedPreferencesProvider)
-          .setBool('onboarding_complete', true);
-
-      OutAboutHaptics.onActivitySave();
-
-      // Navigate to home
-      if (mounted) {
-        GoRouter.of(context).go('/home');
-      }
     } catch (e) {
-      setState(() => _isLoading = false);
+      debugPrint('FirstActivityPage: activities insert failed — $e');
+    }
+
+    // Log behavioral events (fire-and-forget, never throws)
+    final eventService = ref.read(behavioralEventServiceProvider);
+    eventService.log(
+      'wishlist_added',
+      extra: {'activity_name': name, 'category': _selectedCategory!},
+    );
+    eventService.log(
+      'onboarding_completed',
+      extra: {'step': 6},
+    );
+
+    // Mark onboarding complete
+    await ref
+        .read(sharedPreferencesProvider)
+        .setBool('onboarding_complete', true);
+
+    OutAboutHaptics.onActivitySave();
+
+    // Navigate to home
+    if (mounted) {
+      GoRouter.of(context).go('/home');
     }
   }
 
