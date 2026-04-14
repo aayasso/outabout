@@ -209,7 +209,7 @@ Never store precise coordinates — bucket to ~1 mile radius.
 
 ## Screen Build Status
 - Phase 1 (Environment + Design System): COMPLETE
-- Phase 2 Screen 1 (Onboarding / Auth — 6 screens): NOT STARTED
+- Phase 2 Screen 1 (Onboarding / Auth — 6 screens): COMPLETE
 - Phase 2 Screen 2 (Activity Library): NOT STARTED
 - Phase 2 Screen 3 (Add / Edit Activity): NOT STARTED
 - Phase 2 Screen 4 (Browse Right Now): NOT STARTED
