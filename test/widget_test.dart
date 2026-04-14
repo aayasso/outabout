@@ -22,7 +22,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Onboarding'), findsOneWidget);
+    expect(find.text('Value Proposition'), findsOneWidget);
   });
 
   testWidgets('OutAboutApp renders home when onboarding is complete',

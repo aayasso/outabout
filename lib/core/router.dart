@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/home/home_screen.dart';
+import '../features/onboarding/onboarding_screen.dart';
 import 'theme.dart';
 import 'weather_theme_provider.dart';
 
@@ -27,7 +28,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/onboarding',
         pageBuilder: (context, state) => CustomTransitionPage(
-          child: const _PlaceholderOnboardingScreen(),
+          child: const OnboardingScreen(),
           transitionsBuilder:
               (context, animation, secondaryAnimation, child) {
             return FadeTransition(
@@ -61,25 +62,3 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
-
-// ---------------------------------------------------------------------------
-// Temporary placeholder — will be replaced by Task 11
-// ---------------------------------------------------------------------------
-
-class _PlaceholderOnboardingScreen extends ConsumerWidget {
-  const _PlaceholderOnboardingScreen();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final colors = ref.watch(weatherThemeColorsProvider);
-    return Scaffold(
-      backgroundColor: colors.background,
-      body: Center(
-        child: Text(
-          'Onboarding',
-          style: OutAboutTypography.headingLarge(colors),
-        ),
-      ),
-    );
-  }
-}
