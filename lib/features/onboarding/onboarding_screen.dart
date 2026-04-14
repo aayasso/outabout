@@ -5,6 +5,7 @@ import '../../core/theme.dart';
 import '../../core/weather_theme_provider.dart';
 import 'onboarding_provider.dart';
 import 'pages/location_permission_page.dart';
+import 'pages/notification_permission_page.dart';
 import 'pages/value_proposition_page.dart';
 import 'widgets/progress_dots.dart';
 
@@ -77,8 +78,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     onNext: () =>
                         ref.read(onboardingStepProvider.notifier).next(),
                   ),
-                  _PlaceholderPage(
-                      label: 'Notification Permission', colors: colors),
+                  NotificationPermissionPage(
+                    onNext: () =>
+                        ref.read(onboardingStepProvider.notifier).next(),
+                  ),
                   _PlaceholderPage(
                       label: 'Booking Integrations', colors: colors),
                   _PlaceholderPage(label: 'Auth', colors: colors),

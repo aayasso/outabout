@@ -10,11 +10,14 @@ import 'package:outabout/features/onboarding/onboarding_screen.dart';
 import 'package:outabout/features/onboarding/widgets/progress_dots.dart';
 import 'package:outabout/services/behavioral_event_service.dart';
 import 'package:outabout/services/location_service.dart';
+import 'package:outabout/services/notification_service.dart';
 
 class MockBehavioralEventService extends Mock
     implements BehavioralEventService {}
 
 class MockLocationService extends Mock implements LocationService {}
+
+class MockNotificationService extends Mock implements NotificationService {}
 
 void main() {
   group('OnboardingScreen', () {
@@ -37,14 +40,24 @@ void main() {
       return mockLocationService;
     }
 
+    MockNotificationService buildMockNotificationService() {
+      final mockNotificationService = MockNotificationService();
+      when(() => mockNotificationService.requestPermission())
+          .thenAnswer((_) async => true);
+      return mockNotificationService;
+    }
+
     Widget buildSubject({
       SharedPreferences? prefs,
       WeatherTheme? themeOverride,
       MockBehavioralEventService? mockEventService,
       MockLocationService? mockLocationService,
+      MockNotificationService? mockNotificationService,
     }) {
       final eventService = mockEventService ?? buildMockEventService();
       final locationService = mockLocationService ?? buildMockLocationService();
+      final notificationService =
+          mockNotificationService ?? buildMockNotificationService();
       return ProviderScope(
         overrides: [
           if (prefs != null)
@@ -55,6 +68,7 @@ void main() {
             ),
           behavioralEventServiceProvider.overrideWithValue(eventService),
           locationServiceProvider.overrideWithValue(locationService),
+          notificationServiceProvider.overrideWithValue(notificationService),
         ],
         child: const MaterialApp(
           home: OnboardingScreen(),
@@ -117,7 +131,7 @@ void main() {
 
       final remainingPageLabels = [
         'Know what\'s happening near you',
-        'Notification Permission',
+        'Get notified when conditions are perfect',
         'Booking Integrations',
         'Auth',
         'First Activity',
