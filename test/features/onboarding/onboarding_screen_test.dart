@@ -8,6 +8,7 @@ import 'package:outabout/core/theme.dart';
 import 'package:outabout/core/weather_theme_provider.dart';
 import 'package:outabout/features/onboarding/onboarding_screen.dart';
 import 'package:outabout/features/onboarding/widgets/progress_dots.dart';
+import 'package:outabout/services/auth_service.dart';
 import 'package:outabout/services/behavioral_event_service.dart';
 import 'package:outabout/services/location_service.dart';
 import 'package:outabout/services/notification_service.dart';
@@ -18,6 +19,8 @@ class MockBehavioralEventService extends Mock
 class MockLocationService extends Mock implements LocationService {}
 
 class MockNotificationService extends Mock implements NotificationService {}
+
+class MockAuthService extends Mock implements AuthService {}
 
 void main() {
   group('OnboardingScreen', () {
@@ -47,17 +50,32 @@ void main() {
       return mockNotificationService;
     }
 
+    MockAuthService buildMockAuthService() {
+      final mockAuthService = MockAuthService();
+      when(() => mockAuthService.signInAnonymously())
+          .thenAnswer((_) async => AuthResult.failure('test'));
+      when(() => mockAuthService.signUpWithEmail(any(), any()))
+          .thenAnswer((_) async => AuthResult.failure('test'));
+      when(() => mockAuthService.signInWithEmail(any(), any()))
+          .thenAnswer((_) async => AuthResult.failure('test'));
+      when(() => mockAuthService.sendMagicLink(any()))
+          .thenAnswer((_) async => AuthResult.failure('test'));
+      return mockAuthService;
+    }
+
     Widget buildSubject({
       SharedPreferences? prefs,
       WeatherTheme? themeOverride,
       MockBehavioralEventService? mockEventService,
       MockLocationService? mockLocationService,
       MockNotificationService? mockNotificationService,
+      MockAuthService? mockAuthService,
     }) {
       final eventService = mockEventService ?? buildMockEventService();
       final locationService = mockLocationService ?? buildMockLocationService();
       final notificationService =
           mockNotificationService ?? buildMockNotificationService();
+      final authService = mockAuthService ?? buildMockAuthService();
       return ProviderScope(
         overrides: [
           if (prefs != null)
@@ -69,6 +87,7 @@ void main() {
           behavioralEventServiceProvider.overrideWithValue(eventService),
           locationServiceProvider.overrideWithValue(locationService),
           notificationServiceProvider.overrideWithValue(notificationService),
+          authServiceProvider.overrideWithValue(authService),
         ],
         child: const MaterialApp(
           home: OnboardingScreen(),
@@ -133,13 +152,19 @@ void main() {
         'Know what\'s happening near you',
         'Get notified when conditions are perfect',
         'Book directly from OutAbout',
-        'Auth',
+        'Create your account',
         'First Activity',
       ];
 
       for (var i = 0; i < remainingPageLabels.length; i++) {
-        await tester.fling(
-            find.byType(PageView), const Offset(-300, 0), 1000);
+        // Fling from the top portion of the PageView to avoid
+        // TextFields on the Auth page that intercept gestures.
+        final pageViewBox = tester.getRect(find.byType(PageView));
+        final startPoint = Offset(
+          pageViewBox.center.dx,
+          pageViewBox.top + 50,
+        );
+        await tester.flingFrom(startPoint, const Offset(-300, 0), 1000);
         await tester.pumpAndSettle();
 
         expect(find.text(remainingPageLabels[i]), findsOneWidget,
