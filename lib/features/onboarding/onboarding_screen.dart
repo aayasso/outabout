@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme.dart';
 import '../../core/weather_theme_provider.dart';
 import 'onboarding_provider.dart';
+import 'pages/value_proposition_page.dart';
 import 'widgets/progress_dots.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
@@ -67,7 +68,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 },
                 children: [
                   // Placeholder containers — each task (12-17) replaces one
-                  _PlaceholderPage(label: 'Value Proposition', colors: colors),
+                  ValuePropositionPage(
+                    onNext: () =>
+                        ref.read(onboardingStepProvider.notifier).next(),
+                  ),
                   _PlaceholderPage(
                       label: 'Location Permission', colors: colors),
                   _PlaceholderPage(
