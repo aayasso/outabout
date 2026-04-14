@@ -132,7 +132,7 @@ void main() {
       final remainingPageLabels = [
         'Know what\'s happening near you',
         'Get notified when conditions are perfect',
-        'Booking Integrations',
+        'Book directly from OutAbout',
         'Auth',
         'First Activity',
       ];

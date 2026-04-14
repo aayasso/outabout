@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme.dart';
 import '../../core/weather_theme_provider.dart';
 import 'onboarding_provider.dart';
+import 'pages/booking_integrations_page.dart';
 import 'pages/location_permission_page.dart';
 import 'pages/notification_permission_page.dart';
 import 'pages/value_proposition_page.dart';
@@ -82,8 +83,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     onNext: () =>
                         ref.read(onboardingStepProvider.notifier).next(),
                   ),
-                  _PlaceholderPage(
-                      label: 'Booking Integrations', colors: colors),
+                  BookingIntegrationsPage(
+                    onNext: () =>
+                        ref.read(onboardingStepProvider.notifier).next(),
+                  ),
                   _PlaceholderPage(label: 'Auth', colors: colors),
                   _PlaceholderPage(label: 'First Activity', colors: colors),
                 ],
