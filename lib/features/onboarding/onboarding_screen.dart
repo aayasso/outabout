@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme.dart';
 import '../../core/weather_theme_provider.dart';
 import 'onboarding_provider.dart';
+import 'pages/location_permission_page.dart';
 import 'pages/value_proposition_page.dart';
 import 'widgets/progress_dots.dart';
 
@@ -72,8 +73,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     onNext: () =>
                         ref.read(onboardingStepProvider.notifier).next(),
                   ),
-                  _PlaceholderPage(
-                      label: 'Location Permission', colors: colors),
+                  LocationPermissionPage(
+                    onNext: () =>
+                        ref.read(onboardingStepProvider.notifier).next(),
+                  ),
                   _PlaceholderPage(
                       label: 'Notification Permission', colors: colors),
                   _PlaceholderPage(

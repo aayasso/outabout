@@ -9,9 +9,12 @@ import 'package:outabout/core/weather_theme_provider.dart';
 import 'package:outabout/features/onboarding/onboarding_screen.dart';
 import 'package:outabout/features/onboarding/widgets/progress_dots.dart';
 import 'package:outabout/services/behavioral_event_service.dart';
+import 'package:outabout/services/location_service.dart';
 
 class MockBehavioralEventService extends Mock
     implements BehavioralEventService {}
+
+class MockLocationService extends Mock implements LocationService {}
 
 void main() {
   group('OnboardingScreen', () {
@@ -27,12 +30,21 @@ void main() {
       return mockEventService;
     }
 
+    MockLocationService buildMockLocationService() {
+      final mockLocationService = MockLocationService();
+      when(() => mockLocationService.requestPermission())
+          .thenAnswer((_) async => LocationPermissionResult.granted);
+      return mockLocationService;
+    }
+
     Widget buildSubject({
       SharedPreferences? prefs,
       WeatherTheme? themeOverride,
       MockBehavioralEventService? mockEventService,
+      MockLocationService? mockLocationService,
     }) {
       final eventService = mockEventService ?? buildMockEventService();
+      final locationService = mockLocationService ?? buildMockLocationService();
       return ProviderScope(
         overrides: [
           if (prefs != null)
@@ -42,6 +54,7 @@ void main() {
               (ref) => WeatherThemeNotifier(themeOverride),
             ),
           behavioralEventServiceProvider.overrideWithValue(eventService),
+          locationServiceProvider.overrideWithValue(locationService),
         ],
         child: const MaterialApp(
           home: OnboardingScreen(),
@@ -86,7 +99,7 @@ void main() {
       await tester.fling(find.byType(PageView), const Offset(-300, 0), 1000);
       await tester.pumpAndSettle();
 
-      expect(find.text('Location Permission'), findsOneWidget);
+      expect(find.text('Know what\'s happening near you'), findsOneWidget);
     });
 
     testWidgets('swiping through all pages works', (tester) async {
@@ -103,7 +116,7 @@ void main() {
       );
 
       final remainingPageLabels = [
-        'Location Permission',
+        'Know what\'s happening near you',
         'Notification Permission',
         'Booking Integrations',
         'Auth',
