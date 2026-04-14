@@ -8,10 +8,12 @@ import 'package:outabout/core/theme.dart';
 import 'package:outabout/core/weather_theme_provider.dart';
 import 'package:outabout/features/onboarding/onboarding_screen.dart';
 import 'package:outabout/features/onboarding/widgets/progress_dots.dart';
+import 'package:outabout/core/providers.dart';
 import 'package:outabout/services/auth_service.dart';
 import 'package:outabout/services/behavioral_event_service.dart';
 import 'package:outabout/services/location_service.dart';
 import 'package:outabout/services/notification_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class MockBehavioralEventService extends Mock
     implements BehavioralEventService {}
@@ -21,6 +23,10 @@ class MockLocationService extends Mock implements LocationService {}
 class MockNotificationService extends Mock implements NotificationService {}
 
 class MockAuthService extends Mock implements AuthService {}
+
+class MockSupabaseClient extends Mock implements SupabaseClient {}
+
+class MockGotruthClient extends Mock implements GoTrueClient {}
 
 void main() {
   group('OnboardingScreen', () {
@@ -63,6 +69,14 @@ void main() {
       return mockAuthService;
     }
 
+    MockSupabaseClient buildMockSupabaseClient() {
+      final mockSupabase = MockSupabaseClient();
+      final mockAuth = MockGotruthClient();
+      when(() => mockSupabase.auth).thenReturn(mockAuth);
+      when(() => mockAuth.currentUser).thenReturn(null);
+      return mockSupabase;
+    }
+
     Widget buildSubject({
       SharedPreferences? prefs,
       WeatherTheme? themeOverride,
@@ -70,12 +84,14 @@ void main() {
       MockLocationService? mockLocationService,
       MockNotificationService? mockNotificationService,
       MockAuthService? mockAuthService,
+      MockSupabaseClient? mockSupabaseClient,
     }) {
       final eventService = mockEventService ?? buildMockEventService();
       final locationService = mockLocationService ?? buildMockLocationService();
       final notificationService =
           mockNotificationService ?? buildMockNotificationService();
       final authService = mockAuthService ?? buildMockAuthService();
+      final supabaseClient = mockSupabaseClient ?? buildMockSupabaseClient();
       return ProviderScope(
         overrides: [
           if (prefs != null)
@@ -88,6 +104,7 @@ void main() {
           locationServiceProvider.overrideWithValue(locationService),
           notificationServiceProvider.overrideWithValue(notificationService),
           authServiceProvider.overrideWithValue(authService),
+          supabaseClientProvider.overrideWithValue(supabaseClient),
         ],
         child: const MaterialApp(
           home: OnboardingScreen(),
@@ -153,7 +170,7 @@ void main() {
         'Get notified when conditions are perfect',
         'Book directly from OutAbout',
         'Create your account',
-        'First Activity',
+        'What do you love doing outside?',
       ];
 
       for (var i = 0; i < remainingPageLabels.length; i++) {

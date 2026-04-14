@@ -8,6 +8,7 @@ import 'pages/booking_integrations_page.dart';
 import 'pages/location_permission_page.dart';
 import 'pages/notification_permission_page.dart';
 import 'pages/auth_page.dart';
+import 'pages/first_activity_page.dart';
 import 'pages/value_proposition_page.dart';
 import 'widgets/progress_dots.dart';
 
@@ -92,7 +93,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     onNext: () =>
                         ref.read(onboardingStepProvider.notifier).next(),
                   ),
-                  _PlaceholderPage(label: 'First Activity', colors: colors),
+                  const FirstActivityPage(),
                 ],
               ),
             ),
@@ -103,16 +104,3 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 }
 
-class _PlaceholderPage extends StatelessWidget {
-  final String label;
-  final WeatherThemeColors colors;
-
-  const _PlaceholderPage({required this.label, required this.colors});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text(label, style: OutAboutTypography.headingLarge(colors)),
-    );
-  }
-}
