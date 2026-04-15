@@ -33,6 +33,8 @@ class MockNotificationService extends Mock implements NotificationService {}
 
 class MockAuthService extends Mock implements AuthService {}
 
+class MockUser extends Mock implements User {}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -65,7 +67,7 @@ MockNotificationService _buildMockNotificationService() {
 MockAuthService _buildMockAuthService() {
   final mock = MockAuthService();
   when(() => mock.signInAnonymously())
-      .thenAnswer((_) async => AuthResult.failure('mock'));
+      .thenAnswer((_) async => AuthResult.success(MockUser()));
   when(() => mock.signUpWithEmail(any(), any()))
       .thenAnswer((_) async => AuthResult.failure('mock'));
   when(() => mock.signInWithEmail(any(), any()))

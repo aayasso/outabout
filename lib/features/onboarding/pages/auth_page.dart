@@ -77,12 +77,21 @@ class _AuthPageState extends ConsumerState<AuthPage> {
   }
 
   Future<void> _handleSkip() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
     final authService = ref.read(authServiceProvider);
-    await authService.signInAnonymously();
-    ref.read(behavioralEventServiceProvider).log('auth_skipped');
+    final result = await authService.signInAnonymously();
     setState(() => _isLoading = false);
-    widget.onNext();
+
+    if (result.success) {
+      ref.read(behavioralEventServiceProvider).log('auth_skipped');
+      widget.onNext();
+    } else {
+      setState(() => _errorMessage =
+          'Unable to continue as guest. Please try again or create an account.');
+    }
   }
 
   @override

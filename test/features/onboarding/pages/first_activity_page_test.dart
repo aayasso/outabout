@@ -362,6 +362,64 @@ void main() {
       expect(navigatedToHome, isTrue);
     });
 
+    testWidgets(
+        'skips Supabase insert when no auth session exists (no anonymous string)',
+        (tester) async {
+      final prefs = await mockPrefs();
+      final mockEventService = buildMockEventService();
+      final mockSupabase = MockSupabaseClient();
+      final mockAuth = MockGoTrueClient();
+      when(() => mockSupabase.auth).thenReturn(mockAuth);
+      when(() => mockAuth.currentUser).thenReturn(null); // No session
+
+      final router = GoRouter(
+        initialLocation: '/onboarding',
+        routes: [
+          GoRoute(
+            path: '/onboarding',
+            builder: (_, __) => const Scaffold(body: FirstActivityPage()),
+          ),
+          GoRoute(
+            path: '/home',
+            builder: (_, __) => const Scaffold(body: Text('Home')),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          behavioralEventServiceProvider.overrideWithValue(mockEventService),
+          supabaseClientProvider.overrideWithValue(mockSupabase),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      await tester.tap(find.text('Hiking'));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      await tester.scrollUntilVisible(
+        find.text('Add to Wishlist'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.text('Add to Wishlist'));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Verify supabase.from() was NEVER called — no insert with 'anonymous'
+      verifyNever(() => mockSupabase.from(any()));
+
+      // But events and onboarding completion still happen
+      verify(() => mockEventService.log(
+            'wishlist_added',
+            extra: any(named: 'extra'),
+          )).called(1);
+      expect(prefs.getBool('onboarding_complete'), isTrue);
+    });
+
     // Parameterized test for all 5 weather themes
     for (final theme in WeatherTheme.values) {
       testWidgets('renders correctly with ${theme.displayName} theme',

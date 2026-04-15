@@ -255,6 +255,53 @@ void main() {
       expect(nextCalled, isTrue);
     });
 
+    // 8b. "Skip for Now" shows error and does NOT advance when signInAnonymously fails
+    testWidgets(
+        'Skip for Now shows error when signInAnonymously fails',
+        (tester) async {
+      final prefs = await mockPrefs();
+      final mockAuth = buildMockAuthService();
+      // Override signInAnonymously to return failure
+      when(() => mockAuth.signInAnonymously())
+          .thenAnswer((_) async => AuthResult.failure('Network error'));
+      final mockEventService = buildMockEventService();
+      var nextCalled = false;
+
+      await tester.pumpWidget(
+        buildSubject(
+          prefs: prefs,
+          onNext: () => nextCalled = true,
+          mockAuthService: mockAuth,
+          mockEventService: mockEventService,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Scroll to Skip button
+      await tester.scrollUntilVisible(
+        find.text('Skip for Now'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.text('Skip for Now'));
+      await tester.pumpAndSettle();
+
+      // Should NOT advance — onNext not called
+      expect(nextCalled, isFalse);
+
+      // Should NOT log auth_skipped
+      verifyNever(() => mockEventService.log('auth_skipped'));
+
+      // Should show user-friendly error
+      expect(
+        find.text(
+            'Unable to continue as guest. Please try again or create an account.'),
+        findsOneWidget,
+      );
+    });
+
     // 9. Success logs auth_completed, calls onNext
     testWidgets('successful auth logs auth_completed and calls onNext',
         (tester) async {

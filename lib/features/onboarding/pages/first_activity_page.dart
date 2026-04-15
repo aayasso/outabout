@@ -67,23 +67,28 @@ class _FirstActivityPageState extends ConsumerState<FirstActivityPage> {
     setState(() => _isLoading = true);
 
     final supabase = ref.read(supabaseClientProvider);
-    final userId = supabase.auth.currentUser?.id ?? 'anonymous';
+    final userId = supabase.auth.currentUser?.id;
     final name = _nameController.text.trim().isEmpty
         ? _selectedCategory!
         : _nameController.text.trim();
 
-    // Attempt Supabase insert — non-blocking for onboarding completion.
-    // Anonymous auth sessions may lack RLS INSERT privileges, so this
-    // must not prevent the user from finishing onboarding.
-    try {
-      await supabase.from('activities').insert({
-        'user_id': userId,
-        'name': name,
-        'category': _selectedCategory!,
-        'created_at': DateTime.now().toIso8601String(),
-      });
-    } catch (e) {
-      debugPrint('FirstActivityPage: activities insert failed — $e');
+    // Insert activity into Supabase. Requires a valid auth session —
+    // the auth page ensures one exists (email or anonymous) before
+    // reaching this screen. Insert failure is non-blocking so the user
+    // always completes onboarding.
+    if (userId != null) {
+      try {
+        await supabase.from('activities').insert({
+          'user_id': userId,
+          'name': name,
+          'category': _selectedCategory!,
+          'created_at': DateTime.now().toIso8601String(),
+        });
+      } catch (e) {
+        debugPrint('FirstActivityPage: activities insert failed — $e');
+      }
+    } else {
+      debugPrint('FirstActivityPage: no auth session — skipping insert');
     }
 
     // Log behavioral events (fire-and-forget, never throws)
