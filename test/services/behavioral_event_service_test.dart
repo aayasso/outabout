@@ -273,8 +273,8 @@ void main() {
           payload['conditions_at_event'] as Map<String, dynamic>;
       expect(conditionsCtx['weather_theme'], 'rainy');
 
-      // Verify extra fields merged.
-      expect(payload['activity_id'], 'abc-123');
+      // Verify extra fields merged into session_context.
+      expect(sessionCtx['activity_id'], 'abc-123');
     });
 
     test('buildPayload sets correct temporal context from DateTime.now()',

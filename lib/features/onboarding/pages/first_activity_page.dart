@@ -68,6 +68,7 @@ class _FirstActivityPageState extends ConsumerState<FirstActivityPage> {
 
     final supabase = ref.read(supabaseClientProvider);
     final userId = supabase.auth.currentUser?.id;
+    debugPrint('FirstActivityPage: userId = $userId');
     final name = _nameController.text.trim().isEmpty
         ? _selectedCategory!
         : _nameController.text.trim();
@@ -81,7 +82,6 @@ class _FirstActivityPageState extends ConsumerState<FirstActivityPage> {
         await supabase.from('activities').insert({
           'user_id': userId,
           'name': name,
-          'category': _selectedCategory!,
           'created_at': DateTime.now().toIso8601String(),
         });
       } catch (e) {

@@ -156,8 +156,7 @@ class BehavioralEventService {
       'conditions_at_event': conditions.toJson(),
       'geographic_context': geographic.toJson(),
       'temporal_context': temporal.toJson(),
-      'session_context': session.toJson(),
-      if (extra != null) ...extra,
+      'session_context': {...session.toJson(), if (extra != null) ...extra},
     };
   }
 
