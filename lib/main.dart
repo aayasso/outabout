@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -23,7 +24,19 @@ Future<void> main() async {
     anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
 
+  if (kDebugMode) {
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session != null) {
+      await Supabase.instance.client.auth.signOut();
+      debugPrint('[DEBUG] Signed out persisted session: ${session.user.id}');
+    }
+  }
+
   final prefs = await SharedPreferences.getInstance();
+
+  if (kDebugMode) {
+    await prefs.remove('onboarding_complete');
+  }
 
   runApp(
     ProviderScope(
