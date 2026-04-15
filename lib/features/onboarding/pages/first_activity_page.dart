@@ -68,7 +68,6 @@ class _FirstActivityPageState extends ConsumerState<FirstActivityPage> {
 
     final supabase = ref.read(supabaseClientProvider);
     final userId = supabase.auth.currentUser?.id;
-    debugPrint('FirstActivityPage: userId = $userId');
     final name = _nameController.text.trim().isEmpty
         ? _selectedCategory!
         : _nameController.text.trim();
