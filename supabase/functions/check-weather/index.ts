@@ -11,7 +11,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 // Fetch weather forecast for a location
 async function getWeatherForecast(lat: number, lon: number) {
-  const url = `https://api.tomorrow.io/v4/forecast?location=${lat},${lon}&apikey=${TOMORROW_API_KEY}&timesteps=1d&fields=temperatureMax,temperatureMin,precipitationProbability,windSpeedMax,uvIndex`;
+  const url = `https://api.tomorrow.io/v4/forecast?location=${lat},${lon}&apikey=${TOMORROW_API_KEY}&timesteps=1d&fields=temperatureMax,temperatureMin,precipitationProbability,windSpeedMax,uvIndex,weatherCode`;
   const res = await fetch(url);
   const data = await res.json();
   return data.timelines?.daily || [];
@@ -45,10 +45,114 @@ function conditionsMatch(forecast: any, profile: any): boolean {
   return true;
 }
 
+// Build full weather snapshot for behavioral event logging
+function buildConditionsSnapshot(forecastDay: any, daysAhead: number): Record<string, any> {
+  const day = forecastDay.values;
+  const avgTemp_c = (day.temperatureMax + day.temperatureMin) / 2;
+  return {
+    temp_c: Math.round(avgTemp_c * 10) / 10,
+    temp_f: Math.round((avgTemp_c * 9/5 + 32) * 10) / 10,
+    temp_max_c: day.temperatureMax,
+    temp_min_c: day.temperatureMin,
+    precipitation_probability: day.precipitationProbability,
+    wind_kph: day.windSpeedMax,
+    uv_index: day.uvIndex,
+    weather_code: day.weatherCode ?? null,
+    forecast_window_hours: daysAhead * 24,
+    forecast_date: forecastDay.time,
+  };
+}
+
+// Build temporal context for behavioral event logging
+function buildTemporalContext(now: Date, daysAhead: number): Record<string, any> {
+  const month = now.getMonth() + 1;
+  const season =
+    month >= 3 && month <= 5 ? "spring" :
+    month >= 6 && month <= 8 ? "summer" :
+    month >= 9 && month <= 11 ? "fall" : "winter";
+
+  const weekOfSeason = Math.ceil(
+    ((now.getTime() - new Date(now.getFullYear(), (Math.floor((month - 1) / 3)) * 3, 1).getTime())
+    / (7 * 24 * 60 * 60 * 1000))
+  );
+
+  return {
+    hour_of_day: now.getHours(),
+    day_of_week: now.getDay(),
+    week_of_month: Math.ceil(now.getDate() / 7),
+    month_of_year: month,
+    season,
+    week_of_season: weekOfSeason,
+    days_ahead: daysAhead,
+    notification_sent_at: now.toISOString(),
+  };
+}
+
+// Build geographic context — bucketed to ~1 mile radius
+function buildGeographicContext(
+  lat: number,
+  lon: number,
+  metro?: string,
+  city?: string,
+  state?: string,
+  country = "US"
+): Record<string, any> {
+  // Bucket to ~1 mile radius (0.015 degrees ≈ 1 mile)
+  const precision = 1000;
+  const lat_bucketed = Math.round(lat * precision) / precision;
+  const lng_bucketed = Math.round(lon * precision) / precision;
+
+  return {
+    lat_bucketed,
+    lng_bucketed,
+    metro: metro ?? null,
+    city: city ?? null,
+    state: state ?? null,
+    country,
+    timezone: null, // populated by app when available
+  };
+}
+
+// Log behavioral event to Supabase
+async function logBehavioralEvent(
+  userId: string,
+  activityId: string,
+  eventType: string,
+  conditionsSnapshot: Record<string, any>,
+  geographicContext: Record<string, any>,
+  temporalContext: Record<string, any>,
+  notificationId?: string
+): Promise<void> {
+  const { error } = await supabase
+    .from("behavioral_events")
+    .insert({
+      user_id: userId,
+      activity_id: activityId,
+      event_type: eventType,
+      conditions_at_event: conditionsSnapshot,
+      geographic_context: geographicContext,
+      temporal_context: temporalContext,
+      session_context: {
+        platform: "edge_function",
+        app_version: "server",
+        notification_id: notificationId ?? null,
+      },
+    });
+
+  if (error) {
+    // Log error but never let logging failure break notification delivery
+    console.error("behavioral_event logging failed:", error.message);
+  }
+}
+
 // Send push notification via OneSignal
-async function sendNotification(userId: string, activityName: string, date: string) {
+async function sendNotification(
+  userId: string,
+  activityName: string,
+  date: string
+): Promise<string | null> {
   const message = `🌤 Conditions are right for: ${activityName} on ${date}`;
-  await fetch("https://api.onesignal.com/notifications", {
+  const res = await fetch("https://api.onesignal.com/notifications", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -61,25 +165,41 @@ async function sendNotification(userId: string, activityName: string, date: stri
       headings: { en: "Weather Activity Alert" },
     }),
   });
+
+  const data = await res.json();
+  // Return OneSignal notification ID for logging
+  return data.id ?? null;
 }
 
 serve(async (_req) => {
   try {
     const now = new Date();
-    const dayOfWeek = now.getDay(); // 0 = Sunday
+    const dayOfWeek = now.getDay();
     const currentHour = now.getHours();
 
     // Get all users with a saved location
     const { data: locations, error: locError } = await supabase
       .from("user_locations")
-      .select("user_id, latitude, longitude");
+      .select("user_id, latitude, longitude, metro, city, state, country");
 
     if (locError) throw locError;
 
     for (const location of locations ?? []) {
-      const forecast = await getWeatherForecast(location.latitude, location.longitude);
+      const forecast = await getWeatherForecast(
+        location.latitude,
+        location.longitude
+      );
 
-      // Get all activities with condition profiles and notification prefs for this user
+      const geoContext = buildGeographicContext(
+        location.latitude,
+        location.longitude,
+        location.metro,
+        location.city,
+        location.state,
+        location.country ?? "US"
+      );
+
+      // Get all activities with condition profiles and notification prefs
       const { data: activities } = await supabase
         .from("activities")
         .select(`
@@ -97,33 +217,106 @@ serve(async (_req) => {
 
         for (let i = 0; i < forecast.length; i++) {
           const forecastDay = forecast[i];
-          const forecastDate = new Date(forecastDay.time);
           const daysAhead = i;
-          const dateLabel = forecastDate.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+          const forecastDate = new Date(forecastDay.time);
+          const dateLabel = forecastDate.toLocaleDateString("en-US", {
+            weekday: "long",
+            month: "short",
+            day: "numeric",
+          });
+
+          const conditionsSnapshot = buildConditionsSnapshot(forecastDay, daysAhead);
+          const temporalContext = buildTemporalContext(now, daysAhead);
 
           if (!conditionsMatch(forecastDay, profile)) continue;
+
+          let notificationSent = false;
 
           // Morning of
           if (prefs.notify_morning_of && daysAhead === 0) {
             const [hours] = (prefs.morning_time || "07:00:00").split(":").map(Number);
             if (currentHour === hours) {
-              await sendNotification(location.user_id, activity.name, dateLabel);
+              const notifId = await sendNotification(
+                location.user_id,
+                activity.name,
+                dateLabel
+              );
+              await logBehavioralEvent(
+                location.user_id,
+                activity.id,
+                "condition_match_notified",
+                conditionsSnapshot,
+                geoContext,
+                { ...temporalContext, trigger: "morning_of" },
+                notifId ?? undefined
+              );
+              notificationSent = true;
             }
           }
 
           // Night before
           if (prefs.notify_night_before && daysAhead === 1 && currentHour === 20) {
-            await sendNotification(location.user_id, activity.name, dateLabel);
+            const notifId = await sendNotification(
+              location.user_id,
+              activity.name,
+              dateLabel
+            );
+            await logBehavioralEvent(
+              location.user_id,
+              activity.id,
+              "condition_match_notified",
+              conditionsSnapshot,
+              geoContext,
+              { ...temporalContext, trigger: "night_before" },
+              notifId ?? undefined
+            );
+            notificationSent = true;
           }
 
           // Sunday digest
-          if (prefs.notify_sunday_digest && dayOfWeek === 0 && currentHour === 18 && daysAhead <= 7) {
-            await sendNotification(location.user_id, activity.name, dateLabel);
+          if (
+            prefs.notify_sunday_digest &&
+            dayOfWeek === 0 &&
+            currentHour === 18 &&
+            daysAhead <= 7
+          ) {
+            const notifId = await sendNotification(
+              location.user_id,
+              activity.name,
+              dateLabel
+            );
+            await logBehavioralEvent(
+              location.user_id,
+              activity.id,
+              "condition_match_notified",
+              conditionsSnapshot,
+              geoContext,
+              { ...temporalContext, trigger: "sunday_digest" },
+              notifId ?? undefined
+            );
+            notificationSent = true;
           }
 
           // Days before
-          if (prefs.notify_days_before && daysAhead === prefs.days_before_count) {
-            await sendNotification(location.user_id, activity.name, dateLabel);
+          if (
+            prefs.notify_days_before &&
+            daysAhead === prefs.days_before_count
+          ) {
+            const notifId = await sendNotification(
+              location.user_id,
+              activity.name,
+              dateLabel
+            );
+            await logBehavioralEvent(
+              location.user_id,
+              activity.id,
+              "condition_match_notified",
+              conditionsSnapshot,
+              geoContext,
+              { ...temporalContext, trigger: "days_before" },
+              notifId ?? undefined
+            );
+            notificationSent = true;
           }
         }
       }
