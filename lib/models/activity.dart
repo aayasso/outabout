@@ -1,3 +1,5 @@
+import 'package:outabout/data/models/condition_profile.dart';
+
 class Activity {
   final String? id;
   final String userId;
@@ -10,6 +12,7 @@ class Activity {
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final Map<String, dynamic> geographicContext;
+  final ConditionProfile? conditionProfile;
 
   const Activity({
     this.id,
@@ -23,6 +26,7 @@ class Activity {
     this.createdAt,
     this.updatedAt,
     this.geographicContext = const {},
+    this.conditionProfile,
   });
 
   factory Activity.fromJson(Map<String, dynamic> json) {
@@ -47,6 +51,13 @@ class Activity {
       geographicContext:
           json['geographic_context'] as Map<String, dynamic>? ??
               const {},
+      conditionProfile:
+          json['condition_profiles'] is Map<String, dynamic>
+              ? ConditionProfile.fromJson(
+                  json['condition_profiles']
+                      as Map<String, dynamic>,
+                )
+              : null,
     );
   }
 
