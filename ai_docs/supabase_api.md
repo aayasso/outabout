@@ -1,7 +1,7 @@
 # OutAbout — Supabase & API Reference
 # ai_docs/supabase_api.md
 # Living document. Update when schema or endpoints change.
-# Last updated: 2026-04-28
+# Last updated: 2026-05-03
 
 ## Supabase
 
@@ -27,7 +27,7 @@ class ActivityRepository {
         .from('activities')
         .select()
         .eq('user_id', userId)
-        .eq('is_active', true)
+        .eq('is_archived', false)
         .order('created_at', ascending: false);
     return data.map(Activity.fromJson).toList();
   }
@@ -54,51 +54,249 @@ final activityRepositoryProvider = Provider<ActivityRepository>((ref) {
 
 ---
 
-## Tables & Columns
+## Tables & Columns — App (Flutter read/write)
 
 ### activities
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid PK | auto-generated |
-| `user_id` | uuid FK | → auth.users.id, CASCADE DELETE |
-| `name` | text | activity name |
-| `description` | text nullable | |
-| `icon` | text nullable | icon identifier string |
-| `is_active` | bool | default true |
-| `created_at` | timestamptz | auto-set |
-| `updated_at` | timestamptz | auto-set |
+| Column | Type | Nullable | Default | Notes |
+|---|---|---|---|---|
+| `id` | uuid PK | NO | `uuid_generate_v4()` | |
+| `user_id` | uuid FK | NO | — | → profiles.id |
+| `name` | text | NO | — | activity name |
+| `notes` | text | YES | — | user notes |
+| `url` | text | YES | — | related link |
+| `location` | text | YES | — | freeform location text |
+| `category_ids` | uuid[] | YES | `'{}'` | array of category UUIDs |
+| `is_archived` | boolean | YES | `false` | soft delete |
+| `created_at` | timestamptz | YES | `now()` | |
+| `updated_at` | timestamptz | YES | `now()` | |
+| `geographic_context` | jsonb | NO | `'{}'` | location context for intelligence |
 
-### activity_conditions
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid PK | auto-generated |
-| `activity_id` | uuid FK | → activities.id, CASCADE DELETE |
-| `condition_type` | text | 'temp_min','temp_max','wind_max','no_rain', etc. |
-| `condition_value` | float nullable | threshold value |
-| `created_at` | timestamptz | auto-set |
+> **Cleanup note:** The existing `lib/models/activity.dart` (in the onboarding
+> worktree) still contains a legacy `category` (text) field. This needs to be
+> removed and replaced with `category_ids` (uuid[]) to match the live schema.
 
-### reminders
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid PK | auto-generated |
-| `user_id` | uuid FK | → auth.users.id |
-| `activity_id` | uuid FK | → activities.id |
-| `triggered_at` | timestamptz | when reminder fired |
-| `weather_snapshot` | jsonb | Tomorrow.io response at trigger time |
-| `active_theme` | text | WeatherTheme.name at trigger time |
-| `was_dismissed` | bool | default false |
+### condition_profiles
+| Column | Type | Nullable | Default | Notes |
+|---|---|---|---|---|
+| `id` | uuid PK | NO | `uuid_generate_v4()` | |
+| `activity_id` | uuid FK | NO | — | → activities.id |
+| `temp_enabled` | boolean | YES | `false` | |
+| `temp_min` | numeric | YES | — | |
+| `temp_max` | numeric | YES | — | |
+| `precip_enabled` | boolean | YES | `false` | |
+| `precip_level` | text | YES | — | e.g. 'none', 'light', 'any' |
+| `wind_enabled` | boolean | YES | `false` | |
+| `wind_max` | numeric | YES | — | max wind speed |
+| `uv_enabled` | boolean | YES | `false` | |
+| `uv_min` | numeric | YES | — | |
+| `uv_max` | numeric | YES | — | |
+| `created_at` | timestamptz | YES | `now()` | |
+| `updated_at` | timestamptz | YES | `now()` | |
 
-### user_profiles
-| Column | Type | Notes |
+### condition_profile_history
+| Column | Type | Nullable | Default | Notes |
+|---|---|---|---|---|
+| `id` | uuid PK | NO | `gen_random_uuid()` | |
+| `activity_id` | uuid FK | NO | — | → activities.id |
+| `user_id` | uuid | NO | — | |
+| `previous_profile` | jsonb | NO | `'{}'` | snapshot of old condition_profiles row |
+| `new_profile` | jsonb | NO | `'{}'` | snapshot of new condition_profiles row |
+| `change_reason` | text | YES | — | |
+| `changed_at` | timestamptz | NO | `now()` | |
+
+### categories
+| Column | Type | Nullable | Default | Notes |
+|---|---|---|---|---|
+| `id` | uuid PK | NO | `uuid_generate_v4()` | |
+| `user_id` | uuid FK | NO | — | → profiles.id |
+| `name` | text | NO | — | |
+| `color` | text | YES | — | hex color string |
+| `icon` | text | YES | — | icon identifier |
+| `created_at` | timestamptz | YES | `now()` | |
+
+### notification_preferences
+| Column | Type | Nullable | Default | Notes |
+|---|---|---|---|---|
+| `id` | uuid PK | NO | `uuid_generate_v4()` | |
+| `activity_id` | uuid FK | NO | — | → activities.id |
+| `notify_days_before` | boolean | YES | `false` | |
+| `days_before_count` | integer | YES | `2` | |
+| `notify_sunday_digest` | boolean | YES | `false` | |
+| `notify_night_before` | boolean | YES | `false` | |
+| `notify_morning_of` | boolean | YES | `false` | |
+| `morning_time` | time | YES | `'07:00:00'` | |
+| `created_at` | timestamptz | YES | `now()` | |
+| `updated_at` | timestamptz | YES | `now()` | |
+
+### profiles
+| Column | Type | Nullable | Default | Notes |
+|---|---|---|---|---|
+| `id` | uuid PK | NO | — | = auth.users.id |
+| `display_name` | text | YES | — | |
+| `avatar_url` | text | YES | — | |
+| `is_premium` | boolean | YES | `false` | |
+| `temperature_unit` | text | YES | `'F'` | 'F' or 'C' |
+| `created_at` | timestamptz | YES | `now()` | |
+| `updated_at` | timestamptz | YES | `now()` | |
+
+### user_locations
+| Column | Type | Nullable | Default | Notes |
+|---|---|---|---|---|
+| `id` | uuid PK | NO | `uuid_generate_v4()` | |
+| `user_id` | uuid FK | NO | — | → profiles.id |
+| `city` | text | YES | — | |
+| `latitude` | numeric | NO | — | |
+| `longitude` | numeric | NO | — | |
+| `updated_at` | timestamptz | YES | `now()` | |
+
+### behavioral_events
+| Column | Type | Nullable | Default | Notes |
+|---|---|---|---|---|
+| `id` | uuid PK | NO | `gen_random_uuid()` | |
+| `user_id` | uuid | NO | — | |
+| `activity_id` | uuid FK | YES | — | → activities.id |
+| `event_type` | text | NO | — | CHECK constraint, see approved types below |
+| `conditions_at_event` | jsonb | NO | `'{}'` | see CLAUDE.md for schema |
+| `geographic_context` | jsonb | NO | `'{}'` | see CLAUDE.md for schema |
+| `temporal_context` | jsonb | NO | `'{}'` | see CLAUDE.md for schema |
+| `session_context` | jsonb | NO | `'{}'` | see CLAUDE.md for schema |
+| `monetization_event_id` | uuid FK | YES | — | → monetization_events.id |
+| `created_at` | timestamptz | NO | `now()` | |
+
+**Approved event_types** (enforced by CHECK constraint):
+`condition_match_notified`, `notification_opened`, `app_opened_post_notification`,
+`activity_confirmed`, `condition_match_ignored`, `activity_viewed`,
+`wishlist_added`, `wishlist_removed`, `condition_profile_updated`,
+`affiliate_link_clicked`, `partner_impression_viewed`, `partner_cta_clicked`,
+`auth_completed`, `auth_skipped`, `onboarding_completed`,
+`booking_integration_viewed`, `theme_override_set`
+
+---
+
+## Foreign Key Summary (App Tables)
+
+| Table | Column | References |
 |---|---|---|
-| `id` | uuid PK | = auth.users.id |
-| `display_name` | text nullable | |
-| `location_lat` | float nullable | |
-| `location_lng` | float nullable | |
-| `location_name` | text nullable | geocoded place name |
-| `notifications_enabled` | bool | default false |
-| `onboarding_completed_at` | timestamptz nullable | |
-| `created_at` | timestamptz | auto-set |
+| `activities` | `user_id` | `profiles.id` |
+| `behavioral_events` | `activity_id` | `activities.id` |
+| `behavioral_events` | `monetization_event_id` | `monetization_events.id` |
+| `categories` | `user_id` | `profiles.id` |
+| `condition_profile_history` | `activity_id` | `activities.id` |
+| `condition_profiles` | `activity_id` | `activities.id` |
+| `notification_preferences` | `activity_id` | `activities.id` |
+| `user_locations` | `user_id` | `profiles.id` |
+
+---
+
+## Tables — Intelligence Platform Only
+
+These tables are managed by the outabout-intelligence system.
+The Flutter app does **not** read or write these directly (except
+`behavioral_events` and `monetization_events` which are write-only from the app).
+
+### monetization_events
+| Column | Type | Nullable | Default | Notes |
+|---|---|---|---|---|
+| `id` | uuid PK | NO | `gen_random_uuid()` | |
+| `event_type` | text | NO | — | |
+| `partner_id` | uuid FK | YES | — | → partners.id |
+| `affiliate_link_id` | uuid FK | YES | — | → affiliate_links.id |
+| `activity_category` | text | YES | — | |
+| `activity_id` | uuid FK | YES | — | → activities.id |
+| `weather_temp_c` | numeric | YES | — | |
+| `weather_condition` | text | YES | — | |
+| `weather_wind_kph` | numeric | YES | — | |
+| `weather_uv_index` | numeric | YES | — | |
+| `region` | text | YES | — | |
+| `country` | text | YES | `'US'` | |
+| `hour_of_day` | smallint | YES | — | |
+| `day_of_week` | smallint | YES | — | |
+| `month_of_year` | smallint | YES | — | |
+| `user_id` | uuid | YES | — | |
+| `created_at` | timestamptz | NO | `now()` | |
+| `behavioral_event_id` | uuid FK | YES | — | → behavioral_events.id |
+
+### partners
+| Column | Type | Nullable | Default | Notes |
+|---|---|---|---|---|
+| `id` | uuid PK | NO | `gen_random_uuid()` | |
+| `name` | text | NO | — | |
+| `description` | text | YES | — | |
+| `website_url` | text | YES | — | |
+| `booking_url` | text | YES | — | |
+| `logo_url` | text | YES | — | |
+| `contact_email` | text | YES | — | |
+| `status` | text | NO | `'active'` | |
+| `partner_type` | text | NO | `'local_business'` | |
+| `monthly_fee_usd` | numeric | YES | — | |
+| `notes` | text | YES | — | |
+| `created_at` | timestamptz | NO | `now()` | |
+| `updated_at` | timestamptz | NO | `now()` | |
+
+### affiliate_links
+| Column | Type | Nullable | Default | Notes |
+|---|---|---|---|---|
+| `id` | uuid PK | NO | `gen_random_uuid()` | |
+| `category_id` | uuid FK | YES | — | |
+| `activity_id` | uuid FK | YES | — | |
+| `label` | text | NO | — | |
+| `url` | text | NO | — | |
+| `provider` | text | YES | — | |
+| `commission_type` | text | YES | — | |
+| `is_active` | boolean | NO | `true` | |
+| `priority` | integer | NO | `0` | |
+| `created_at` | timestamptz | NO | `now()` | |
+| `updated_at` | timestamptz | NO | `now()` | |
+
+### partner_categories
+Join table: `id` (uuid PK), `partner_id` (uuid FK → partners.id),
+`category_id` (uuid FK), `created_at` (timestamptz).
+
+### partner_locations
+| Column | Type | Nullable | Default | Notes |
+|---|---|---|---|---|
+| `id` | uuid PK | NO | `gen_random_uuid()` | |
+| `partner_id` | uuid FK | NO | — | → partners.id |
+| `city` | text | YES | — | |
+| `region` | text | YES | — | |
+| `country` | text | NO | `'US'` | |
+| `latitude` | numeric | NO | — | |
+| `longitude` | numeric | NO | — | |
+| `radius_km` | numeric | NO | `25` | |
+| `created_at` | timestamptz | NO | `now()` | |
+
+### aggregate_insights
+Precomputed rollup table for intelligence queries. Key columns:
+`period_start`, `period_end`, `granularity`, `activity_category`,
+`region`, `country`, temporal dimensions (`month_of_year`, `day_of_week`),
+weather averages (`avg_temp_c`, `dominant_condition`, `avg_wind_kph`, `avg_uv_index`),
+counts (`activity_match_count`, `unique_user_count`, `partner_impression_count`,
+`partner_click_count`, `affiliate_click_count`), `computed_at`, `data_sources` (jsonb),
+`confidence_score`.
+
+### data_intelligence_vectors
+pgvector table for RAG embeddings: `id` (bigint), `text` (varchar),
+`metadata_` (jsonb), `node_id` (varchar), `embedding` (vector).
+
+### external_data_events
+Ingested third-party data: `id` (uuid), `source`, `event_type`,
+`geographic_key` (jsonb), `temporal_key` (jsonb), `activity_category`,
+`payload` (jsonb), `confidence_score`, `ingested_at`.
+
+### food_access_scores
+USDA food access data by zipcode: `id` (serial), `zipcode`, `metro`,
+access metrics (`low_access_raw`, `low_access_normalized`),
+grocery density, health outcomes, `composite_score`, `letter_grade`,
+`interpretation`, `created_at`, `updated_at`.
+
+### intelligence_queries
+Query log for the intelligence platform: `id` (uuid), `queried_by`,
+`buyer_segment`, `raw_query`, `parsed_intent` (jsonb),
+`agents_invoked` (text[]), `data_sources_used` (text[]),
+`response_text`, `response_payload` (jsonb), `confidence_score`,
+feedback fields (`feedback_rating`, `feedback_note`, `feedback_at`,
+`output_acted_on`), `follow_up_query_id`, `low_confidence_dimensions` (jsonb),
+`created_at`.
 
 ---
 
@@ -157,10 +355,10 @@ GET https://api.tomorrow.io/v4/weather/realtime
 ### Weather code → WeatherTheme mapping
 ```dart
 // In WeatherThemeNotifier.setThemeFromConditions(int code)
-5000–5999 → WeatherTheme.snowy
-4000–4999 → WeatherTheme.rainy
-2000–2999 → WeatherTheme.rainy   // fog maps to rainy mood
-1100–1999 → WeatherTheme.overcast
+5000-5999 → WeatherTheme.snowy
+4000-4999 → WeatherTheme.rainy
+2000-2999 → WeatherTheme.rainy   // fog maps to rainy mood
+1100-1999 → WeatherTheme.overcast
 1001      → WeatherTheme.overcast
 default   → WeatherTheme.sunny
 ```
@@ -234,22 +432,22 @@ final locationName = '${place.locality}, ${place.administrativeArea}';
 // Fetch with related records
 final data = await _client
     .from('activities')
-    .select('*, activity_conditions(*)')
+    .select('*, condition_profiles(*)')
     .eq('user_id', userId)
     .order('created_at', ascending: false);
 
 // Upsert
-await _client.from('user_profiles').upsert(profile.toJson());
+await _client.from('profiles').upsert(profile.toJson());
 
 // Update specific field
 await _client
-    .from('user_profiles')
-    .update({'notifications_enabled': true})
+    .from('profiles')
+    .update({'temperature_unit': 'C'})
     .eq('id', userId);
 
 // Realtime subscription
 _client
-    .from('reminders')
+    .from('activities')
     .stream(primaryKey: ['id'])
     .eq('user_id', userId)
     .listen((data) { /* handle */ });
