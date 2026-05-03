@@ -1,7 +1,7 @@
 # OutAbout — Screens & Navigation Map
 # ai_docs/screens_navigation.md
 # Living document. Update when screens or routes change.
-# Last updated: 2026-04-28
+# Last updated: 2026-05-03
 
 ## Route Constants
 
@@ -10,9 +10,12 @@ Never hardcode a route string in a widget.
 
 ```dart
 abstract class AppRoutes {
-  static const String onboarding = '/onboarding';
-  static const String home       = '/home';
-  // Add new routes here as the app grows
+  static const String onboarding  = '/onboarding';
+  static const String home        = '/home';
+  static const String activities  = '/activities';
+  static const String settings    = '/settings';
+  static const String addActivity = '/activity/add';
+  static const String activity    = '/activity/:id';
 }
 ```
 
@@ -64,7 +67,7 @@ GoRoute(
 ### OnboardingScreen `/onboarding`
 **File:** `lib/features/onboarding/onboarding_screen.dart`
 **Type:** ConsumerStatefulWidget
-**State:** `onboardingStepProvider` (int, 0–5)
+**State:** `onboardingStepProvider` (int, 0-5)
 **Providers:** `weatherThemeColorsProvider`, `onboardingStepProvider`
 **Layout:** ProgressDots at top + PageView body
 **Navigation:** → `/home` (after step 5 completes auth)
@@ -73,13 +76,81 @@ GoRoute(
 - `BouncingScrollPhysics` on PageView
 - 6 pages rendered as children — see Onboarding Pages below
 
-### HomeScreen `/home`
+### HomeScreen `/home` (shell)
 **File:** `lib/features/home/home_screen.dart`
+**Type:** ConsumerStatefulWidget
+**Providers:** `weatherThemeColorsProvider`, `selectedTabProvider`
+**Layout:** Scaffold with 3-tab bottom `NavigationBar` + indexed body
+**State:** Manages the active tab index and preserves tab state
+**Notes:**
+- Uses `StatefulShellRoute` (go_router) for bottom nav tab persistence
+- Tab body switches between `TodayTab`, `ActivitiesTab`, `SettingsTab`
+- Bottom nav colors from theme: `colors.surface` background,
+  `colors.primary` selected, `colors.textSecondary` unselected
+
+---
+
+## Bottom Navigation (3 tabs)
+
+| Index | Label | Icon | Widget | Purpose |
+|---|---|---|---|---|
+| 0 | Today | `Icons.wb_sunny_outlined` | `TodayTab` | Current weather + condition-matched activities |
+| 1 | Activities | `Icons.directions_run_outlined` | `ActivitiesTab` | Full wishlist with condition profiles |
+| 2 | Settings | `Icons.settings_outlined` | `SettingsTab` | Profile, location, notifications, theme override, sign out |
+
+Colors from theme:
+```dart
+NavigationBarThemeData(
+  backgroundColor: colors.surface,
+  indicatorColor: colors.primary.withOpacity(0.15),
+  labelTextStyle: WidgetStateProperty.resolveWith((states) {
+    if (states.contains(WidgetState.selected)) {
+      return OutAboutTypography.labelSmall(colors).copyWith(color: colors.primary);
+    }
+    return OutAboutTypography.labelSmall(colors);
+  }),
+)
+```
+
+---
+
+## Tab Screens
+
+### TodayTab (Tab 0 — default landing)
+**File:** `lib/features/home/tabs/today_tab.dart`
 **Type:** ConsumerWidget
-**Status:** Placeholder — needs full implementation
-**Providers:** `weatherThemeColorsProvider`
-**Planned content:** Active activities list, current weather display,
-  reminder feed, bottom navigation
+**Purpose:** Current weather conditions + activities whose condition profiles
+match the current weather. This is the main value screen — "what can I do
+right now?"
+**Planned content:**
+- Weather summary card (current temp, condition, location)
+- List of activities with matching conditions highlighted
+- Empty state when no activities match or no activities exist
+
+### ActivitiesTab (Tab 1)
+**File:** `lib/features/home/tabs/activities_tab.dart`
+**Type:** ConsumerWidget
+**Purpose:** Full activity wishlist with condition profile summaries.
+Browse, add, edit, archive activities.
+**Planned content:**
+- Scrollable list of all non-archived activities
+- Each card shows activity name + condition profile summary
+- FAB or header action to add new activity
+- Swipe or long-press to archive
+- Empty state for new users (encourage adding first activity)
+
+### SettingsTab (Tab 2)
+**File:** `lib/features/home/tabs/settings_tab.dart`
+**Type:** ConsumerWidget
+**Purpose:** Profile, location, notifications, theme override, sign out.
+**Planned content:**
+- Profile section (display name, avatar)
+- Location management
+- Notification preferences
+- Theme override (adaptive / manual selection)
+- Temperature unit toggle (F / C)
+- Sign out
+- App version
 
 ---
 
@@ -119,35 +190,15 @@ Add to AppRoutes and routerProvider when building each one.
 
 | Screen | Route | Purpose |
 |---|---|---|
-| HomeScreen (full) | `/home` | Activities dashboard, weather, reminders |
-| AddActivityScreen | `/activity/add` | Create new activity + conditions |
-| ActivityDetailScreen | `/activity/:id` | View/edit activity + conditions |
-| SettingsScreen | `/settings` | Profile, notifications, theme override, sign out |
-| WeatherDetailScreen | `/weather` | Expanded current conditions |
+| AddActivityScreen | `/activity/add` | Create new activity + condition profile |
+| ActivityDetailScreen | `/activity/:id` | View/edit activity + condition profile |
 
 ---
 
-## Bottom Navigation (planned for HomeScreen)
+## go_router Config Skeleton
 
-| Index | Label | Icon | Target |
-|---|---|---|---|
-| 0 | Today | Icons.wb_sunny_outlined | Home/dashboard |
-| 1 | Activities | Icons.directions_run_outlined | Activities list |
-| 2 | Reminders | Icons.notifications_outlined | Reminder history |
-| 3 | Settings | Icons.settings_outlined | Settings |
-
-Colors from theme:
-```dart
-BottomNavigationBarThemeData(
-  backgroundColor: colors.surface,
-  selectedItemColor: colors.primary,
-  unselectedItemColor: colors.textSecondary,
-)
-```
-
----
-
-## go_router Config Skeleton (current)
+The router uses `StatefulShellRoute` for bottom-nav tab persistence.
+Each tab branch maintains its own navigation stack.
 
 ```dart
 final routerProvider = Provider<GoRouter>((ref) {
@@ -175,11 +226,44 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.onboarding,
         pageBuilder: _fadeTransition(const OnboardingScreen()),
       ),
-      GoRoute(
-        path: AppRoutes.home,
-        pageBuilder: _fadeTransition(const HomeScreen()),
+      // Bottom nav shell — preserves tab state across navigation
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) {
+          return HomeScreen(navigationShell: navigationShell);
+        },
+        branches: [
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: AppRoutes.home,
+              pageBuilder: _fadeTransition(const TodayTab()),
+            ),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: AppRoutes.activities,
+              pageBuilder: _fadeTransition(const ActivitiesTab()),
+            ),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: AppRoutes.settings,
+              pageBuilder: _fadeTransition(const SettingsTab()),
+            ),
+          ]),
+        ],
       ),
-      // Add new routes here
+      // Push routes (overlay on top of any tab)
+      GoRoute(
+        path: AppRoutes.addActivity,
+        pageBuilder: _fadeTransition(const AddActivityScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.activity,
+        pageBuilder: (context, state) {
+          final id = state.pathParameters['id']!;
+          return _fadeTransitionPage(ActivityDetailScreen(activityId: id));
+        },
+      ),
     ],
   );
 });
