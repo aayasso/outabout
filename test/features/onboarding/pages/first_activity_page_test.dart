@@ -28,7 +28,7 @@ void main() {
         id: 'abc-123',
         userId: 'user-456',
         name: 'Morning Hike',
-        category: 'Hiking',
+        categoryIds: const ['hiking-id'],
         createdAt: now,
       );
 
@@ -37,7 +37,7 @@ void main() {
       expect(json['id'], 'abc-123');
       expect(json['user_id'], 'user-456');
       expect(json['name'], 'Morning Hike');
-      expect(json['category'], 'Hiking');
+      expect(json['category_ids'], ['hiking-id']);
       expect(json['created_at'], now.toIso8601String());
     });
 
@@ -45,7 +45,7 @@ void main() {
       final activity = Activity(
         userId: 'user-456',
         name: 'Morning Hike',
-        category: 'Hiking',
+        categoryIds: const ['hiking-id'],
         createdAt: DateTime(2026, 4, 14),
       );
 
@@ -60,7 +60,7 @@ void main() {
         id: 'abc-123',
         userId: 'user-456',
         name: 'Morning Hike',
-        category: 'Hiking',
+        categoryIds: const ['hiking-id'],
         createdAt: now,
       );
 
@@ -69,7 +69,7 @@ void main() {
       expect(restored.id, original.id);
       expect(restored.userId, original.userId);
       expect(restored.name, original.name);
-      expect(restored.category, original.category);
+      expect(restored.categoryIds, original.categoryIds);
       expect(restored.createdAt, original.createdAt);
     });
   });

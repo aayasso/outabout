@@ -1,7 +1,5 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -13,30 +11,16 @@ import 'core/weather_theme_provider.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await dotenv.load();
-
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
   ]);
 
   await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL']!,
-    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
+    url: 'https://tswxxjwqnppqlfcbfowt.supabase.co',
+    anonKey: 'sb_publishable_o_0mfKjLVbJWZZCFVVuvJA_V3x0e3OX',
   );
 
-  if (kDebugMode) {
-    final session = Supabase.instance.client.auth.currentSession;
-    if (session != null) {
-      await Supabase.instance.client.auth.signOut();
-      debugPrint('[DEBUG] Signed out persisted session: ${session.user.id}');
-    }
-  }
-
   final prefs = await SharedPreferences.getInstance();
-
-  if (kDebugMode) {
-    await prefs.remove('onboarding_complete');
-  }
 
   runApp(
     ProviderScope(
@@ -54,6 +38,7 @@ class OutAboutApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeData = ref.watch(themeDataProvider);
+
     final router = ref.watch(routerProvider);
 
     return AnimatedTheme(
@@ -69,3 +54,4 @@ class OutAboutApp extends ConsumerWidget {
     );
   }
 }
+

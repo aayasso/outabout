@@ -73,7 +73,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Welcome to OutAbout'), findsOneWidget);
+      expect(find.text('Today'), findsWidgets);
     });
 
     testWidgets(

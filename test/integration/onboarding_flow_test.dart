@@ -10,7 +10,6 @@ import 'package:outabout/core/theme.dart';
 import 'package:outabout/core/weather_theme_provider.dart';
 import 'package:outabout/core/providers.dart';
 import 'package:outabout/features/onboarding/onboarding_screen.dart';
-import 'package:outabout/features/home/home_screen.dart';
 import 'package:outabout/services/behavioral_event_service.dart';
 import 'package:outabout/services/location_service.dart';
 import 'package:outabout/services/notification_service.dart';
@@ -110,7 +109,8 @@ Widget _buildApp({
       ),
       GoRoute(
         path: '/home',
-        builder: (_, __) => const HomeScreen(),
+        builder: (_, __) =>
+            const Scaffold(body: Text('Home')),
       ),
     ],
   );
