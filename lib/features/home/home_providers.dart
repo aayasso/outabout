@@ -127,7 +127,7 @@ final conditionMatchProvider =
         activities
             .map((a) => ConditionMatch(
                   activity: a,
-                  isMatch: _evaluateMatch(
+                  isMatch: evaluateMatch(
                     a.conditionProfile,
                     weather,
                   ),
@@ -138,7 +138,7 @@ final conditionMatchProvider =
   );
 });
 
-bool _evaluateMatch(
+bool evaluateMatch(
   ConditionProfile? profile,
   WeatherData weather,
 ) {

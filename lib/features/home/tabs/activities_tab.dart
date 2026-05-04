@@ -26,6 +26,10 @@ class ActivitiesTab extends ConsumerWidget {
         weatherTheme.brightness == Brightness.dark;
     final activitiesAsync =
         ref.watch(activitiesProvider);
+    final profileAsync = ref.watch(profileProvider);
+    final temperatureUnit =
+        profileAsync.valueOrNull?.temperatureUnit ??
+            'F';
 
     return Scaffold(
       backgroundColor: colors.background,
@@ -89,6 +93,8 @@ class ActivitiesTab extends ConsumerWidget {
                           isDark: isDark,
                           index: index,
                           ref: ref,
+                          temperatureUnit:
+                              temperatureUnit,
                         ),
                       );
                     },
@@ -120,6 +126,7 @@ class _ActivityListCard extends StatelessWidget {
     required this.isDark,
     required this.index,
     required this.ref,
+    required this.temperatureUnit,
   });
 
   final Activity activity;
@@ -127,6 +134,7 @@ class _ActivityListCard extends StatelessWidget {
   final bool isDark;
   final int index;
   final WidgetRef ref;
+  final String temperatureUnit;
 
   @override
   Widget build(BuildContext context) {
@@ -248,30 +256,28 @@ class _ActivityListCard extends StatelessWidget {
   ) {
     final chips = <Widget>[];
 
-    // TODO: read temperature unit (F/C) from
-    // profileProvider once SettingsTab is built
-    // in Task 8.
     if (profile.tempEnabled) {
       final min = profile.tempMin?.round();
       final max = profile.tempMax?.round();
       if (min != null && max != null) {
         chips.add(
           _ConditionChip(
-            label: '$min\u2013$max\u00B0',
+            label:
+                '$min\u2013$max\u00B0$temperatureUnit',
             colors: colors,
           ),
         );
       } else if (min != null) {
         chips.add(
           _ConditionChip(
-            label: '> $min\u00B0',
+            label: '> $min\u00B0$temperatureUnit',
             colors: colors,
           ),
         );
       } else if (max != null) {
         chips.add(
           _ConditionChip(
-            label: '< $max\u00B0',
+            label: '< $max\u00B0$temperatureUnit',
             colors: colors,
           ),
         );
@@ -291,10 +297,13 @@ class _ActivityListCard extends StatelessWidget {
     }
 
     if (profile.windEnabled && profile.windMax != null) {
+      final windUnit =
+          temperatureUnit == 'C' ? 'km/h' : 'mph';
       chips.add(
         _ConditionChip(
           label:
-              'Wind < ${profile.windMax!.round()} mph',
+              'Wind < ${profile.windMax!.round()} '
+              '$windUnit',
           colors: colors,
         ),
       );
