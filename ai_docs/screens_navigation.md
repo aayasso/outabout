@@ -184,13 +184,26 @@ onPageChanged: (index) {
 
 ---
 
+## Built Screens (push routes)
+
+### AddActivityScreen `/activity/add`
+**File:** `lib/features/add_activity/add_activity_screen.dart`
+**Type:** ConsumerStatefulWidget
+**Purpose:** Create new activity with weather condition profile.
+**Providers:** `weatherThemeColorsProvider`, `activityRepositoryProvider`,
+`behavioralEventServiceProvider`, `activitiesProvider` (invalidate on save)
+**Layout:** AppBar with close button + scrollable form body
+**Sub-widgets:** `_ActivityNameField`, `_NotesField`, `_ConditionSection`,
+`_TemperatureSection`, `_PrecipitationSection`, `_WindSection`, `_UvSection`,
+`_SaveButton`
+**Navigation:** `context.pop()` on save success
+
 ## Planned Screens (not yet built)
 
 Add to AppRoutes and routerProvider when building each one.
 
 | Screen | Route | Purpose |
 |---|---|---|
-| AddActivityScreen | `/activity/add` | Create new activity + condition profile |
 | ActivityDetailScreen | `/activity/:id` | View/edit activity + condition profile |
 
 ---

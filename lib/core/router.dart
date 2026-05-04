@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/add_activity/add_activity_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/home/tabs/activities_tab.dart';
 import '../features/home/tabs/settings_tab.dart';
@@ -135,6 +136,14 @@ final routerProvider = Provider<GoRouter>((ref) {
             ],
           ),
         ],
+      ),
+      GoRoute(
+        path: AppRoutes.addActivity,
+        pageBuilder: (context, state) =>
+            _fadeTransitionPage(
+          child: const AddActivityScreen(),
+          state: state,
+        ),
       ),
     ],
   );

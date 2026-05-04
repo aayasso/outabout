@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../models/condition_profile.dart';
 import '../../models/activity.dart';
 
 class ActivityRepository {
@@ -26,6 +27,40 @@ class ActivityRepository {
         .select('*, condition_profiles(*)')
         .single();
     return Activity.fromJson(data);
+  }
+
+  Future<Activity> insertWithConditions({
+    required Activity activity,
+    required ConditionProfile profile,
+  }) async {
+    final activityData = await _client
+        .from('activities')
+        .insert(activity.toJson())
+        .select()
+        .single();
+    final savedActivity = Activity.fromJson(activityData);
+
+    final profileData = await _client
+        .from('condition_profiles')
+        .insert({
+          ...profile.toJson(),
+          'activity_id': savedActivity.id,
+        })
+        .select()
+        .single();
+
+    return Activity(
+      id: savedActivity.id,
+      userId: savedActivity.userId,
+      name: savedActivity.name,
+      notes: savedActivity.notes,
+      categoryIds: savedActivity.categoryIds,
+      createdAt: savedActivity.createdAt,
+      updatedAt: savedActivity.updatedAt,
+      geographicContext: savedActivity.geographicContext,
+      conditionProfile:
+          ConditionProfile.fromJson(profileData),
+    );
   }
 
   Future<void> archive(String activityId) async {
