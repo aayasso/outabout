@@ -40,12 +40,24 @@ class ActivityRepository {
         .single();
     final savedActivity = Activity.fromJson(activityData);
 
+    final profilePayload = {
+      'activity_id': savedActivity.id,
+      if (profile.tempEnabled) 'temp_enabled': true,
+      if (profile.tempMin != null) 'temp_min': profile.tempMin,
+      if (profile.tempMax != null) 'temp_max': profile.tempMax,
+      if (profile.precipEnabled) 'precip_enabled': true,
+      if (profile.precipLevel != null)
+        'precip_level': profile.precipLevel,
+      if (profile.windEnabled) 'wind_enabled': true,
+      if (profile.windMax != null) 'wind_max': profile.windMax,
+      if (profile.uvEnabled) 'uv_enabled': true,
+      if (profile.uvMin != null) 'uv_min': profile.uvMin,
+      if (profile.uvMax != null) 'uv_max': profile.uvMax,
+    };
+
     final profileData = await _client
         .from('condition_profiles')
-        .insert({
-          ...profile.toJson(),
-          'activity_id': savedActivity.id,
-        })
+        .insert(profilePayload)
         .select()
         .single();
 
