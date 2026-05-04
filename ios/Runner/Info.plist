@@ -66,5 +66,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>OutAbout uses your location to show weather conditions and activities near you.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>OutAbout uses your location in the background to notify you when weather matches your activities.</string>
 </dict>
 </plist>
