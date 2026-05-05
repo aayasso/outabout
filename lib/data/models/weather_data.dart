@@ -5,6 +5,7 @@ class WeatherData {
   final double humidity;
   final double precipitationIntensity;
   final double uvIndex;
+  final DateTime? fetchedAt;
 
   const WeatherData({
     required this.weatherCode,
@@ -13,6 +14,7 @@ class WeatherData {
     required this.humidity,
     required this.precipitationIntensity,
     required this.uvIndex,
+    this.fetchedAt,
   });
 
   /// Parses from the full Tomorrow.io realtime response:
@@ -32,4 +34,31 @@ class WeatherData {
       uvIndex: (values['uvIndex'] as num).toDouble(),
     );
   }
+
+  /// Parses from flat cache JSON stored in SharedPreferences.
+  factory WeatherData.fromCacheJson(
+    Map<String, dynamic> json,
+    DateTime fetchedAt,
+  ) {
+    return WeatherData(
+      weatherCode: json['weatherCode'] as int,
+      temperature: (json['temperature'] as num).toDouble(),
+      windSpeed: (json['windSpeed'] as num).toDouble(),
+      humidity: (json['humidity'] as num).toDouble(),
+      precipitationIntensity:
+          (json['precipitationIntensity'] as num).toDouble(),
+      uvIndex: (json['uvIndex'] as num).toDouble(),
+      fetchedAt: fetchedAt,
+    );
+  }
+
+  /// Serializes to flat JSON for cache storage.
+  Map<String, dynamic> toJson() => {
+        'weatherCode': weatherCode,
+        'temperature': temperature,
+        'windSpeed': windSpeed,
+        'humidity': humidity,
+        'precipitationIntensity': precipitationIntensity,
+        'uvIndex': uvIndex,
+      };
 }

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -69,16 +71,46 @@ class NoLocationException implements Exception {
   String toString() => 'NoLocationException: no location available';
 }
 
+const _cacheDataKey = 'cached_weather_data';
+const _cacheFetchedAtKey = 'cached_weather_fetched_at';
+
 final weatherDataProvider =
     FutureProvider<WeatherData>((ref) async {
   final location = await ref.watch(userLocationProvider.future);
   if (location == null) throw NoLocationException();
 
+  final prefs = ref.watch(sharedPreferencesProvider);
   final repo = ref.watch(weatherRepositoryProvider);
-  final data = await repo.fetchCurrent(
-    location.latitude,
-    location.longitude,
-  );
+
+  WeatherData data;
+  try {
+    data = await repo.fetchCurrent(
+      location.latitude,
+      location.longitude,
+    );
+
+    // Cache the result
+    await prefs.setString(
+      _cacheDataKey,
+      jsonEncode(data.toJson()),
+    );
+    await prefs.setString(
+      _cacheFetchedAtKey,
+      DateTime.now().toIso8601String(),
+    );
+  } catch (e) {
+    // On failure, try to load from cache
+    final cachedJson = prefs.getString(_cacheDataKey);
+    final cachedAt = prefs.getString(_cacheFetchedAtKey);
+    if (cachedJson != null && cachedAt != null) {
+      data = WeatherData.fromCacheJson(
+        jsonDecode(cachedJson) as Map<String, dynamic>,
+        DateTime.parse(cachedAt),
+      );
+    } else {
+      rethrow;
+    }
+  }
 
   ref
       .read(weatherThemeProvider.notifier)
@@ -182,6 +214,17 @@ bool evaluateMatch(
 
   return true;
 }
+
+// ---------------------------------------------------------------------------
+// Activity detail provider
+// ---------------------------------------------------------------------------
+
+final activityDetailProvider =
+    FutureProvider.family<Activity?, String>(
+        (ref, activityId) async {
+  final repo = ref.watch(activityRepositoryProvider);
+  return repo.fetchById(activityId);
+});
 
 // ---------------------------------------------------------------------------
 // Profile provider

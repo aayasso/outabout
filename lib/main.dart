@@ -1,12 +1,19 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/router.dart';
 import 'core/theme.dart';
 import 'core/weather_theme_provider.dart';
+import 'features/home/home_providers.dart';
+import 'services/behavioral_event_service.dart';
+import 'services/notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,10 +22,18 @@ Future<void> main() async {
     DeviceOrientation.portraitUp,
   ]);
 
+  await dotenv.load(fileName: '.env');
+
   await Supabase.initialize(
-    url: 'https://tswxxjwqnppqlfcbfowt.supabase.co',
-    anonKey: 'sb_publishable_o_0mfKjLVbJWZZCFVVuvJA_V3x0e3OX',
+    url: dotenv.env['SUPABASE_URL']!,
+    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
+
+  try {
+    OneSignal.initialize(dotenv.env['ONESIGNAL_APP_ID']!);
+  } catch (e) {
+    log('OneSignal init failed: $e', name: 'OutAbout');
+  }
 
   final prefs = await SharedPreferences.getInstance();
 
@@ -32,11 +47,48 @@ Future<void> main() async {
   );
 }
 
-class OutAboutApp extends ConsumerWidget {
+class OutAboutApp extends ConsumerStatefulWidget {
   const OutAboutApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<OutAboutApp> createState() => _OutAboutAppState();
+}
+
+class _OutAboutAppState extends ConsumerState<OutAboutApp> {
+  late final AppLifecycleListener _lifecycleListener;
+
+  @override
+  void initState() {
+    super.initState();
+    _lifecycleListener = AppLifecycleListener(
+      onResume: _onResume,
+    );
+    _setupNotificationClickHandler();
+  }
+
+  void _setupNotificationClickHandler() {
+    final notificationService = ref.read(notificationServiceProvider);
+    final eventService = ref.read(behavioralEventServiceProvider);
+    notificationService.setupClickHandler(
+      onActivityTap: (activityId) {
+        ref.read(routerProvider).go('/activity/$activityId');
+      },
+      eventService: eventService,
+    );
+  }
+
+  void _onResume() {
+    ref.invalidate(weatherDataProvider);
+  }
+
+  @override
+  void dispose() {
+    _lifecycleListener.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final themeData = ref.watch(themeDataProvider);
 
     final router = ref.watch(routerProvider);

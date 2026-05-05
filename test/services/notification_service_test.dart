@@ -137,4 +137,34 @@ void main() {
       expect(notificationServiceProvider, isNotNull);
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // OneSignal methods — structural tests only.
+  //
+  // OneSignal relies on native platform channels, so full integration tests
+  // require a running app on a real device or emulator. These tests verify
+  // the methods exist and have the correct signatures.
+  // ---------------------------------------------------------------------------
+
+  group('NotificationService — OneSignal methods (structural)', () {
+    test('exposes initializeOneSignal() method', () {
+      final service = NotificationService();
+      expect(service.initializeOneSignal, isA<Function>());
+    });
+
+    test('exposes setUserTag() method', () {
+      final service = NotificationService();
+      expect(service.setUserTag, isA<Function>());
+    });
+
+    test('exposes clearUserTag() method', () {
+      final service = NotificationService();
+      expect(service.clearUserTag, isA<Function>());
+    });
+
+    test('exposes setupClickHandler() method', () {
+      final service = NotificationService();
+      expect(service.setupClickHandler, isA<Function>());
+    });
+  });
 }

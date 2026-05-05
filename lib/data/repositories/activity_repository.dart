@@ -75,6 +75,52 @@ class ActivityRepository {
     );
   }
 
+  Future<Activity?> fetchById(String activityId) async {
+    final data = await _client
+        .from('activities')
+        .select('*, condition_profiles(*)')
+        .eq('id', activityId)
+        .maybeSingle();
+    if (data == null) return null;
+    return Activity.fromJson(data);
+  }
+
+  Future<Activity> updateWithConditions(
+    Activity activity,
+    ConditionProfile? profile,
+  ) async {
+    final now = DateTime.now().toIso8601String();
+
+    await _client.from('activities').update({
+      'name': activity.name,
+      'notes': activity.notes,
+      'url': activity.url,
+      'location': activity.location,
+      'category_ids': activity.categoryIds,
+      'updated_at': now,
+    }).eq('id', activity.id!);
+
+    if (profile != null) {
+      final profileJson = profile.toJson();
+      profileJson.remove('id');
+      profileJson.remove('created_at');
+      profileJson.remove('updated_at');
+      profileJson['activity_id'] = activity.id;
+      profileJson['updated_at'] = now;
+
+      await _client
+          .from('condition_profiles')
+          .upsert(profileJson, onConflict: 'activity_id');
+    }
+
+    final data = await _client
+        .from('activities')
+        .select('*, condition_profiles(*)')
+        .eq('id', activity.id!)
+        .single();
+    return Activity.fromJson(data);
+  }
+
   Future<void> archive(String activityId) async {
     await _client
         .from('activities')

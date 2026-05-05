@@ -266,6 +266,16 @@ class _LocationPermissionBanner extends ConsumerWidget {
 // _WeatherSummaryCard
 // ---------------------------------------------------------------------------
 
+String? _stalenessText(DateTime? fetchedAt) {
+  if (fetchedAt == null) return null;
+  final minutes =
+      DateTime.now().difference(fetchedAt).inMinutes;
+  if (minutes < 30) return null;
+  if (minutes < 60) return 'Updated $minutes min ago';
+  final hours = minutes ~/ 60;
+  return 'Updated $hours hr ago';
+}
+
 ({IconData icon, Color tint}) _weatherIconData(
   int weatherCode,
 ) {
@@ -368,6 +378,17 @@ class _WeatherSummaryCard extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (_stalenessText(weather.fetchedAt)
+                    case final text?) ...[
+                  const SizedBox(
+                    height: OutAboutSpacing.xs,
+                  ),
+                  Text(
+                    text,
+                    style:
+                        OutAboutTypography.bodySmall(colors),
+                  ),
+                ],
               ],
             ),
           ),
