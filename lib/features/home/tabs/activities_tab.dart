@@ -12,6 +12,13 @@ import '../../../models/activity.dart';
 import '../home_providers.dart';
 
 // ---------------------------------------------------------------------------
+// Unit conversion helpers
+// ---------------------------------------------------------------------------
+
+int _celsiusToFahrenheit(double c) => (c * 9 / 5 + 32).round();
+int _kmhToMph(double kmh) => (kmh * 0.621371).round();
+
+// ---------------------------------------------------------------------------
 // ActivitiesTab — main entry point
 // ---------------------------------------------------------------------------
 
@@ -257,8 +264,16 @@ class _ActivityListCard extends StatelessWidget {
     final chips = <Widget>[];
 
     if (profile.tempEnabled) {
-      final min = profile.tempMin?.round();
-      final max = profile.tempMax?.round();
+      final min = profile.tempMin != null
+          ? (temperatureUnit == 'F'
+              ? _celsiusToFahrenheit(profile.tempMin!)
+              : profile.tempMin!.round())
+          : null;
+      final max = profile.tempMax != null
+          ? (temperatureUnit == 'F'
+              ? _celsiusToFahrenheit(profile.tempMax!)
+              : profile.tempMax!.round())
+          : null;
       if (min != null && max != null) {
         chips.add(
           _ConditionChip(
@@ -299,11 +314,12 @@ class _ActivityListCard extends StatelessWidget {
     if (profile.windEnabled && profile.windMax != null) {
       final windUnit =
           temperatureUnit == 'C' ? 'km/h' : 'mph';
+      final windValue = temperatureUnit == 'F'
+          ? _kmhToMph(profile.windMax!)
+          : profile.windMax!.round();
       chips.add(
         _ConditionChip(
-          label:
-              'Wind < ${profile.windMax!.round()} '
-              '$windUnit',
+          label: 'Wind < $windValue $windUnit',
           colors: colors,
         ),
       );
