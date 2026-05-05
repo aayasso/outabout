@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:outabout/models/behavioral_event.dart';
+import 'package:outabout/data/models/behavioral_event.dart';
 import 'package:outabout/services/location_service.dart';
 
 // ---------------------------------------------------------------------------
