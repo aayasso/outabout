@@ -63,6 +63,24 @@ class _TodayTabState extends ConsumerState<TodayTab> {
 
     return Scaffold(
       backgroundColor: colors.background,
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: colors.primary,
+        onPressed: () =>
+            context.go(AppRoutes.addActivity),
+        tooltip: 'Add activity',
+        child: Icon(
+          Icons.add,
+          color: isDark ? Colors.black : Colors.white,
+        ),
+      )
+          .animate()
+          .scale(
+            begin: const Offset(0.8, 0.8),
+            end: const Offset(1.0, 1.0),
+            duration:
+                OutAboutAnimations.standardDuration,
+            curve: Curves.easeOutBack,
+          ),
       body: RefreshIndicator(
         color: colors.primary,
         backgroundColor: colors.surface,
