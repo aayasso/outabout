@@ -13,6 +13,13 @@ import '../../../data/models/weather_data.dart';
 import '../home_providers.dart';
 
 // ---------------------------------------------------------------------------
+// Unit conversion helpers
+// ---------------------------------------------------------------------------
+
+int _celsiusToFahrenheit(double c) => (c * 9 / 5 + 32).round();
+int _kmhToMph(double kmh) => (kmh * 0.621371).round();
+
+// ---------------------------------------------------------------------------
 // TodayTab — main entry point
 // ---------------------------------------------------------------------------
 
@@ -35,6 +42,9 @@ class _TodayTabState extends ConsumerState<TodayTab> {
     final matchesAsync = ref.watch(conditionMatchProvider);
     final weatherAsync = ref.watch(weatherDataProvider);
     final locationAsync = ref.watch(userLocationProvider);
+    final profileAsync = ref.watch(profileProvider);
+    final temperatureUnit =
+        profileAsync.valueOrNull?.temperatureUnit ?? 'F';
 
     ref.listen<AsyncValue<List<ConditionMatch>>>(
       conditionMatchProvider,
@@ -86,6 +96,7 @@ class _TodayTabState extends ConsumerState<TodayTab> {
             isDark: isDark,
             weatherAsync: weatherAsync,
             locationAsync: locationAsync,
+            temperatureUnit: temperatureUnit,
           ),
         ),
       ),
@@ -120,6 +131,7 @@ class _TodayTabState extends ConsumerState<TodayTab> {
     required bool isDark,
     required AsyncValue<WeatherData> weatherAsync,
     required AsyncValue<dynamic> locationAsync,
+    required String temperatureUnit,
   }) {
     if (matches.isEmpty) {
       return const _TodayEmptyState();
@@ -155,9 +167,12 @@ class _TodayTabState extends ConsumerState<TodayTab> {
                   location: location,
                   colors: colors,
                   isDark: isDark,
+                  temperatureUnit: temperatureUnit,
                 ),
               ),
               const SizedBox(height: OutAboutSpacing.md),
+              if (matched.isEmpty)
+                _NoMatchesState(colors: colors),
             ]),
           ),
         ),
@@ -409,12 +424,14 @@ class _WeatherSummaryCard extends StatelessWidget {
     required this.location,
     required this.colors,
     required this.isDark,
+    required this.temperatureUnit,
   });
 
   final WeatherData weather;
   final dynamic location;
   final WeatherThemeColors colors;
   final bool isDark;
+  final String temperatureUnit;
 
   @override
   Widget build(BuildContext context) {
@@ -423,6 +440,14 @@ class _WeatherSummaryCard extends StatelessWidget {
     );
     final cityName = location?.city as String? ??
         'Current Location';
+
+    final tempDisplay = temperatureUnit == 'F'
+        ? '${_celsiusToFahrenheit(weather.temperature)}\u00B0F'
+        : '${weather.temperature.round()}\u00B0C';
+
+    final windDisplay = temperatureUnit == 'F'
+        ? '${_kmhToMph(weather.windSpeed)} mph'
+        : '${weather.windSpeed.round()} km/h';
 
     return Container(
       padding: const EdgeInsets.all(OutAboutSpacing.lg),
@@ -442,10 +467,40 @@ class _WeatherSummaryCard extends StatelessWidget {
                   CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${weather.temperature.round()}\u00B0',
+                  tempDisplay,
                   style: OutAboutTypography.displayLarge(
                     colors,
                   ),
+                ),
+                const SizedBox(
+                  height: OutAboutSpacing.xs,
+                ),
+                Text(
+                  iconData.name,
+                  style:
+                      OutAboutTypography.bodyMedium(colors),
+                ),
+                const SizedBox(
+                  height: OutAboutSpacing.xs,
+                ),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.air,
+                      size: 14,
+                      color: colors.textSecondary,
+                    ),
+                    const SizedBox(
+                      width: OutAboutSpacing.xs,
+                    ),
+                    Text(
+                      windDisplay,
+                      style:
+                          OutAboutTypography.bodySmall(
+                        colors,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(
                   height: OutAboutSpacing.xs,
@@ -578,7 +633,7 @@ class _MatchedActivityCard extends StatelessWidget {
                           height: OutAboutSpacing.xs,
                         ),
                         Text(
-                          'Conditions met',
+                          '\u2713 Conditions met',
                           style: OutAboutTypography
                                   .labelSmall(colors)
                               .copyWith(
@@ -724,6 +779,53 @@ class _ActivityCard extends StatelessWidget {
           duration:
               OutAboutAnimations.standardDuration,
           curve: Curves.easeOutCubic,
+        );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// _NoMatchesState
+// ---------------------------------------------------------------------------
+
+class _NoMatchesState extends StatelessWidget {
+  const _NoMatchesState({required this.colors});
+
+  final WeatherThemeColors colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(OutAboutSpacing.lg),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.cloud_outlined,
+            size: 48,
+            color: colors.textSecondary,
+          ),
+          const SizedBox(height: OutAboutSpacing.md),
+          Text(
+            'No matches right now',
+            style:
+                OutAboutTypography.headingMedium(colors),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: OutAboutSpacing.sm),
+          Text(
+            'Your activities don\'t match current '
+            'conditions. We\'ll notify you when they do.',
+            style: OutAboutTypography.bodyMedium(colors)
+                .copyWith(color: colors.textSecondary),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    )
+        .animate()
+        .fadeIn(
+          duration:
+              OutAboutAnimations.standardDuration,
         );
   }
 }
