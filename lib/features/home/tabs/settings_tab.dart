@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers.dart';
 import '../../../core/theme.dart';
 import '../../../core/weather_theme_provider.dart';
+import '../../../services/notification_service.dart';
 import '../home_providers.dart';
 
 // ---------------------------------------------------------------------------
@@ -570,6 +571,7 @@ class _SignOutButton extends ConsumerWidget {
 
     if (confirmed != true) return;
 
+    ref.read(notificationServiceProvider).clearUserTag();
     final client = ref.read(supabaseClientProvider);
     await client.auth.signOut();
     final prefs =

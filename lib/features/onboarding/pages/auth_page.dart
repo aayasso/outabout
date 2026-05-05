@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/providers.dart';
 import '../../../core/theme.dart';
 import '../../../core/weather_theme_provider.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/behavioral_event_service.dart';
+import '../../../services/notification_service.dart';
 import '../widgets/onboarding_button.dart';
 
 class AuthPage extends ConsumerStatefulWidget {
@@ -70,6 +72,11 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     if (result.success) {
       OutAboutHaptics.onConditionMatch();
       ref.read(behavioralEventServiceProvider).log('auth_completed');
+      final userId =
+          ref.read(supabaseClientProvider).auth.currentUser?.id;
+      if (userId != null) {
+        ref.read(notificationServiceProvider).setUserTag(userId);
+      }
       widget.onNext();
     } else {
       setState(() => _errorMessage = result.errorMessage);
@@ -87,6 +94,11 @@ class _AuthPageState extends ConsumerState<AuthPage> {
 
     if (result.success) {
       ref.read(behavioralEventServiceProvider).log('auth_skipped');
+      final userId =
+          ref.read(supabaseClientProvider).auth.currentUser?.id;
+      if (userId != null) {
+        ref.read(notificationServiceProvider).setUserTag(userId);
+      }
       widget.onNext();
     } else {
       setState(() => _errorMessage =

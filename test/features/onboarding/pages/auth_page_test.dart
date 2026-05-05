@@ -5,13 +5,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show User;
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show GoTrueClient, SupabaseClient, User;
 
+import 'package:outabout/core/providers.dart';
 import 'package:outabout/core/theme.dart';
 import 'package:outabout/core/weather_theme_provider.dart';
 import 'package:outabout/features/onboarding/pages/auth_page.dart';
 import 'package:outabout/services/auth_service.dart';
 import 'package:outabout/services/behavioral_event_service.dart';
+import 'package:outabout/services/notification_service.dart';
 
 class MockAuthService extends Mock implements AuthService {}
 
@@ -19,6 +22,12 @@ class MockBehavioralEventService extends Mock
     implements BehavioralEventService {}
 
 class MockUser extends Mock implements User {}
+
+class MockSupabaseClient extends Mock implements SupabaseClient {}
+
+class MockGoTrueClient extends Mock implements GoTrueClient {}
+
+class MockNotificationService extends Mock implements NotificationService {}
 
 void main() {
   group('AuthPage', () {
@@ -47,6 +56,23 @@ void main() {
       return mockAuthService;
     }
 
+    MockSupabaseClient buildMockSupabaseClient() {
+      final mockClient = MockSupabaseClient();
+      final mockAuth = MockGoTrueClient();
+      final mockUser = MockUser();
+      when(() => mockUser.id).thenReturn('test-user-id');
+      when(() => mockAuth.currentUser).thenReturn(mockUser);
+      when(() => mockClient.auth).thenReturn(mockAuth);
+      return mockClient;
+    }
+
+    MockNotificationService buildMockNotificationService() {
+      final mock = MockNotificationService();
+      when(() => mock.setUserTag(any())).thenAnswer((_) async {});
+      when(() => mock.clearUserTag()).thenAnswer((_) async {});
+      return mock;
+    }
+
     Widget buildSubject({
       required VoidCallback onNext,
       SharedPreferences? prefs,
@@ -56,6 +82,8 @@ void main() {
     }) {
       final eventService = mockEventService ?? buildMockEventService();
       final authService = mockAuthService ?? buildMockAuthService();
+      final supabaseClient = buildMockSupabaseClient();
+      final notifService = buildMockNotificationService();
       return ProviderScope(
         overrides: [
           if (prefs != null)
@@ -66,6 +94,8 @@ void main() {
             ),
           behavioralEventServiceProvider.overrideWithValue(eventService),
           authServiceProvider.overrideWithValue(authService),
+          supabaseClientProvider.overrideWithValue(supabaseClient),
+          notificationServiceProvider.overrideWithValue(notifService),
         ],
         child: MaterialApp(
           home: Scaffold(body: AuthPage(onNext: onNext)),
