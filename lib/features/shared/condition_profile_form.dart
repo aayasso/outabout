@@ -5,6 +5,13 @@ import '../../core/theme.dart';
 import '../../core/weather_theme_provider.dart';
 
 // ---------------------------------------------------------------------------
+// Unit conversion helpers
+// ---------------------------------------------------------------------------
+
+int _celsiusToFahrenheit(double c) => (c * 9 / 5 + 32).round();
+int _kmhToMph(double kmh) => (kmh * 0.621371).round();
+
+// ---------------------------------------------------------------------------
 // ConditionSection — toggle wrapper with animated child
 // ---------------------------------------------------------------------------
 
@@ -94,26 +101,36 @@ class TemperatureSection extends StatelessWidget {
     required this.min,
     required this.max,
     required this.onChanged,
+    required this.temperatureUnit,
   });
 
   final WeatherThemeColors colors;
   final double min;
   final double max;
   final ValueChanged<RangeValues> onChanged;
+  final String temperatureUnit;
 
   @override
   Widget build(BuildContext context) {
+    final minDisplay = temperatureUnit == 'F'
+        ? _celsiusToFahrenheit(min)
+        : min.round();
+    final maxDisplay = temperatureUnit == 'F'
+        ? _celsiusToFahrenheit(max)
+        : max.round();
+    final unit = '\u00B0$temperatureUnit';
+
     return Column(
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              '${min.round()} C',
+              '$minDisplay $unit',
               style: OutAboutTypography.labelMedium(colors),
             ),
             Text(
-              '${max.round()} C',
+              '$maxDisplay $unit',
               style: OutAboutTypography.labelMedium(colors),
             ),
           ],
@@ -131,8 +148,8 @@ class TemperatureSection extends StatelessWidget {
             max: 50,
             divisions: 50,
             labels: RangeLabels(
-              '${min.round()}',
-              '${max.round()}',
+              '$minDisplay$unit',
+              '$maxDisplay$unit',
             ),
             onChanged: onChanged,
           ),
@@ -205,20 +222,27 @@ class WindSection extends StatelessWidget {
     required this.colors,
     required this.maxWind,
     required this.onChanged,
+    required this.temperatureUnit,
   });
 
   final WeatherThemeColors colors;
   final double maxWind;
   final ValueChanged<double> onChanged;
+  final String temperatureUnit;
 
   @override
   Widget build(BuildContext context) {
+    final windDisplay = temperatureUnit == 'F'
+        ? _kmhToMph(maxWind)
+        : maxWind.round();
+    final windUnit = temperatureUnit == 'F' ? 'mph' : 'km/h';
+
     return Column(
       children: [
         Align(
           alignment: Alignment.centerLeft,
           child: Text(
-            'Max ${maxWind.round()} km/h',
+            'Max $windDisplay $windUnit',
             style: OutAboutTypography.labelMedium(colors),
           ),
         ),
@@ -234,7 +258,7 @@ class WindSection extends StatelessWidget {
             min: 0,
             max: 80,
             divisions: 80,
-            label: '${maxWind.round()} km/h',
+            label: '$windDisplay $windUnit',
             onChanged: onChanged,
           ),
         ),

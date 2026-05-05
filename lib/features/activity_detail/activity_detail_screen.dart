@@ -220,6 +220,9 @@ class _ActivityDetailScreenState
   @override
   Widget build(BuildContext context) {
     final colors = ref.watch(weatherThemeColorsProvider);
+    final profileAsync = ref.watch(profileProvider);
+    final temperatureUnit =
+        profileAsync.valueOrNull?.temperatureUnit ?? 'F';
     final activityAsync = ref.watch(
       activityDetailProvider(widget.activityId),
     );
@@ -262,7 +265,8 @@ class _ActivityDetailScreenState
               return _ArchivedBanner(colors: colors);
             }
             _initializeControllers(activity);
-            return _buildForm(activity, colors);
+            return _buildForm(
+              activity, colors, temperatureUnit);
           },
         ),
       ),
@@ -272,6 +276,7 @@ class _ActivityDetailScreenState
   Widget _buildForm(
     Activity activity,
     WeatherThemeColors colors,
+    String temperatureUnit,
   ) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(OutAboutSpacing.md),
@@ -331,6 +336,7 @@ class _ActivityDetailScreenState
               colors: colors,
               min: _tempMin,
               max: _tempMax,
+              temperatureUnit: temperatureUnit,
               onChanged: (range) => setState(() {
                 _tempMin = range.start;
                 _tempMax = range.end;
@@ -361,6 +367,7 @@ class _ActivityDetailScreenState
             child: WindSection(
               colors: colors,
               maxWind: _windMax,
+              temperatureUnit: temperatureUnit,
               onChanged: (v) =>
                   setState(() => _windMax = v),
             ),
