@@ -8,6 +8,7 @@ import '../../core/theme.dart';
 import '../../core/weather_theme_provider.dart';
 import '../../data/models/condition_profile.dart';
 import '../../data/models/activity.dart';
+import '../../data/models/notification_preference.dart';
 import '../../services/behavioral_event_service.dart';
 import '../home/home_providers.dart';
 import '../shared/condition_profile_form.dart';
@@ -46,6 +47,15 @@ class _ActivityDetailScreenState
   double _uvMin = 0.0;
   double _uvMax = 11.0;
 
+  // Notification preferences state
+  bool _notifInitialized = false;
+  bool _notifyMorningOf = false;
+  TimeOfDay _morningTime = const TimeOfDay(hour: 7, minute: 0);
+  bool _notifyNightBefore = false;
+  bool _notifyDaysBefore = false;
+  int _daysBeforeCount = 2;
+  bool _notifySundayDigest = false;
+
   @override
   void initState() {
     super.initState();
@@ -78,6 +88,19 @@ class _ActivityDetailScreenState
       _uvMax = profile.uvMax ?? 11.0;
     }
     _initialized = true;
+  }
+
+  void _initializeNotificationState(
+    NotificationPreference? pref,
+  ) {
+    if (_notifInitialized || pref == null) return;
+    _notifyMorningOf = pref.notifyMorningOf;
+    _morningTime = pref.morningTime;
+    _notifyNightBefore = pref.notifyNightBefore;
+    _notifyDaysBefore = pref.notifyDaysBefore;
+    _daysBeforeCount = pref.daysBeforeCount;
+    _notifySundayDigest = pref.notifySundayDigest;
+    _notifInitialized = true;
   }
 
   Future<void> _onSave(Activity original) async {
@@ -134,6 +157,21 @@ class _ActivityDetailScreenState
         profile,
       );
 
+      final notifRepo =
+          ref.read(notificationPreferenceRepositoryProvider);
+      await notifRepo.upsert(
+        NotificationPreference(
+          id: '',
+          activityId: original.id!,
+          notifyMorningOf: _notifyMorningOf,
+          morningTime: _morningTime,
+          notifyNightBefore: _notifyNightBefore,
+          notifyDaysBefore: _notifyDaysBefore,
+          daysBeforeCount: _daysBeforeCount,
+          notifySundayDigest: _notifySundayDigest,
+        ),
+      );
+
       await events.log(
         'condition_profile_updated',
         extra: {'activity_id': original.id},
@@ -144,6 +182,11 @@ class _ActivityDetailScreenState
       ref.invalidate(activitiesProvider);
       ref.invalidate(
         activityDetailProvider(widget.activityId),
+      );
+      ref.invalidate(
+        notificationPreferenceProvider(
+          widget.activityId,
+        ),
       );
 
       if (mounted) context.pop();
@@ -226,6 +269,10 @@ class _ActivityDetailScreenState
     final activityAsync = ref.watch(
       activityDetailProvider(widget.activityId),
     );
+    final notifAsync = ref.watch(
+      notificationPreferenceProvider(widget.activityId),
+    );
+    _initializeNotificationState(notifAsync.valueOrNull);
 
     return PopScope(
       canPop: !_isSaving,
@@ -266,7 +313,8 @@ class _ActivityDetailScreenState
             }
             _initializeControllers(activity);
             return _buildForm(
-              activity, colors, temperatureUnit);
+              activity, colors, temperatureUnit,
+              notifAsync);
           },
         ),
       ),
@@ -277,6 +325,7 @@ class _ActivityDetailScreenState
     Activity activity,
     WeatherThemeColors colors,
     String temperatureUnit,
+    AsyncValue<NotificationPreference?> notifAsync,
   ) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(OutAboutSpacing.md),
@@ -390,6 +439,8 @@ class _ActivityDetailScreenState
             ),
           ),
           const SizedBox(height: OutAboutSpacing.lg),
+          _buildNotificationSection(colors, notifAsync),
+          const SizedBox(height: OutAboutSpacing.lg),
           if (_errorMessage != null) ...[
             _ErrorBanner(
               colors: colors,
@@ -442,6 +493,83 @@ class _ActivityDetailScreenState
           end: 0,
           curve: Curves.easeOutCubic,
         );
+  }
+
+  Widget _buildNotificationSection(
+    WeatherThemeColors colors,
+    AsyncValue<NotificationPreference?> notifAsync,
+  ) {
+    return notifAsync.when(
+      loading: () => _NotificationShimmer(colors: colors),
+      error: (error, _) => _NotificationError(
+        colors: colors,
+        onRetry: () => ref.invalidate(
+          notificationPreferenceProvider(
+            widget.activityId,
+          ),
+        ),
+      ),
+      data: (_) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Notifications',
+            style:
+                OutAboutTypography.headingMedium(colors),
+          ),
+          const SizedBox(height: OutAboutSpacing.md),
+          ConditionSection(
+            title: 'Morning of',
+            icon: Icons.wb_sunny_outlined,
+            enabled: _notifyMorningOf,
+            onToggled: (v) =>
+                setState(() => _notifyMorningOf = v),
+            child: _MorningTimePicker(
+              colors: colors,
+              time: _morningTime,
+              onTimeChanged: (t) =>
+                  setState(() => _morningTime = t),
+            ),
+          ),
+          const SizedBox(height: OutAboutSpacing.sm),
+          ConditionSection(
+            title: 'Night before',
+            icon: Icons.nightlight_outlined,
+            enabled: _notifyNightBefore,
+            onToggled: (v) =>
+                setState(() => _notifyNightBefore = v),
+            child: const SizedBox.shrink(),
+          ),
+          const SizedBox(height: OutAboutSpacing.sm),
+          ConditionSection(
+            title: 'Days before',
+            icon: Icons.calendar_today_outlined,
+            enabled: _notifyDaysBefore,
+            onToggled: (v) =>
+                setState(() => _notifyDaysBefore = v),
+            child: _DaysBeforeStepper(
+              colors: colors,
+              count: _daysBeforeCount,
+              onChanged: (c) =>
+                  setState(() => _daysBeforeCount = c),
+            ),
+          ),
+          const SizedBox(height: OutAboutSpacing.sm),
+          ConditionSection(
+            title: 'Sunday digest',
+            icon: Icons.list_alt_outlined,
+            enabled: _notifySundayDigest,
+            onToggled: (v) =>
+                setState(() => _notifySundayDigest = v),
+            child: const SizedBox.shrink(),
+          ),
+        ],
+      )
+          .animate()
+          .fadeIn(
+            duration: OutAboutAnimations.standardDuration,
+          ),
+    );
   }
 }
 
@@ -660,6 +788,226 @@ class _ErrorBanner extends StatelessWidget {
               style: OutAboutTypography.bodySmall(colors)
                   .copyWith(
                       color: OutAboutColors.errorColor),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// _MorningTimePicker
+// ---------------------------------------------------------------------------
+
+class _MorningTimePicker extends StatelessWidget {
+  const _MorningTimePicker({
+    required this.colors,
+    required this.time,
+    required this.onTimeChanged,
+  });
+
+  final WeatherThemeColors colors;
+  final TimeOfDay time;
+  final ValueChanged<TimeOfDay> onTimeChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () async {
+        final picked = await showTimePicker(
+          context: context,
+          initialTime: time,
+        );
+        if (picked != null) onTimeChanged(picked);
+      },
+      child: Semantics(
+        label: 'Notification time: ${time.format(context)}'
+            '. Tap to change.',
+        button: true,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: OutAboutSpacing.md,
+            vertical: OutAboutSpacing.sm,
+          ),
+          decoration: BoxDecoration(
+            color: colors.surface,
+            borderRadius: BorderRadius.circular(
+              OutAboutRadius.buttons,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.access_time,
+                color: colors.primary,
+                size: 18,
+              ),
+              const SizedBox(width: OutAboutSpacing.sm),
+              Text(
+                time.format(context),
+                style:
+                    OutAboutTypography.bodyMedium(colors),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// _DaysBeforeStepper
+// ---------------------------------------------------------------------------
+
+class _DaysBeforeStepper extends StatelessWidget {
+  const _DaysBeforeStepper({
+    required this.colors,
+    required this.count,
+    required this.onChanged,
+  });
+
+  final WeatherThemeColors colors;
+  final int count;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          '$count ${count == 1 ? 'day' : 'days'} before',
+          style: OutAboutTypography.bodyMedium(colors),
+        ),
+        const Spacer(),
+        SizedBox(
+          width: 48,
+          height: 48,
+          child: IconButton(
+            icon: Icon(
+              Icons.remove_circle_outline,
+              color: count <= 1
+                  ? colors.divider
+                  : colors.primary,
+            ),
+            onPressed: count <= 1
+                ? null
+                : () => onChanged(count - 1),
+            tooltip: 'Decrease days',
+          ),
+        ),
+        SizedBox(
+          width: 48,
+          height: 48,
+          child: IconButton(
+            icon: Icon(
+              Icons.add_circle_outline,
+              color: count >= 7
+                  ? colors.divider
+                  : colors.primary,
+            ),
+            onPressed: count >= 7
+                ? null
+                : () => onChanged(count + 1),
+            tooltip: 'Increase days',
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// _NotificationShimmer
+// ---------------------------------------------------------------------------
+
+class _NotificationShimmer extends StatelessWidget {
+  const _NotificationShimmer({required this.colors});
+  final WeatherThemeColors colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return Shimmer.fromColors(
+      baseColor: colors.surface,
+      highlightColor: colors.divider,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            height: 20,
+            width: 120,
+            decoration: BoxDecoration(
+              color: colors.cardBackground,
+              borderRadius: BorderRadius.circular(
+                OutAboutRadius.sm,
+              ),
+            ),
+          ),
+          const SizedBox(height: OutAboutSpacing.md),
+          for (int i = 0; i < 4; i++) ...[
+            Container(
+              height: 64,
+              decoration: BoxDecoration(
+                color: colors.cardBackground,
+                borderRadius: BorderRadius.circular(
+                  OutAboutRadius.cards,
+                ),
+              ),
+            ),
+            const SizedBox(height: OutAboutSpacing.sm),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// _NotificationError
+// ---------------------------------------------------------------------------
+
+class _NotificationError extends StatelessWidget {
+  const _NotificationError({
+    required this.colors,
+    required this.onRetry,
+  });
+
+  final WeatherThemeColors colors;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(OutAboutSpacing.md),
+      decoration: BoxDecoration(
+        color:
+            OutAboutColors.errorColor.withValues(alpha: 0.1),
+        borderRadius:
+            BorderRadius.circular(OutAboutRadius.cards),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.notifications_off_outlined,
+            color: colors.textSecondary,
+            size: 20,
+          ),
+          const SizedBox(width: OutAboutSpacing.sm),
+          Expanded(
+            child: Text(
+              'Could not load notification preferences.',
+              style: OutAboutTypography.bodySmall(colors),
+            ),
+          ),
+          TextButton(
+            onPressed: onRetry,
+            child: Text(
+              'Retry',
+              style:
+                  OutAboutTypography.labelMedium(colors)
+                      .copyWith(color: colors.primary),
             ),
           ),
         ],
