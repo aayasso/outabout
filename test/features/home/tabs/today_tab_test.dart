@@ -10,7 +10,7 @@ import 'package:outabout/data/models/user_location.dart';
 import 'package:outabout/data/models/weather_data.dart';
 import 'package:outabout/features/home/home_providers.dart';
 import 'package:outabout/features/home/tabs/today_tab.dart';
-import 'package:outabout/models/activity.dart';
+import 'package:outabout/data/models/activity.dart';
 
 void main() {
   group('TodayTab', () {

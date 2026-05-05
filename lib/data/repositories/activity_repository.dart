@@ -1,7 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/condition_profile.dart';
-import '../../models/activity.dart';
+import '../models/activity.dart';
 
 class ActivityRepository {
   ActivityRepository(this._client);

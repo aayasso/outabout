@@ -10,7 +10,7 @@ import 'package:outabout/core/providers.dart';
 import 'package:outabout/core/theme.dart';
 import 'package:outabout/core/weather_theme_provider.dart';
 import 'package:outabout/features/onboarding/pages/first_activity_page.dart';
-import 'package:outabout/models/activity.dart';
+import 'package:outabout/data/models/activity.dart';
 import 'package:outabout/services/behavioral_event_service.dart';
 
 class MockSupabaseClient extends Mock implements SupabaseClient {}

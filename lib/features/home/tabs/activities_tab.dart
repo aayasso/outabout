@@ -8,7 +8,7 @@ import '../../../core/router.dart';
 import '../../../core/theme.dart';
 import '../../../core/weather_theme_provider.dart';
 import '../../../data/models/condition_profile.dart';
-import '../../../models/activity.dart';
+import '../../../data/models/activity.dart';
 import '../home_providers.dart';
 
 // ---------------------------------------------------------------------------

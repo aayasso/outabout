@@ -10,7 +10,7 @@ import '../../core/theme.dart';
 import '../../core/weather_theme_provider.dart';
 import '../../data/models/condition_profile.dart';
 import '../../features/home/home_providers.dart';
-import '../../models/activity.dart';
+import '../../data/models/activity.dart';
 import '../../services/behavioral_event_service.dart';
 
 class AddActivityScreen extends ConsumerStatefulWidget {
