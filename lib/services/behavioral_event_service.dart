@@ -6,7 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/providers.dart';
 import '../core/weather_theme_provider.dart';
-import '../models/behavioral_event.dart';
+import '../data/models/behavioral_event.dart';
 
 // ---------------------------------------------------------------------------
 // Approved event types

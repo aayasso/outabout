@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 
-import '../models/behavioral_event.dart';
+import '../data/models/behavioral_event.dart';
 
 // ---------------------------------------------------------------------------
 // LocationPermissionResult
