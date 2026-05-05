@@ -184,6 +184,17 @@ bool evaluateMatch(
 }
 
 // ---------------------------------------------------------------------------
+// Activity detail provider
+// ---------------------------------------------------------------------------
+
+final activityDetailProvider =
+    FutureProvider.family<Activity?, String>(
+        (ref, activityId) async {
+  final repo = ref.watch(activityRepositoryProvider);
+  return repo.fetchById(activityId);
+});
+
+// ---------------------------------------------------------------------------
 // Profile provider
 // ---------------------------------------------------------------------------
 
