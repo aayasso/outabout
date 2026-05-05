@@ -12,7 +12,7 @@ import '../../data/models/user_location.dart';
 import '../../data/models/weather_data.dart';
 import '../../data/repositories/activity_repository.dart';
 import '../../data/repositories/weather_repository.dart';
-import '../../models/activity.dart';
+import '../../data/models/activity.dart';
 import '../../services/location_service.dart';
 
 // ---------------------------------------------------------------------------

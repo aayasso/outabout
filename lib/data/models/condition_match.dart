@@ -1,4 +1,4 @@
-import 'package:outabout/models/activity.dart';
+import 'package:outabout/data/models/activity.dart';
 
 class ConditionMatch {
   final Activity activity;

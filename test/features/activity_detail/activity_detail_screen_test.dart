@@ -10,7 +10,7 @@ import 'package:outabout/core/theme.dart';
 import 'package:outabout/core/weather_theme_provider.dart';
 import 'package:outabout/features/activity_detail/activity_detail_screen.dart';
 import 'package:outabout/features/home/home_providers.dart';
-import 'package:outabout/models/activity.dart';
+import 'package:outabout/data/models/activity.dart';
 import 'package:outabout/services/behavioral_event_service.dart';
 
 class MockBehavioralEventService extends Mock

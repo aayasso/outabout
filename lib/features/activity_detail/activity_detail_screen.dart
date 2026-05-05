@@ -7,7 +7,7 @@ import 'package:shimmer/shimmer.dart';
 import '../../core/theme.dart';
 import '../../core/weather_theme_provider.dart';
 import '../../data/models/condition_profile.dart';
-import '../../models/activity.dart';
+import '../../data/models/activity.dart';
 import '../../services/behavioral_event_service.dart';
 import '../home/home_providers.dart';
 import '../shared/condition_profile_form.dart';
