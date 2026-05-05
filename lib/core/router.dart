@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/activity_detail/activity_detail_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/home/tabs/activities_tab.dart';
 import '../features/home/tabs/settings_tab.dart';
@@ -90,6 +91,19 @@ final routerProvider = Provider<GoRouter>((ref) {
           child: const _OnboardingPlaceholder(),
           state: state,
         ),
+      ),
+      GoRoute(
+        path: AppRoutes.activity,
+        pageBuilder: (context, state) {
+          final activityId =
+              state.pathParameters['id']!;
+          return _fadeTransitionPage(
+            child: ActivityDetailScreen(
+              activityId: activityId,
+            ),
+            state: state,
+          );
+        },
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
