@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/router.dart';
 import 'core/theme.dart';
 import 'core/weather_theme_provider.dart';
+import 'features/home/home_providers.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,11 +33,36 @@ Future<void> main() async {
   );
 }
 
-class OutAboutApp extends ConsumerWidget {
+class OutAboutApp extends ConsumerStatefulWidget {
   const OutAboutApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<OutAboutApp> createState() => _OutAboutAppState();
+}
+
+class _OutAboutAppState extends ConsumerState<OutAboutApp> {
+  late final AppLifecycleListener _lifecycleListener;
+
+  @override
+  void initState() {
+    super.initState();
+    _lifecycleListener = AppLifecycleListener(
+      onResume: _onResume,
+    );
+  }
+
+  void _onResume() {
+    ref.invalidate(weatherDataProvider);
+  }
+
+  @override
+  void dispose() {
+    _lifecycleListener.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final themeData = ref.watch(themeDataProvider);
 
     final router = ref.watch(routerProvider);
