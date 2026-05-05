@@ -7,10 +7,12 @@ import '../../core/providers.dart';
 import '../../core/weather_theme_provider.dart';
 import '../../data/models/condition_match.dart';
 import '../../data/models/condition_profile.dart';
+import '../../data/models/notification_preference.dart';
 import '../../data/models/profile.dart';
 import '../../data/models/user_location.dart';
 import '../../data/models/weather_data.dart';
 import '../../data/repositories/activity_repository.dart';
+import '../../data/repositories/notification_preference_repository.dart';
 import '../../data/repositories/weather_repository.dart';
 import '../../data/models/activity.dart';
 import '../../services/location_service.dart';
@@ -241,3 +243,23 @@ final profileProvider = FutureProvider<Profile?>((ref) async {
       .maybeSingle();
   return data != null ? Profile.fromJson(data) : null;
 });
+
+// ---------------------------------------------------------------------------
+// Notification preference providers
+// ---------------------------------------------------------------------------
+
+final notificationPreferenceRepositoryProvider =
+    Provider<NotificationPreferenceRepository>((ref) {
+  return NotificationPreferenceRepository(
+    ref.watch(supabaseClientProvider),
+  );
+});
+
+final notificationPreferenceProvider =
+    FutureProvider.family<NotificationPreference?, String>(
+  (ref, activityId) async {
+    return ref
+        .watch(notificationPreferenceRepositoryProvider)
+        .fetchByActivityId(activityId);
+  },
+);
