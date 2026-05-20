@@ -10,8 +10,12 @@ import '../../data/models/condition_profile.dart';
 import '../../data/models/activity.dart';
 import '../../data/models/notification_preference.dart';
 import '../../services/behavioral_event_service.dart';
+import '../../widgets/category_chip_picker.dart';
 import '../home/home_providers.dart';
 import '../shared/condition_profile_form.dart';
+
+const int maxNameLength = 50;
+const int maxNotesLength = 200;
 
 class ActivityDetailScreen extends ConsumerStatefulWidget {
   const ActivityDetailScreen({
@@ -32,6 +36,7 @@ class _ActivityDetailScreenState
   final _notesController = TextEditingController();
 
   bool _initialized = false;
+  final Set<String> _selectedCategoryIds = {};
   bool _isSaving = false;
   String? _errorMessage;
 
@@ -60,6 +65,7 @@ class _ActivityDetailScreenState
   void initState() {
     super.initState();
     _nameController.addListener(() => setState(() {}));
+    _notesController.addListener(() => setState(() {}));
   }
 
   @override
@@ -73,6 +79,7 @@ class _ActivityDetailScreenState
     if (_initialized) return;
     _nameController.text = activity.name;
     _notesController.text = activity.notes ?? '';
+    _selectedCategoryIds.addAll(activity.categoryIds);
 
     final profile = activity.conditionProfile;
     if (profile != null) {
@@ -103,8 +110,33 @@ class _ActivityDetailScreenState
     _notifInitialized = true;
   }
 
+  bool get _canSave {
+    if (_isSaving) return false;
+    final name = _nameController.text.trim();
+    if (name.isEmpty || name.length > maxNameLength) {
+      return false;
+    }
+    if (_notesController.text.length > maxNotesLength) {
+      return false;
+    }
+    return true;
+  }
+
+  String? get _disabledReason {
+    if (_isSaving) return null;
+    final name = _nameController.text.trim();
+    if (name.isEmpty) return null;
+    if (name.length > maxNameLength) {
+      return 'Name is too long';
+    }
+    if (_notesController.text.length > maxNotesLength) {
+      return 'Notes exceed $maxNotesLength characters';
+    }
+    return null;
+  }
+
   Future<void> _onSave(Activity original) async {
-    if (_nameController.text.trim().isEmpty) return;
+    if (!_canSave) return;
 
     setState(() {
       _isSaving = true;
@@ -124,7 +156,7 @@ class _ActivityDetailScreenState
             : _notesController.text.trim(),
         url: original.url,
         location: original.location,
-        categoryIds: original.categoryIds,
+        categoryIds: _selectedCategoryIds.toList(),
         isArchived: original.isArchived,
         geographicContext: original.geographicContext,
       );
@@ -249,6 +281,13 @@ class _ActivityDetailScreenState
     try {
       final repo = ref.read(activityRepositoryProvider);
       await repo.archive(activity.id!);
+      ref.read(behavioralEventServiceProvider).log(
+        'wishlist_removed',
+        extra: {
+          'activity_id': activity.id,
+          'method': 'archive_button',
+        },
+      );
       OutAboutHaptics.onActivitySave();
       ref.invalidate(activitiesProvider);
       if (mounted) context.pop();
@@ -336,9 +375,21 @@ class _ActivityDetailScreenState
             controller: _nameController,
             style: OutAboutTypography.bodyLarge(colors),
             decoration: InputDecoration(
-              labelText: 'Activity Name',
+              labelText: 'Activity name *',
               labelStyle:
                   OutAboutTypography.labelMedium(colors),
+              errorText: _nameController.text
+                          .trim()
+                          .length >
+                      maxNameLength
+                  ? 'Name must be $maxNameLength'
+                      ' characters or less'
+                  : null,
+              errorStyle:
+                  OutAboutTypography.bodySmall(colors)
+                      .copyWith(
+                color: OutAboutColors.errorColor,
+              ),
               enabledBorder: UnderlineInputBorder(
                 borderSide:
                     BorderSide(color: colors.divider),
@@ -350,25 +401,85 @@ class _ActivityDetailScreenState
             ),
           ),
           const SizedBox(height: OutAboutSpacing.md),
-          TextField(
-            controller: _notesController,
-            style: OutAboutTypography.bodyMedium(colors),
-            maxLines: 3,
-            decoration: InputDecoration(
-              labelText: 'Notes (optional)',
-              labelStyle:
-                  OutAboutTypography.labelMedium(colors),
-              enabledBorder: UnderlineInputBorder(
-                borderSide:
-                    BorderSide(color: colors.divider),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              TextField(
+                controller: _notesController,
+                style:
+                    OutAboutTypography.bodyMedium(colors),
+                maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: 'Notes (optional)',
+                  labelStyle:
+                      OutAboutTypography.labelMedium(
+                    colors,
+                  ),
+                  enabledBorder: UnderlineInputBorder(
+                    borderSide:
+                        BorderSide(color: colors.divider),
+                  ),
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide:
+                        BorderSide(color: colors.primary),
+                  ),
+                ),
               ),
-              focusedBorder: UnderlineInputBorder(
-                borderSide:
-                    BorderSide(color: colors.primary),
-              ),
-            ),
+              if (_notesController
+                  .text.isNotEmpty) ...[
+                const SizedBox(
+                  height: OutAboutSpacing.xs,
+                ),
+                Text(
+                  '${_notesController.text.length}'
+                  ' / $maxNotesLength',
+                  style: OutAboutTypography.bodySmall(
+                    colors,
+                  ).copyWith(
+                    color:
+                        _notesController.text.length >
+                                maxNotesLength
+                            ? OutAboutColors.errorColor
+                            : colors.textSecondary,
+                  ),
+                ),
+              ],
+            ],
           ),
           const SizedBox(height: OutAboutSpacing.lg),
+          CategoryChipPicker(
+            selectedIds: _selectedCategoryIds,
+            onToggle: (id) {
+              setState(() {
+                if (_selectedCategoryIds.contains(id)) {
+                  _selectedCategoryIds.remove(id);
+                } else {
+                  _selectedCategoryIds.add(id);
+                }
+              });
+              final isNowSelected =
+                  _selectedCategoryIds.contains(id);
+              ref
+                  .read(behavioralEventServiceProvider)
+                  .log(
+                    isNowSelected
+                        ? 'category_selected'
+                        : 'category_deselected',
+                    extra: {
+                      'category_id': id,
+                      'activity_id':
+                          widget.activityId,
+                    },
+                  );
+            },
+            onCreateCategory: () =>
+                showCreateCategoryFlow(
+              context,
+              ref,
+              colors,
+            ),
+          ),
+          const SizedBox(height: OutAboutSpacing.md),
           Text(
             'Weather Conditions',
             style:
@@ -451,12 +562,9 @@ class _ActivityDetailScreenState
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: _nameController.text
-                          .trim()
-                          .isEmpty ||
-                      _isSaving
-                  ? null
-                  : () => _onSave(activity),
+              onPressed: _canSave
+                  ? () => _onSave(activity)
+                  : null,
               child: _isSaving
                   ? SizedBox(
                       width: 20,
@@ -469,6 +577,21 @@ class _ActivityDetailScreenState
                   : const Text('Save'),
             ),
           ),
+          if (_disabledReason case final reason?)
+            Padding(
+              padding: const EdgeInsets.only(
+                top: OutAboutSpacing.sm,
+              ),
+              child: Text(
+                reason,
+                style:
+                    OutAboutTypography.bodySmall(colors)
+                        .copyWith(
+                  color: colors.textSecondary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
           const SizedBox(height: OutAboutSpacing.md),
           Center(
             child: TextButton(
@@ -522,8 +645,20 @@ class _ActivityDetailScreenState
             title: 'Morning of',
             icon: Icons.wb_sunny_outlined,
             enabled: _notifyMorningOf,
-            onToggled: (v) =>
-                setState(() => _notifyMorningOf = v),
+            onToggled: (v) {
+              setState(() => _notifyMorningOf = v);
+              ref
+                  .read(behavioralEventServiceProvider)
+                  .log(
+                    'notification_preference_changed',
+                    extra: {
+                      'activity_id':
+                          widget.activityId,
+                      'preference_type': 'morning_of',
+                      'new_value': v,
+                    },
+                  );
+            },
             child: _MorningTimePicker(
               colors: colors,
               time: _morningTime,
@@ -536,8 +671,21 @@ class _ActivityDetailScreenState
             title: 'Night before',
             icon: Icons.nightlight_outlined,
             enabled: _notifyNightBefore,
-            onToggled: (v) =>
-                setState(() => _notifyNightBefore = v),
+            onToggled: (v) {
+              setState(() => _notifyNightBefore = v);
+              ref
+                  .read(behavioralEventServiceProvider)
+                  .log(
+                    'notification_preference_changed',
+                    extra: {
+                      'activity_id':
+                          widget.activityId,
+                      'preference_type':
+                          'night_before',
+                      'new_value': v,
+                    },
+                  );
+            },
             child: const SizedBox.shrink(),
           ),
           const SizedBox(height: OutAboutSpacing.sm),
@@ -545,8 +693,21 @@ class _ActivityDetailScreenState
             title: 'Days before',
             icon: Icons.calendar_today_outlined,
             enabled: _notifyDaysBefore,
-            onToggled: (v) =>
-                setState(() => _notifyDaysBefore = v),
+            onToggled: (v) {
+              setState(() => _notifyDaysBefore = v);
+              ref
+                  .read(behavioralEventServiceProvider)
+                  .log(
+                    'notification_preference_changed',
+                    extra: {
+                      'activity_id':
+                          widget.activityId,
+                      'preference_type':
+                          'days_before',
+                      'new_value': v,
+                    },
+                  );
+            },
             child: _DaysBeforeStepper(
               colors: colors,
               count: _daysBeforeCount,
@@ -559,8 +720,21 @@ class _ActivityDetailScreenState
             title: 'Sunday digest',
             icon: Icons.list_alt_outlined,
             enabled: _notifySundayDigest,
-            onToggled: (v) =>
-                setState(() => _notifySundayDigest = v),
+            onToggled: (v) {
+              setState(() => _notifySundayDigest = v);
+              ref
+                  .read(behavioralEventServiceProvider)
+                  .log(
+                    'notification_preference_changed',
+                    extra: {
+                      'activity_id':
+                          widget.activityId,
+                      'preference_type':
+                          'sunday_digest',
+                      'new_value': v,
+                    },
+                  );
+            },
             child: const SizedBox.shrink(),
           ),
         ],

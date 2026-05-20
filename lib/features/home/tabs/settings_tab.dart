@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../../core/providers.dart';
 import '../../../core/theme.dart';
 import '../../../core/weather_theme_provider.dart';
+import '../../../services/behavioral_event_service.dart';
 import '../../../services/notification_service.dart';
 import '../home_providers.dart';
 
@@ -26,9 +28,8 @@ class SettingsTab extends ConsumerWidget {
     final displayName = profileAsync.valueOrNull
             ?.displayName ??
         'OutAbout User';
-    final cityName =
-        locationAsync.valueOrNull?.city ??
-            'Location not set';
+    final location = locationAsync.valueOrNull;
+    final cityName = location?.city ?? 'Location not set';
 
     return Scaffold(
       backgroundColor: colors.background,
@@ -68,11 +69,31 @@ class SettingsTab extends ConsumerWidget {
                 header: 'Location',
                 colors: colors,
                 children: [
-                  _SettingsRow(
-                    icon: Icons.location_on_outlined,
-                    label: cityName,
-                    colors: colors,
-                  ),
+                  if (location == null)
+                    _SettingsRow(
+                      icon:
+                          Icons.location_off_outlined,
+                      label: 'Location not set',
+                      colors: colors,
+                      trailing: TextButton(
+                        onPressed: openAppSettings,
+                        child: Text(
+                          'Enable location',
+                          style: OutAboutTypography
+                              .labelLarge(colors)
+                              .copyWith(
+                            color: colors.primary,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    _SettingsRow(
+                      icon:
+                          Icons.location_on_outlined,
+                      label: cityName,
+                      colors: colors,
+                    ),
                 ],
               ),
               const SizedBox(
@@ -376,6 +397,23 @@ class _ThemeOverrideSelector extends ConsumerWidget {
                 )
                 .setOverride(option.theme);
             OutAboutHaptics.onConditionToggle();
+            final themeName =
+                option.theme?.name ?? 'adaptive';
+            ref
+                .read(behavioralEventServiceProvider)
+                .log(
+                  'theme_override_set',
+                  extra: {'theme': themeName},
+                );
+            ref
+                .read(behavioralEventServiceProvider)
+                .log(
+                  'settings_changed',
+                  extra: {
+                    'setting': 'theme_override',
+                    'new_value': themeName,
+                  },
+                );
           },
           child: Semantics(
             label:
@@ -465,6 +503,15 @@ class _TemperatureUnitRow extends ConsumerWidget {
         }).eq('id', profile.id);
         ref.invalidate(profileProvider);
         OutAboutHaptics.onConditionToggle();
+        ref
+            .read(behavioralEventServiceProvider)
+            .log(
+              'settings_changed',
+              extra: {
+                'setting': 'temperature_unit',
+                'new_value': newUnit,
+              },
+            );
       },
       colors: colors,
     );

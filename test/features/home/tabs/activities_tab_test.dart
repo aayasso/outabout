@@ -39,7 +39,7 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(
-          find.text('Your wishlist is empty'),
+          find.text('No activities yet'),
           findsOneWidget,
         );
       },

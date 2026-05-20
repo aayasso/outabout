@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +11,8 @@ import '../../../core/theme.dart';
 import '../../../core/weather_theme_provider.dart';
 import '../../../data/models/condition_profile.dart';
 import '../../../data/models/activity.dart';
+import '../../../services/behavioral_event_service.dart';
+import '../category_filter.dart';
 import '../home_providers.dart';
 
 // ---------------------------------------------------------------------------
@@ -22,11 +26,20 @@ int _kmhToMph(double kmh) => (kmh * 0.621371).round();
 // ActivitiesTab — main entry point
 // ---------------------------------------------------------------------------
 
-class ActivitiesTab extends ConsumerWidget {
+class ActivitiesTab extends ConsumerStatefulWidget {
   const ActivitiesTab({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ActivitiesTab> createState() =>
+      _ActivitiesTabState();
+}
+
+class _ActivitiesTabState
+    extends ConsumerState<ActivitiesTab> {
+  Set<String> _selectedCategoryIds = {};
+
+  @override
+  Widget build(BuildContext context) {
     final colors = ref.watch(weatherThemeColorsProvider);
     final weatherTheme = ref.watch(weatherThemeProvider);
     final isDark =
@@ -67,6 +80,11 @@ class ActivitiesTab extends ConsumerWidget {
           if (activities.isEmpty) {
             return const _ActivitiesEmptyState();
           }
+          final filtered =
+              filterActivitiesByCategories(
+            activities,
+            _selectedCategoryIds,
+          );
           return CustomScrollView(
             slivers: [
               SliverAppBar(
@@ -80,45 +98,398 @@ class ActivitiesTab extends ConsumerWidget {
                   ),
                 ),
               ),
-              SliverPadding(
-                padding: const EdgeInsets.all(
-                  OutAboutSpacing.md,
-                ),
-                sliver: SliverList(
-                  delegate:
-                      SliverChildBuilderDelegate(
-                    (context, index) {
-                      return Padding(
-                        padding:
-                            const EdgeInsets.only(
-                          bottom: OutAboutSpacing.sm,
-                        ),
-                        child: _ActivityListCard(
-                          activity:
-                              activities[index],
-                          colors: colors,
-                          isDark: isDark,
-                          index: index,
-                          ref: ref,
-                          temperatureUnit:
-                              temperatureUnit,
-                        ),
+              SliverToBoxAdapter(
+                child: _CategoryFilterChipRow(
+                  selectedCategoryIds:
+                      _selectedCategoryIds,
+                  onToggle: (id) {
+                    setState(() {
+                      if (_selectedCategoryIds
+                          .contains(id)) {
+                        _selectedCategoryIds.remove(
+                          id,
+                        );
+                      } else {
+                        _selectedCategoryIds.add(
+                          id,
+                        );
+                      }
+                      _selectedCategoryIds =
+                          Set.of(
+                        _selectedCategoryIds,
                       );
+                    });
+                    ref
+                        .read(
+                          behavioralEventServiceProvider,
+                        )
+                        .log(
+                          'filter_applied',
+                          extra: {
+                            'category_id': id,
+                            'active_filter_count':
+                                _selectedCategoryIds
+                                    .length,
+                          },
+                        );
+                  },
+                  onClearAll: () {
+                    final previousCount =
+                        _selectedCategoryIds.length;
+                    setState(() {
+                      _selectedCategoryIds = {};
+                    });
+                    ref
+                        .read(
+                          behavioralEventServiceProvider,
+                        )
+                        .log(
+                          'filter_cleared',
+                          extra: {
+                            'previous_filter_count':
+                                previousCount,
+                          },
+                        );
+                  },
+                ),
+              ),
+              if (filtered.isEmpty &&
+                  _selectedCategoryIds.isNotEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: _FilteredEmptyState(
+                    colors: colors,
+                    onClearFilters: () {
+                      setState(() {
+                        _selectedCategoryIds = {};
+                      });
                     },
-                    childCount: activities.length,
+                  ),
+                )
+              else ...[
+                SliverPadding(
+                  padding: const EdgeInsets.all(
+                    OutAboutSpacing.md,
+                  ),
+                  sliver: SliverList(
+                    delegate:
+                        SliverChildBuilderDelegate(
+                      (context, index) {
+                        return Padding(
+                          padding:
+                              const EdgeInsets.only(
+                            bottom:
+                                OutAboutSpacing.sm,
+                          ),
+                          child: _ActivityListCard(
+                            activity:
+                                filtered[index],
+                            colors: colors,
+                            isDark: isDark,
+                            index: index,
+                            ref: ref,
+                            temperatureUnit:
+                                temperatureUnit,
+                          ),
+                        );
+                      },
+                      childCount: filtered.length,
+                    ),
                   ),
                 ),
-              ),
-              const SliverPadding(
-                padding: EdgeInsets.only(
-                  bottom: OutAboutSpacing.xxxl,
+                const SliverPadding(
+                  padding: EdgeInsets.only(
+                    bottom: OutAboutSpacing.xxxl,
+                  ),
                 ),
-              ),
+              ],
             ],
           );
         },
       ),
     );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// _CategoryFilterChipRow
+// ---------------------------------------------------------------------------
+
+class _CategoryFilterChipRow extends ConsumerWidget {
+  const _CategoryFilterChipRow({
+    required this.selectedCategoryIds,
+    required this.onToggle,
+    required this.onClearAll,
+  });
+
+  final Set<String> selectedCategoryIds;
+  final ValueChanged<String> onToggle;
+  final VoidCallback onClearAll;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors =
+        ref.watch(weatherThemeColorsProvider);
+    final categoriesAsync =
+        ref.watch(categoriesProvider);
+
+    return categoriesAsync.when(
+      loading: () => _ChipRowShimmer(colors: colors),
+      error: (error, stackTrace) {
+        log(
+          'Categories failed to load, hiding '
+          'filter row',
+          error: error,
+          name: 'ActivitiesTab',
+        );
+        return const SizedBox.shrink();
+      },
+      data: (categories) {
+        if (categories.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        final isAllSelected =
+            selectedCategoryIds.isEmpty;
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(
+            horizontal: OutAboutSpacing.md,
+            vertical: OutAboutSpacing.sm,
+          ),
+          child: Row(
+            children: [
+              _FilterChip(
+                label: 'All',
+                isSelected: isAllSelected,
+                selectedColor: colors.primary,
+                selectedTextColor:
+                    ThemeData.estimateBrightnessForColor(
+                              colors.primary,
+                            ) ==
+                            Brightness.dark
+                        ? Colors.white
+                        : Colors.black,
+                colors: colors,
+                onTap: () {
+                  OutAboutHaptics
+                      .onConditionToggle();
+                  onClearAll();
+                  // Feature 5 hook:
+                  // filter_cleared fires here
+                },
+              ),
+              ...categories.map((category) {
+                final id = category.id!;
+                final isSelected =
+                    selectedCategoryIds.contains(id);
+                return Padding(
+                  padding: const EdgeInsets.only(
+                    left: OutAboutSpacing.sm,
+                  ),
+                  child: _FilterChip(
+                    label: category.name,
+                    isSelected: isSelected,
+                    selectedColor: colors.primary
+                        .withValues(alpha: 0.15),
+                    selectedBorderColor:
+                        colors.primary,
+                    selectedTextColor:
+                        colors.primary,
+                    colors: colors,
+                    onTap: () {
+                      OutAboutHaptics
+                          .onConditionToggle();
+                      onToggle(id);
+                      // Feature 5 hook:
+                      // filter_applied fires here
+                    },
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// _FilterChip
+// ---------------------------------------------------------------------------
+
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
+    required this.label,
+    required this.isSelected,
+    required this.selectedColor,
+    required this.colors,
+    required this.onTap,
+    this.selectedBorderColor,
+    this.selectedTextColor,
+  });
+
+  final String label;
+  final bool isSelected;
+  final Color selectedColor;
+  final Color? selectedBorderColor;
+  final Color? selectedTextColor;
+  final WeatherThemeColors colors;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 48,
+      child: Center(
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: OutAboutSpacing.sm,
+              vertical: OutAboutSpacing.xs,
+            ),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? selectedColor
+                  : colors.surface,
+              borderRadius: BorderRadius.circular(
+                OutAboutRadius.full,
+              ),
+              border: Border.all(
+                color: isSelected
+                    ? (selectedBorderColor ??
+                        selectedColor)
+                    : colors.divider,
+              ),
+            ),
+            child: Text(
+              label,
+              style: OutAboutTypography.labelMedium(
+                colors,
+              ).copyWith(
+                color: isSelected
+                    ? selectedTextColor
+                    : colors.text,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// _ChipRowShimmer
+// ---------------------------------------------------------------------------
+
+class _ChipRowShimmer extends StatelessWidget {
+  const _ChipRowShimmer({required this.colors});
+
+  final WeatherThemeColors colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(
+        horizontal: OutAboutSpacing.md,
+        vertical: OutAboutSpacing.sm,
+      ),
+      child: Row(
+        children: List.generate(4, (index) {
+          return Padding(
+            padding: EdgeInsets.only(
+              left: index == 0
+                  ? 0
+                  : OutAboutSpacing.sm,
+            ),
+            child: Shimmer.fromColors(
+              baseColor: colors.surface,
+              highlightColor: colors.divider,
+              child: Container(
+                width: 72,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: colors.surface,
+                  borderRadius:
+                      BorderRadius.circular(
+                    OutAboutRadius.full,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// _FilteredEmptyState
+// ---------------------------------------------------------------------------
+
+class _FilteredEmptyState extends StatelessWidget {
+  const _FilteredEmptyState({
+    required this.colors,
+    required this.onClearFilters,
+  });
+
+  final WeatherThemeColors colors;
+  final VoidCallback onClearFilters;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(
+          OutAboutSpacing.xl,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.filter_list_off,
+              size: 48,
+              color: colors.textSecondary,
+            ),
+            const SizedBox(
+              height: OutAboutSpacing.md,
+            ),
+            Text(
+              'No activities in these categories',
+              style:
+                  OutAboutTypography.headingMedium(
+                colors,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(
+              height: OutAboutSpacing.md,
+            ),
+            TextButton(
+              onPressed: onClearFilters,
+              child: Text(
+                'Clear filters',
+                style:
+                    OutAboutTypography.labelLarge(
+                  colors,
+                ).copyWith(
+                  color: colors.primary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    )
+        .animate()
+        .fadeIn(
+          duration:
+              OutAboutAnimations.standardDuration,
+        );
   }
 }
 
@@ -164,14 +535,33 @@ class _ActivityListCard extends StatelessWidget {
           color: Colors.white,
         ),
       ),
-      onDismissed: (_) {
-        if (activity.id != null) {
-          ref
+      onDismissed: (_) async {
+        if (activity.id == null) return;
+        try {
+          await ref
               .read(activityRepositoryProvider)
               .archive(activity.id!);
+          ref
+              .read(behavioralEventServiceProvider)
+              .log(
+                'wishlist_removed',
+                extra: {
+                  'activity_id': activity.id,
+                  'method': 'swipe_dismiss',
+                },
+              );
+          OutAboutHaptics.onActivitySave();
+          ref.invalidate(activitiesProvider);
+        } catch (e, st) {
+          log(
+            'Failed to archive activity from '
+            'swipe-dismiss',
+            error: e,
+            stackTrace: st,
+            name: 'ActivitiesTab',
+          );
+          ref.invalidate(activitiesProvider);
         }
-        OutAboutHaptics.onActivitySave();
-        ref.invalidate(activitiesProvider);
       },
       child: Semantics(
         label: 'Activity: ${activity.name}',
@@ -411,7 +801,7 @@ class _ActivitiesEmptyState extends ConsumerWidget {
               height: OutAboutSpacing.md,
             ),
             Text(
-              'Your wishlist is empty',
+              'No activities yet',
               style:
                   OutAboutTypography.headingMedium(
                 colors,
@@ -445,7 +835,10 @@ class _ActivitiesEmptyState extends ConsumerWidget {
           ],
         ),
       ),
-    );
+    ).animate().fadeIn(
+          duration:
+              OutAboutAnimations.standardDuration,
+        );
   }
 }
 

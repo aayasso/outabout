@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:shimmer/shimmer.dart';
 
 import 'package:outabout/core/theme.dart';
@@ -11,12 +12,22 @@ import 'package:outabout/data/models/weather_data.dart';
 import 'package:outabout/features/home/home_providers.dart';
 import 'package:outabout/features/home/tabs/today_tab.dart';
 import 'package:outabout/data/models/activity.dart';
+import 'package:outabout/services/behavioral_event_service.dart';
+
+class _MockBehavioralEventService extends Mock
+    implements BehavioralEventService {}
 
 void main() {
   group('TodayTab', () {
     Widget buildSubject({
       required List<Override> overrides,
     }) {
+      final mockEventService =
+          _MockBehavioralEventService();
+      when(() => mockEventService.log(
+            any(),
+            extra: any(named: 'extra'),
+          )).thenAnswer((_) async {});
       return ProviderScope(
         overrides: [
           weatherThemeProvider.overrideWith(
@@ -27,6 +38,8 @@ void main() {
           weatherThemeColorsProvider.overrideWithValue(
             WeatherThemeColors.sunny,
           ),
+          behavioralEventServiceProvider
+              .overrideWithValue(mockEventService),
           ...overrides,
         ],
         child: const MaterialApp(

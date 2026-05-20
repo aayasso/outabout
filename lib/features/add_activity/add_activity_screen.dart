@@ -8,10 +8,17 @@ import 'package:go_router/go_router.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../core/weather_theme_provider.dart';
+import '../../data/models/activity.dart';
 import '../../data/models/condition_profile.dart';
 import '../../features/home/home_providers.dart';
-import '../../data/models/activity.dart';
 import '../../services/behavioral_event_service.dart';
+import '../../widgets/category_chip_picker.dart';
+
+const int maxNameLength = 50;
+const int maxNotesLength = 200;
+
+int _celsiusToFahrenheit(double c) => (c * 9 / 5 + 32).round();
+int _kmhToMph(double kmh) => (kmh * 0.621371).round();
 
 class AddActivityScreen extends ConsumerStatefulWidget {
   const AddActivityScreen({super.key});
@@ -26,6 +33,7 @@ class _AddActivityScreenState
   final _nameController = TextEditingController();
   final _notesController = TextEditingController();
 
+  final Set<String> _selectedCategoryIds = {};
   bool _isSaving = false;
   String? _errorMessage;
 
@@ -48,8 +56,30 @@ class _AddActivityScreenState
     super.dispose();
   }
 
-  bool get _canSave =>
-      _nameController.text.trim().isNotEmpty && !_isSaving;
+  bool get _canSave {
+    if (_isSaving) return false;
+    final name = _nameController.text.trim();
+    if (name.isEmpty || name.length > maxNameLength) {
+      return false;
+    }
+    if (_notesController.text.length > maxNotesLength) {
+      return false;
+    }
+    return true;
+  }
+
+  String? get _disabledReason {
+    if (_isSaving) return null;
+    final name = _nameController.text.trim();
+    if (name.isEmpty) return null;
+    if (name.length > maxNameLength) {
+      return 'Name is too long';
+    }
+    if (_notesController.text.length > maxNotesLength) {
+      return 'Notes exceed $maxNotesLength characters';
+    }
+    return null;
+  }
 
   Future<void> _save() async {
     final name = _nameController.text.trim();
@@ -72,6 +102,7 @@ class _AddActivityScreenState
         notes: _notesController.text.trim().isEmpty
             ? null
             : _notesController.text.trim(),
+        categoryIds: _selectedCategoryIds.toList(),
       );
 
       final profile = ConditionProfile(
@@ -123,6 +154,9 @@ class _AddActivityScreenState
   @override
   Widget build(BuildContext context) {
     final colors = ref.watch(weatherThemeColorsProvider);
+    final profileAsync = ref.watch(profileProvider);
+    final temperatureUnit =
+        profileAsync.valueOrNull?.temperatureUnit ?? 'F';
 
     return PopScope(
       canPop: !_isSaving,
@@ -159,11 +193,67 @@ class _AddActivityScreenState
                 onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: OutAboutSpacing.md),
-              _NotesField(
-                controller: _notesController,
-                colors: colors,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  _NotesField(
+                    controller: _notesController,
+                    colors: colors,
+                    onChanged: (_) => setState(() {}),
+                  ),
+                  if (_notesController
+                      .text.isNotEmpty) ...[
+                    const SizedBox(
+                      height: OutAboutSpacing.xs,
+                    ),
+                    Text(
+                      '${_notesController.text.length}'
+                      ' / $maxNotesLength',
+                      style: OutAboutTypography.bodySmall(
+                        colors,
+                      ).copyWith(
+                        color: _notesController.text.length >
+                                maxNotesLength
+                            ? OutAboutColors.errorColor
+                            : colors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ],
               ),
               const SizedBox(height: OutAboutSpacing.lg),
+              CategoryChipPicker(
+                selectedIds: _selectedCategoryIds,
+                onToggle: (id) {
+                  setState(() {
+                    if (_selectedCategoryIds.contains(id)) {
+                      _selectedCategoryIds.remove(id);
+                    } else {
+                      _selectedCategoryIds.add(id);
+                    }
+                  });
+                  final isNowSelected =
+                      _selectedCategoryIds.contains(id);
+                  ref
+                      .read(behavioralEventServiceProvider)
+                      .log(
+                        isNowSelected
+                            ? 'category_selected'
+                            : 'category_deselected',
+                        extra: {
+                          'category_id': id,
+                          'activity_id': null,
+                        },
+                      );
+                },
+                onCreateCategory: () =>
+                    showCreateCategoryFlow(
+                  context,
+                  ref,
+                  colors,
+                ),
+              ),
+              const SizedBox(height: OutAboutSpacing.md),
               Text(
                 'Weather Conditions',
                 style:
@@ -174,6 +264,7 @@ class _AddActivityScreenState
                 enabled: _tempEnabled,
                 range: _tempRange,
                 colors: colors,
+                temperatureUnit: temperatureUnit,
                 onToggle: (v) {
                   OutAboutHaptics.onConditionToggle();
                   setState(() => _tempEnabled = v);
@@ -196,6 +287,7 @@ class _AddActivityScreenState
                 enabled: _windEnabled,
                 maxSpeed: _windMax,
                 colors: colors,
+                temperatureUnit: temperatureUnit,
                 onToggle: (v) {
                   OutAboutHaptics.onConditionToggle();
                   setState(() => _windEnabled = v);
@@ -220,6 +312,7 @@ class _AddActivityScreenState
                 isSaving: _isSaving,
                 colors: colors,
                 onPressed: _save,
+                disabledReason: _disabledReason,
               ),
               const SizedBox(height: OutAboutSpacing.xl),
             ],
@@ -297,9 +390,20 @@ class _ActivityNameField extends StatelessWidget {
       onChanged: onChanged,
       style: OutAboutTypography.bodyLarge(colors),
       decoration: InputDecoration(
-        hintText: 'Activity name',
+        labelText: 'Activity name *',
+        labelStyle:
+            OutAboutTypography.labelMedium(colors),
         hintStyle: OutAboutTypography.bodyLarge(colors)
             .copyWith(color: colors.textSecondary),
+        errorText:
+            controller.text.trim().length > maxNameLength
+                ? 'Name must be $maxNameLength characters'
+                    ' or less'
+                : null,
+        errorStyle:
+            OutAboutTypography.bodySmall(colors).copyWith(
+          color: OutAboutColors.errorColor,
+        ),
       ),
       textCapitalization: TextCapitalization.sentences,
     );
@@ -310,15 +414,18 @@ class _NotesField extends StatelessWidget {
   const _NotesField({
     required this.controller,
     required this.colors,
+    required this.onChanged,
   });
 
   final TextEditingController controller;
   final WeatherThemeColors colors;
+  final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
+      onChanged: onChanged,
       style: OutAboutTypography.bodyMedium(colors),
       maxLines: 3,
       decoration: InputDecoration(
@@ -391,6 +498,7 @@ class _TemperatureSection extends StatelessWidget {
     required this.enabled,
     required this.range,
     required this.colors,
+    required this.temperatureUnit,
     required this.onToggle,
     required this.onChanged,
   });
@@ -398,8 +506,16 @@ class _TemperatureSection extends StatelessWidget {
   final bool enabled;
   final RangeValues range;
   final WeatherThemeColors colors;
+  final String temperatureUnit;
   final ValueChanged<bool> onToggle;
   final ValueChanged<RangeValues> onChanged;
+
+  String _formatTemp(double celsius) {
+    if (temperatureUnit == 'F') {
+      return '${_celsiusToFahrenheit(celsius)}°F';
+    }
+    return '${celsius.round()}°C';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -418,8 +534,8 @@ class _TemperatureSection extends StatelessWidget {
             activeColor: colors.primary,
             inactiveColor: colors.divider,
             labels: RangeLabels(
-              '${range.start.round()} C',
-              '${range.end.round()} C',
+              _formatTemp(range.start),
+              _formatTemp(range.end),
             ),
             onChanged: onChanged,
           ),
@@ -432,13 +548,13 @@ class _TemperatureSection extends StatelessWidget {
                   MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  '${range.start.round()} C',
+                  _formatTemp(range.start),
                   style: OutAboutTypography.labelMedium(
                     colors,
                   ),
                 ),
                 Text(
-                  '${range.end.round()} C',
+                  _formatTemp(range.end),
                   style:
                       OutAboutTypography.labelMedium(colors),
                 ),
@@ -512,6 +628,7 @@ class _WindSection extends StatelessWidget {
     required this.enabled,
     required this.maxSpeed,
     required this.colors,
+    required this.temperatureUnit,
     required this.onToggle,
     required this.onChanged,
   });
@@ -519,8 +636,16 @@ class _WindSection extends StatelessWidget {
   final bool enabled;
   final double maxSpeed;
   final WeatherThemeColors colors;
+  final String temperatureUnit;
   final ValueChanged<bool> onToggle;
   final ValueChanged<double> onChanged;
+
+  String _formatWind(double kmh) {
+    if (temperatureUnit == 'F') {
+      return 'Max ${_kmhToMph(kmh)} mph';
+    }
+    return 'Max ${kmh.round()} km/h';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -538,7 +663,7 @@ class _WindSection extends StatelessWidget {
             divisions: 80,
             activeColor: colors.primary,
             inactiveColor: colors.divider,
-            label: 'Max ${maxSpeed.round()} km/h',
+            label: _formatWind(maxSpeed),
             onChanged: onChanged,
           ),
           Padding(
@@ -548,7 +673,7 @@ class _WindSection extends StatelessWidget {
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'Max ${maxSpeed.round()} km/h',
+                _formatWind(maxSpeed),
                 style:
                     OutAboutTypography.labelMedium(colors),
               ),
@@ -630,30 +755,51 @@ class _SaveButton extends StatelessWidget {
     required this.isSaving,
     required this.colors,
     required this.onPressed,
+    this.disabledReason,
   });
 
   final bool canSave;
   final bool isSaving;
   final WeatherThemeColors colors;
   final VoidCallback onPressed;
+  final String? disabledReason;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 48,
-      child: ElevatedButton(
-        onPressed: canSave ? onPressed : null,
-        child: isSaving
-            ? SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: colors.background,
-                ),
-              )
-            : const Text('Save'),
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 48,
+          child: ElevatedButton(
+            onPressed: canSave ? onPressed : null,
+            child: isSaving
+                ? SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: colors.background,
+                    ),
+                  )
+                : const Text('Save'),
+          ),
+        ),
+        if (disabledReason case final reason?)
+          Padding(
+            padding: const EdgeInsets.only(
+              top: OutAboutSpacing.sm,
+            ),
+            child: Text(
+              reason,
+              style: OutAboutTypography.bodySmall(colors)
+                  .copyWith(
+                color: colors.textSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+      ],
     )
         .animate()
         .fadeIn(

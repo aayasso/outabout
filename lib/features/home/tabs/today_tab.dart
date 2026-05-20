@@ -10,6 +10,7 @@ import '../../../core/theme.dart';
 import '../../../core/weather_theme_provider.dart';
 import '../../../data/models/condition_match.dart';
 import '../../../data/models/weather_data.dart';
+import '../../../services/behavioral_event_service.dart';
 import '../home_providers.dart';
 
 // ---------------------------------------------------------------------------
@@ -85,6 +86,9 @@ class _TodayTabState extends ConsumerState<TodayTab> {
         color: colors.primary,
         backgroundColor: colors.surface,
         onRefresh: () async {
+          ref
+              .read(behavioralEventServiceProvider)
+              .log('weather_refreshed');
           ref.invalidate(weatherDataProvider);
           ref.invalidate(activitiesProvider);
           await ref
@@ -917,7 +921,10 @@ class _TodayEmptyState extends ConsumerWidget {
                 ],
               ),
             ),
-          ),
+          ).animate().fadeIn(
+                duration: OutAboutAnimations
+                    .standardDuration,
+              ),
         ),
       ],
     );

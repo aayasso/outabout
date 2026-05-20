@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/providers.dart';
 import '../../../core/theme.dart';
 import '../../../core/weather_theme_provider.dart';
+import '../../../data/repositories/category_repository.dart';
 import '../../../services/behavioral_event_service.dart';
 import '../widgets/onboarding_button.dart';
 
@@ -102,9 +105,25 @@ class _FirstActivityPageState extends ConsumerState<FirstActivityPage> {
     );
 
     // Mark onboarding complete
-    await ref
-        .read(sharedPreferencesProvider)
-        .setBool('onboarding_complete', true);
+    final prefs = ref.read(sharedPreferencesProvider);
+    await prefs.setBool('onboarding_complete', true);
+
+    // Seed default categories — fire-and-forget; failure never
+    // blocks onboarding. Flag only set on success so the
+    // existing-user migration (Task 5) can retry if needed.
+    if (userId != null) {
+      try {
+        await CategoryRepository(supabase)
+            .seedDefaults(userId);
+        await prefs.setBool('categories_seeded', true);
+      } catch (e) {
+        log(
+          'Category seed failed',
+          error: e,
+          name: 'FirstActivityPage',
+        );
+      }
+    }
 
     OutAboutHaptics.onActivitySave();
 

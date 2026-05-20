@@ -11,7 +11,9 @@ import '../../data/models/notification_preference.dart';
 import '../../data/models/profile.dart';
 import '../../data/models/user_location.dart';
 import '../../data/models/weather_data.dart';
+import '../../data/models/category.dart';
 import '../../data/repositories/activity_repository.dart';
+import '../../data/repositories/category_repository.dart';
 import '../../data/repositories/notification_preference_repository.dart';
 import '../../data/repositories/weather_repository.dart';
 import '../../data/models/activity.dart';
@@ -24,6 +26,20 @@ import '../../services/location_service.dart';
 final activityRepositoryProvider =
     Provider<ActivityRepository>((ref) {
   return ActivityRepository(ref.watch(supabaseClientProvider));
+});
+
+final categoryRepositoryProvider =
+    Provider<CategoryRepository>((ref) {
+  return CategoryRepository(ref.watch(supabaseClientProvider));
+});
+
+final categoriesProvider =
+    FutureProvider<List<Category>>((ref) async {
+  final client = ref.watch(supabaseClientProvider);
+  final userId = client.auth.currentUser?.id;
+  if (userId == null) return [];
+  final repo = ref.watch(categoryRepositoryProvider);
+  return repo.fetchForUser(userId);
 });
 
 final weatherRepositoryProvider =

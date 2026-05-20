@@ -19,6 +19,12 @@ class MockBehavioralEventService extends Mock
 void main() {
   const testId = 'test-activity-id';
 
+  final testActivity = Activity(
+    id: testId,
+    userId: 'user-1',
+    name: 'Test Activity',
+  );
+
   MockBehavioralEventService buildMockEventService() {
     final mock = MockBehavioralEventService();
     when(() => mock.log(any(), extra: any(named: 'extra')))
@@ -28,6 +34,7 @@ void main() {
 
   Widget buildSubject({
     List<Override> overrides = const [],
+    Activity? activity,
   }) {
     return ProviderScope(
       overrides: [
@@ -39,6 +46,12 @@ void main() {
         ),
         behavioralEventServiceProvider
             .overrideWithValue(buildMockEventService()),
+        categoriesProvider.overrideWith(
+          (ref) async => [],
+        ),
+        activityDetailProvider(testId).overrideWith(
+          (ref) async => activity ?? testActivity,
+        ),
         ...overrides,
       ],
       child: const MaterialApp(
@@ -46,6 +59,12 @@ void main() {
       ),
     );
   }
+
+  Finder findNameField() =>
+      find.widgetWithText(TextField, 'Activity name *');
+
+  Finder findNotesField() =>
+      find.widgetWithText(TextField, 'Notes (optional)');
 
   group('ActivityDetailScreen', () {
     testWidgets(
@@ -67,7 +86,6 @@ void main() {
 
         expect(find.byType(Shimmer), findsWidgets);
 
-        // Complete to avoid pending timer issues.
         completer.complete(null);
         await tester.pumpAndSettle();
       },
@@ -125,36 +143,16 @@ void main() {
     testWidgets(
       'Save button disabled when name is empty',
       (tester) async {
-        final testActivity = Activity(
-          id: testId,
-          userId: 'user-1',
-          name: 'Test Activity',
-        );
-
-        await tester.pumpWidget(
-          buildSubject(
-            overrides: [
-              activityDetailProvider(testId).overrideWith(
-                (ref) async => testActivity,
-              ),
-            ],
-          ),
-        );
-
+        await tester.pumpWidget(buildSubject());
         await tester.pumpAndSettle();
 
-        // Clear the name field
-        final nameField = find.byType(TextField).first;
+        final nameField = findNameField();
         await tester.enterText(nameField, '');
         await tester.pump();
 
-        // Find Save button and verify it's disabled
-        final saveButton = find.widgetWithText(
-          ElevatedButton,
-          'Save',
+        final button = tester.widget<ElevatedButton>(
+          find.widgetWithText(ElevatedButton, 'Save'),
         );
-        final button =
-            tester.widget<ElevatedButton>(saveButton);
         expect(button.onPressed, isNull);
       },
     );
@@ -162,31 +160,106 @@ void main() {
     testWidgets(
       'Save button enabled when name has text',
       (tester) async {
-        final testActivity = Activity(
-          id: testId,
-          userId: 'user-1',
-          name: 'Test Activity',
-        );
-
-        await tester.pumpWidget(
-          buildSubject(
-            overrides: [
-              activityDetailProvider(testId).overrideWith(
-                (ref) async => testActivity,
-              ),
-            ],
-          ),
-        );
-
+        await tester.pumpWidget(buildSubject());
         await tester.pumpAndSettle();
 
-        final saveButton = find.widgetWithText(
-          ElevatedButton,
-          'Save',
+        final button = tester.widget<ElevatedButton>(
+          find.widgetWithText(ElevatedButton, 'Save'),
         );
-        final button =
-            tester.widget<ElevatedButton>(saveButton);
         expect(button.onPressed, isNotNull);
+      },
+    );
+
+    // -- Form validation tests --
+
+    testWidgets(
+      'name over 50 chars shows inline error',
+      (tester) async {
+        await tester.pumpWidget(buildSubject());
+        await tester.pumpAndSettle();
+
+        final longName = 'A' * 51;
+        await tester.enterText(findNameField(), longName);
+        await tester.pump();
+
+        expect(
+          find.text('Name must be 50 characters or less'),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'notes counter displays correct count when non-empty',
+      (tester) async {
+        await tester.pumpWidget(buildSubject());
+        await tester.pumpAndSettle();
+
+        await tester.enterText(
+          findNotesField(),
+          'Some notes here',
+        );
+        await tester.pump();
+
+        expect(find.text('15 / 200'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'empty notes shows no counter',
+      (tester) async {
+        await tester.pumpWidget(buildSubject());
+        await tester.pumpAndSettle();
+
+        // Activity loads with empty notes — no counter
+        expect(find.textContaining('/ 200'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'save button disabled when name exceeds limit '
+      'with reason text',
+      (tester) async {
+        await tester.pumpWidget(buildSubject());
+        await tester.pumpAndSettle();
+
+        final longName = 'A' * 51;
+        await tester.enterText(findNameField(), longName);
+        await tester.pump();
+
+        final button = tester.widget<ElevatedButton>(
+          find.widgetWithText(ElevatedButton, 'Save'),
+        );
+        expect(button.onPressed, isNull);
+        expect(
+          find.text('Name is too long'),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'save button disabled when name is empty '
+      'with no reason text',
+      (tester) async {
+        await tester.pumpWidget(buildSubject());
+        await tester.pumpAndSettle();
+
+        await tester.enterText(findNameField(), '');
+        await tester.pump();
+
+        final button = tester.widget<ElevatedButton>(
+          find.widgetWithText(ElevatedButton, 'Save'),
+        );
+        expect(button.onPressed, isNull);
+        expect(
+          find.text('Name is too long'),
+          findsNothing,
+        );
+        expect(
+          find.text('Notes exceed 200 characters'),
+          findsNothing,
+        );
       },
     );
   });

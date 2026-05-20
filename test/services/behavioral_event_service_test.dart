@@ -343,7 +343,19 @@ void main() {
       expect(approvedEventTypes, contains('auth_completed'));
       expect(approvedEventTypes, contains('auth_skipped'));
       expect(approvedEventTypes, contains('onboarding_completed'));
-      expect(approvedEventTypes.length, 17);
+      // Added in behavioral event audit (Feature 5)
+      expect(approvedEventTypes, contains('category_created'));
+      expect(approvedEventTypes, contains('category_selected'));
+      expect(approvedEventTypes, contains('category_deselected'));
+      expect(approvedEventTypes, contains('filter_applied'));
+      expect(approvedEventTypes, contains('filter_cleared'));
+      expect(approvedEventTypes, contains('weather_refreshed'));
+      expect(
+        approvedEventTypes,
+        contains('notification_preference_changed'),
+      );
+      expect(approvedEventTypes, contains('settings_changed'));
+      expect(approvedEventTypes.length, 25);
     });
   });
 }

@@ -30,6 +30,15 @@ const approvedEventTypes = <String>[
   'auth_completed',
   'auth_skipped',
   'onboarding_completed',
+  // Added for behavioral event audit
+  'category_created',
+  'category_selected',
+  'category_deselected',
+  'filter_applied',
+  'filter_cleared',
+  'weather_refreshed',
+  'notification_preference_changed',
+  'settings_changed',
 ];
 
 // ---------------------------------------------------------------------------
