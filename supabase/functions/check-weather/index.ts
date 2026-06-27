@@ -37,11 +37,6 @@ function conditionsMatch(forecast: any, profile: any): boolean {
     if (profile.wind_max !== null && day.windSpeedMax > profile.wind_max) return false;
   }
 
-  if (profile.uv_enabled) {
-    if (profile.uv_min !== null && day.uvIndex < profile.uv_min) return false;
-    if (profile.uv_max !== null && day.uvIndex > profile.uv_max) return false;
-  }
-
   return true;
 }
 
@@ -174,8 +169,6 @@ async function sendNotification(
 serve(async (_req) => {
   try {
     const now = new Date();
-    const dayOfWeek = now.getDay();
-    const currentHour = now.getHours();
 
     // Get all users with a saved location
     const { data: locations, error: locError } = await supabase
@@ -199,126 +192,51 @@ serve(async (_req) => {
         location.country ?? "US"
       );
 
-      // Get all activities with condition profiles and notification prefs
+      // Get all activities with condition profiles
       const { data: activities } = await supabase
         .from("activities")
         .select(`
           id, name, user_id,
-          condition_profiles(*),
-          notification_preferences(*)
+          condition_profiles(*)
         `)
         .eq("user_id", location.user_id)
         .eq("is_archived", false);
 
       for (const activity of activities ?? []) {
         const profile = activity.condition_profiles?.[0];
-        const prefs = activity.notification_preferences?.[0];
-        if (!profile || !prefs) continue;
+        if (!profile) continue;
 
-        for (let i = 0; i < forecast.length; i++) {
-          const forecastDay = forecast[i];
-          const daysAhead = i;
-          const forecastDate = new Date(forecastDay.time);
-          const dateLabel = forecastDate.toLocaleDateString("en-US", {
-            weekday: "long",
-            month: "short",
-            day: "numeric",
-          });
+        // Check today's forecast only (index 0) — fire immediately on match
+        const forecastDay = forecast[0];
+        if (!forecastDay) continue;
 
-          const conditionsSnapshot = buildConditionsSnapshot(forecastDay, daysAhead);
-          const temporalContext = buildTemporalContext(now, daysAhead);
+        const daysAhead = 0;
+        const forecastDate = new Date(forecastDay.time);
+        const dateLabel = forecastDate.toLocaleDateString("en-US", {
+          weekday: "long",
+          month: "short",
+          day: "numeric",
+        });
 
-          if (!conditionsMatch(forecastDay, profile)) continue;
+        if (!conditionsMatch(forecastDay, profile)) continue;
 
-          let notificationSent = false;
+        const conditionsSnapshot = buildConditionsSnapshot(forecastDay, daysAhead);
+        const temporalContext = buildTemporalContext(now, daysAhead);
 
-          // Morning of
-          if (prefs.notify_morning_of && daysAhead === 0) {
-            const [hours] = (prefs.morning_time || "07:00:00").split(":").map(Number);
-            if (currentHour === hours) {
-              const notifId = await sendNotification(
-                location.user_id,
-                activity.name,
-                dateLabel
-              );
-              await logBehavioralEvent(
-                location.user_id,
-                activity.id,
-                "condition_match_notified",
-                conditionsSnapshot,
-                geoContext,
-                { ...temporalContext, trigger: "morning_of" },
-                notifId ?? undefined
-              );
-              notificationSent = true;
-            }
-          }
-
-          // Night before
-          if (prefs.notify_night_before && daysAhead === 1 && currentHour === 20) {
-            const notifId = await sendNotification(
-              location.user_id,
-              activity.name,
-              dateLabel
-            );
-            await logBehavioralEvent(
-              location.user_id,
-              activity.id,
-              "condition_match_notified",
-              conditionsSnapshot,
-              geoContext,
-              { ...temporalContext, trigger: "night_before" },
-              notifId ?? undefined
-            );
-            notificationSent = true;
-          }
-
-          // Sunday digest
-          if (
-            prefs.notify_sunday_digest &&
-            dayOfWeek === 0 &&
-            currentHour === 18 &&
-            daysAhead <= 7
-          ) {
-            const notifId = await sendNotification(
-              location.user_id,
-              activity.name,
-              dateLabel
-            );
-            await logBehavioralEvent(
-              location.user_id,
-              activity.id,
-              "condition_match_notified",
-              conditionsSnapshot,
-              geoContext,
-              { ...temporalContext, trigger: "sunday_digest" },
-              notifId ?? undefined
-            );
-            notificationSent = true;
-          }
-
-          // Days before
-          if (
-            prefs.notify_days_before &&
-            daysAhead === prefs.days_before_count
-          ) {
-            const notifId = await sendNotification(
-              location.user_id,
-              activity.name,
-              dateLabel
-            );
-            await logBehavioralEvent(
-              location.user_id,
-              activity.id,
-              "condition_match_notified",
-              conditionsSnapshot,
-              geoContext,
-              { ...temporalContext, trigger: "days_before" },
-              notifId ?? undefined
-            );
-            notificationSent = true;
-          }
-        }
+        const notifId = await sendNotification(
+          location.user_id,
+          activity.name,
+          dateLabel
+        );
+        await logBehavioralEvent(
+          location.user_id,
+          activity.id,
+          "condition_match_notified",
+          conditionsSnapshot,
+          geoContext,
+          { ...temporalContext, trigger: "immediate" },
+          notifId ?? undefined
+        );
       }
     }
 
