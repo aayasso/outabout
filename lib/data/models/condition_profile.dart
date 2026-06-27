@@ -8,9 +8,6 @@ class ConditionProfile {
   final String? precipLevel;
   final bool windEnabled;
   final double? windMax;
-  final bool uvEnabled;
-  final double? uvMin;
-  final double? uvMax;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -24,9 +21,6 @@ class ConditionProfile {
     this.precipLevel,
     this.windEnabled = false,
     this.windMax,
-    this.uvEnabled = false,
-    this.uvMin,
-    this.uvMax,
     this.createdAt,
     this.updatedAt,
   });
@@ -43,9 +37,6 @@ class ConditionProfile {
         precipLevel: json['precip_level'] as String?,
         windEnabled: json['wind_enabled'] as bool? ?? false,
         windMax: (json['wind_max'] as num?)?.toDouble(),
-        uvEnabled: json['uv_enabled'] as bool? ?? false,
-        uvMin: (json['uv_min'] as num?)?.toDouble(),
-        uvMax: (json['uv_max'] as num?)?.toDouble(),
         createdAt: json['created_at'] != null
             ? DateTime.parse(json['created_at'] as String)
             : null,
@@ -64,9 +55,6 @@ class ConditionProfile {
         if (precipLevel != null) 'precip_level': precipLevel,
         'wind_enabled': windEnabled,
         if (windMax != null) 'wind_max': windMax,
-        'uv_enabled': uvEnabled,
-        if (uvMin != null) 'uv_min': uvMin,
-        if (uvMax != null) 'uv_max': uvMax,
         if (createdAt != null)
           'created_at': createdAt!.toIso8601String(),
         if (updatedAt != null)

@@ -37,7 +37,6 @@ const approvedEventTypes = <String>[
   'filter_applied',
   'filter_cleared',
   'weather_refreshed',
-  'notification_preference_changed',
   'settings_changed',
 ];
 

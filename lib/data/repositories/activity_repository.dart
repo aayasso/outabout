@@ -50,9 +50,6 @@ class ActivityRepository {
         'precip_level': profile.precipLevel,
       if (profile.windEnabled) 'wind_enabled': true,
       if (profile.windMax != null) 'wind_max': profile.windMax,
-      if (profile.uvEnabled) 'uv_enabled': true,
-      if (profile.uvMin != null) 'uv_min': profile.uvMin,
-      if (profile.uvMax != null) 'uv_max': profile.uvMax,
     };
 
     final profileData = await _client

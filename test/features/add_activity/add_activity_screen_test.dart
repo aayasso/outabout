@@ -89,7 +89,7 @@ void main() {
         expect(find.byType(RangeSlider), findsNothing);
 
         final switches = find.byType(Switch);
-        expect(switches, findsNWidgets(4));
+        expect(switches, findsNWidgets(3));
 
         await tester.tap(switches.first);
         await tester.pumpAndSettle();

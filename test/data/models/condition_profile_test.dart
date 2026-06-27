@@ -13,9 +13,6 @@ void main() {
       'precip_level': 'none',
       'wind_enabled': true,
       'wind_max': 20.0,
-      'uv_enabled': true,
-      'uv_min': 2.0,
-      'uv_max': 8.0,
       'created_at': '2026-05-01T10:00:00.000Z',
       'updated_at': '2026-05-02T12:00:00.000Z',
     };
@@ -32,9 +29,6 @@ void main() {
       expect(profile.precipLevel, 'none');
       expect(profile.windEnabled, true);
       expect(profile.windMax, 20.0);
-      expect(profile.uvEnabled, true);
-      expect(profile.uvMin, 2.0);
-      expect(profile.uvMax, 8.0);
       expect(profile.createdAt, isNotNull);
       expect(profile.updatedAt, isNotNull);
     });
@@ -52,9 +46,6 @@ void main() {
       expect(output['precip_level'], 'none');
       expect(output['wind_enabled'], true);
       expect(output['wind_max'], 20.0);
-      expect(output['uv_enabled'], true);
-      expect(output['uv_min'], 2.0);
-      expect(output['uv_max'], 8.0);
     });
 
     test('defaults when fields are missing', () {
@@ -70,9 +61,6 @@ void main() {
       expect(profile.precipLevel, isNull);
       expect(profile.windEnabled, false);
       expect(profile.windMax, isNull);
-      expect(profile.uvEnabled, false);
-      expect(profile.uvMin, isNull);
-      expect(profile.uvMax, isNull);
       expect(profile.createdAt, isNull);
       expect(profile.updatedAt, isNull);
     });

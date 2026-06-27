@@ -41,13 +41,10 @@ class _AddActivityScreenState
   bool _tempEnabled = false;
   bool _precipEnabled = false;
   bool _windEnabled = false;
-  bool _uvEnabled = false;
-
   // Condition values
   RangeValues _tempRange = const RangeValues(15, 30);
   String _precipLevel = 'none';
   double _windMax = 25;
-  RangeValues _uvRange = const RangeValues(0, 11);
 
   @override
   void dispose() {
@@ -115,9 +112,6 @@ class _AddActivityScreenState
         precipLevel: _precipEnabled ? _precipLevel : null,
         windEnabled: _windEnabled,
         windMax: _windEnabled ? _windMax : null,
-        uvEnabled: _uvEnabled,
-        uvMin: _uvEnabled ? _uvRange.start : null,
-        uvMax: _uvEnabled ? _uvRange.end : null,
       );
 
       final repo = ref.read(activityRepositoryProvider);
@@ -294,17 +288,6 @@ class _AddActivityScreenState
                 },
                 onChanged: (v) =>
                     setState(() => _windMax = v),
-              ),
-              _UvSection(
-                enabled: _uvEnabled,
-                range: _uvRange,
-                colors: colors,
-                onToggle: (v) {
-                  OutAboutHaptics.onConditionToggle();
-                  setState(() => _uvEnabled = v);
-                },
-                onChanged: (v) =>
-                    setState(() => _uvRange = v),
               ),
               const SizedBox(height: OutAboutSpacing.lg),
               _SaveButton(
@@ -677,70 +660,6 @@ class _WindSection extends StatelessWidget {
                 style:
                     OutAboutTypography.labelMedium(colors),
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _UvSection extends StatelessWidget {
-  const _UvSection({
-    required this.enabled,
-    required this.range,
-    required this.colors,
-    required this.onToggle,
-    required this.onChanged,
-  });
-
-  final bool enabled;
-  final RangeValues range;
-  final WeatherThemeColors colors;
-  final ValueChanged<bool> onToggle;
-  final ValueChanged<RangeValues> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return _ConditionSection(
-      label: 'UV Index',
-      enabled: enabled,
-      colors: colors,
-      onToggle: onToggle,
-      child: Column(
-        children: [
-          RangeSlider(
-            values: range,
-            min: 0,
-            max: 11,
-            divisions: 11,
-            activeColor: colors.primary,
-            inactiveColor: colors.divider,
-            labels: RangeLabels(
-              '${range.start.round()}',
-              '${range.end.round()}',
-            ),
-            onChanged: onChanged,
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: OutAboutSpacing.md,
-            ),
-            child: Row(
-              mainAxisAlignment:
-                  MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '${range.start.round()}',
-                  style:
-                      OutAboutTypography.labelMedium(colors),
-                ),
-                Text(
-                  '${range.end.round()}',
-                  style:
-                      OutAboutTypography.labelMedium(colors),
-                ),
-              ],
             ),
           ),
         ],

@@ -350,12 +350,8 @@ void main() {
       expect(approvedEventTypes, contains('filter_applied'));
       expect(approvedEventTypes, contains('filter_cleared'));
       expect(approvedEventTypes, contains('weather_refreshed'));
-      expect(
-        approvedEventTypes,
-        contains('notification_preference_changed'),
-      );
       expect(approvedEventTypes, contains('settings_changed'));
-      expect(approvedEventTypes.length, 25);
+      expect(approvedEventTypes.length, 24);
     });
   });
 }

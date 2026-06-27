@@ -30,7 +30,6 @@ void main() {
           tempEnabled: false,
           precipEnabled: false,
           windEnabled: false,
-          uvEnabled: false,
         );
         expect(evaluateMatch(profile, weather), true);
       },
@@ -103,50 +102,6 @@ void main() {
       );
     });
 
-    test('uv too low returns false', () {
-      const lowUvWeather = WeatherData(
-        weatherCode: 1000,
-        temperature: 22.0,
-        windSpeed: 10.0,
-        humidity: 50.0,
-        precipitationIntensity: 0.0,
-        uvIndex: 1.0,
-      );
-      const profile = ConditionProfile(
-        id: 'cp-1',
-        activityId: 'act-1',
-        uvEnabled: true,
-        uvMin: 3.0,
-        uvMax: 8.0,
-      );
-      expect(
-        evaluateMatch(profile, lowUvWeather),
-        false,
-      );
-    });
-
-    test('uv too high returns false', () {
-      const highUvWeather = WeatherData(
-        weatherCode: 1000,
-        temperature: 22.0,
-        windSpeed: 10.0,
-        humidity: 50.0,
-        precipitationIntensity: 0.0,
-        uvIndex: 10.0,
-      );
-      const profile = ConditionProfile(
-        id: 'cp-1',
-        activityId: 'act-1',
-        uvEnabled: true,
-        uvMin: 3.0,
-        uvMax: 8.0,
-      );
-      expect(
-        evaluateMatch(profile, highUvWeather),
-        false,
-      );
-    });
-
     test('all conditions met returns true', () {
       const profile = ConditionProfile(
         id: 'cp-1',
@@ -158,9 +113,6 @@ void main() {
         precipLevel: 'none',
         windEnabled: true,
         windMax: 20.0,
-        uvEnabled: true,
-        uvMin: 3.0,
-        uvMax: 8.0,
       );
       expect(evaluateMatch(profile, weather), true);
     });

@@ -715,26 +715,6 @@ class _ActivityListCard extends StatelessWidget {
       );
     }
 
-    if (profile.uvEnabled) {
-      final min = profile.uvMin?.round();
-      final max = profile.uvMax?.round();
-      if (min != null && max != null) {
-        chips.add(
-          _ConditionChip(
-            label: 'UV $min\u2013$max',
-            colors: colors,
-          ),
-        );
-      } else if (max != null) {
-        chips.add(
-          _ConditionChip(
-            label: 'UV < $max',
-            colors: colors,
-          ),
-        );
-      }
-    }
-
     return chips;
   }
 }

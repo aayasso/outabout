@@ -74,6 +74,11 @@ void main() {
           find.byType(Shimmer),
           findsWidgets,
         );
+
+        // Dispose the widget tree and drain pending
+        // Shimmer animation timers.
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpAndSettle();
       },
     );
 

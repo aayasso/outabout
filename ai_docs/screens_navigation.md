@@ -194,7 +194,7 @@ onPageChanged: (index) {
 `behavioralEventServiceProvider`, `activitiesProvider` (invalidate on save)
 **Layout:** AppBar with close button + scrollable form body
 **Sub-widgets:** `_ActivityNameField`, `_NotesField`, `_ConditionSection`,
-`_TemperatureSection`, `_PrecipitationSection`, `_WindSection`, `_UvSection`,
+`_TemperatureSection`, `_PrecipitationSection`, `_WindSection`,
 `_SaveButton`
 **Navigation:** `context.pop()` on save success
 
