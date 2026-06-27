@@ -22,9 +22,8 @@ function conditionsMatch(forecast: any, profile: any): boolean {
   const day = forecast.values;
 
   if (profile.temp_enabled) {
-    const avgTemp = (day.temperatureMax + day.temperatureMin) / 2;
-    if (profile.temp_min !== null && avgTemp < profile.temp_min) return false;
-    if (profile.temp_max !== null && avgTemp > profile.temp_max) return false;
+    if (profile.temp_min !== null && day.temperatureMax < profile.temp_min) return false;
+    if (profile.temp_max !== null && day.temperatureMin > profile.temp_max) return false;
   }
 
   if (profile.precip_enabled) {
@@ -43,10 +42,7 @@ function conditionsMatch(forecast: any, profile: any): boolean {
 // Build full weather snapshot for behavioral event logging
 function buildConditionsSnapshot(forecastDay: any, daysAhead: number): Record<string, any> {
   const day = forecastDay.values;
-  const avgTemp_c = (day.temperatureMax + day.temperatureMin) / 2;
   return {
-    temp_c: Math.round(avgTemp_c * 10) / 10,
-    temp_f: Math.round((avgTemp_c * 9/5 + 32) * 10) / 10,
     temp_max_c: day.temperatureMax,
     temp_min_c: day.temperatureMin,
     precipitation_probability: day.precipitationProbability,

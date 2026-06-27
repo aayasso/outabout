@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../models/daily_forecast.dart';
 import '../models/weather_data.dart';
 
 class WeatherFetchException implements Exception {
@@ -11,18 +12,14 @@ class WeatherFetchException implements Exception {
   const WeatherFetchException(this.statusCode, this.body);
 
   @override
-  String toString() =>
-      'WeatherFetchException($statusCode): $body';
+  String toString() => 'WeatherFetchException($statusCode): $body';
 }
 
 class WeatherRepository {
   WeatherRepository(this._apiKey);
   final String _apiKey;
 
-  Future<WeatherData> fetchCurrent(
-    double lat,
-    double lng,
-  ) async {
+  Future<WeatherData> fetchCurrent(double lat, double lng) async {
     final uri = Uri.parse(
       'https://api.tomorrow.io/v4/weather/realtime'
       '?location=$lat,$lng'
@@ -33,13 +30,32 @@ class WeatherRepository {
     );
     final response = await http.get(uri);
     if (response.statusCode != 200) {
-      throw WeatherFetchException(
-        response.statusCode,
-        response.body,
-      );
+      throw WeatherFetchException(response.statusCode, response.body);
     }
     return WeatherData.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,
     );
+  }
+
+  Future<List<DailyForecast>> fetchForecast(double lat, double lng) async {
+    final uri = Uri.parse(
+      'https://api.tomorrow.io/v4/forecast'
+      '?timesteps=1d'
+      '&fields=temperatureMax,temperatureMin,'
+      'precipitationProbability,windSpeedMax,weatherCode'
+      '&units=metric'
+      '&apikey=$_apiKey'
+      '&location=$lat,$lng',
+    );
+    final response = await http.get(uri);
+    if (response.statusCode != 200) {
+      throw WeatherFetchException(response.statusCode, response.body);
+    }
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    final timelines = json['timelines'] as Map<String, dynamic>;
+    final daily = timelines['daily'] as List<dynamic>;
+    return daily
+        .map((e) => DailyForecast.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 }

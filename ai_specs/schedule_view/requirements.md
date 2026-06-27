@@ -1,6 +1,6 @@
 # Schedule View — Requirements
 
-> Spec created: 2026-06-27 | Revised: 2026-06-27
+> Spec created: 2026-06-27 | Revised: 2026-06-27 (overlap rule)
 > Branch: feature/schedule-view
 > Status: READY FOR IMPLEMENTATION
 
@@ -112,15 +112,14 @@ The schedule view's per-day matching MUST replicate the backend
 `conditionsMatch` logic in `supabase/functions/check-weather/index.ts`
 (lines 21-41) so that the app and backend never disagree.
 
-#### Backend conditionsMatch (authoritative reference)
+#### Backend conditionsMatch (authoritative reference, overlap rule)
 
 ```typescript
 function conditionsMatch(forecast: any, profile: any): boolean {
   const day = forecast.values;
   if (profile.temp_enabled) {
-    const avgTemp = (day.temperatureMax + day.temperatureMin) / 2;
-    if (profile.temp_min !== null && avgTemp < profile.temp_min) return false;
-    if (profile.temp_max !== null && avgTemp > profile.temp_max) return false;
+    if (profile.temp_min !== null && day.temperatureMax < profile.temp_min) return false;
+    if (profile.temp_max !== null && day.temperatureMin > profile.temp_max) return false;
   }
   if (profile.precip_enabled) {
     const precip = day.precipitationProbability;
@@ -134,6 +133,10 @@ function conditionsMatch(forecast: any, profile: any): boolean {
   return true;
 }
 ```
+
+Temperature uses an **overlap rule**: a day matches if the day's temperature
+range [min, max] overlaps the activity's range [temp_min, temp_max]. No
+averaging is performed.
 
 #### Current frontend evaluateMatch (today-only, uses WeatherData)
 
@@ -158,16 +161,16 @@ bool evaluateMatch(ConditionProfile? profile, WeatherData weather) {
 }
 ```
 
-#### Discrepancies between frontend and backend
+#### Discrepancies between old frontend and backend (now resolved)
 
-| Condition | Backend | Frontend (current) |
-|-----------|---------|-------------------|
-| Temperature | avg of max/min vs thresholds | single realtime temp vs thresholds |
-| Precip "none" | precipitationProbability > 20 fails | precipitationIntensity > 0 fails |
-| Precip "light_ok" | precipitationProbability > 60 fails | NOT IMPLEMENTED |
-| Wind | windSpeedMax vs wind_max | windSpeed vs windMax |
+| Condition | Backend (overlap rule) | Old Frontend (realtime) | New `evaluateDayMatch` |
+|-----------|----------------------|------------------------|----------------------|
+| Temperature | overlap: day.max >= min, day.min <= max | single realtime temp vs thresholds | overlap (identical to backend) |
+| Precip "none" | precipitationProbability > 20 fails | precipitationIntensity > 0 fails | precipitationProbability > 20 (identical) |
+| Precip "light_ok" | precipitationProbability > 60 fails | NOT IMPLEMENTED | precipitationProbability > 60 (identical) |
+| Wind | windSpeedMax > wind_max | windSpeed > windMax | windSpeedMax > windMax (identical) |
 
-#### Resolution: new day-level matcher
+#### Resolution: new day-level matcher (overlap rule)
 
 A new `evaluateDayMatch()` function MUST be added that mirrors the
 backend `conditionsMatch` exactly, operating on `DailyForecast` fields
@@ -178,9 +181,10 @@ bool evaluateDayMatch(ConditionProfile? profile, DailyForecast day) {
   if (profile == null) return true;
 
   if (profile.tempEnabled) {
-    final avgTemp = (day.temperatureMax + day.temperatureMin) / 2;
-    if (profile.tempMin != null && avgTemp < profile.tempMin!) return false;
-    if (profile.tempMax != null && avgTemp > profile.tempMax!) return false;
+    if (profile.tempMin != null && day.temperatureMax < profile.tempMin!)
+      return false;
+    if (profile.tempMax != null && day.temperatureMin > profile.tempMax!)
+      return false;
   }
 
   if (profile.precipEnabled) {
@@ -198,11 +202,15 @@ bool evaluateDayMatch(ConditionProfile? profile, DailyForecast day) {
 }
 ```
 
-The existing `evaluateMatch()` remains for the realtime today-only path
-(theme provider). `evaluateDayMatch()` is used by `scheduleMatchProvider`.
+Temperature uses the **overlap rule**: the day's range [temperatureMin,
+temperatureMax] must overlap the activity's range [tempMin, tempMax].
+- `day.temperatureMax < profile.tempMin` means the day is entirely below
+  the user's minimum — no overlap — fail.
+- `day.temperatureMin > profile.tempMax` means the day is entirely above
+  the user's maximum — no overlap — fail.
 
-There is NO `toWeatherData()` adapter on `DailyForecast`. The daily
-forecast values are compared directly.
+There is NO averaging. There is NO `toWeatherData()` adapter on
+`DailyForecast`. The daily forecast values are compared directly.
 
 ### FR-7: Activity tap navigation
 
@@ -254,14 +262,15 @@ forecast values are compared directly.
   per-activity notifications). This spec covers the screen + layout
   toggle only.
 - Anything that writes or transforms forecast data.
-- Any changes to the backend edge function.
+- Backend edge function deployment (code edit is in scope; deployment
+  is manual).
 
 ## What Happens to Existing Code
 
 | File | Disposition |
 |------|-------------|
 | `lib/features/home/tabs/today_tab.dart` | **Replaced** by `schedule_tab.dart`. Delete after schedule view is complete and verified. |
-| `lib/features/home/home_providers.dart` | **Modified**: keep `evaluateMatch()`, `activitiesProvider`, `userLocationProvider`, `weatherDataProvider`. Add `dailyForecastProvider`, `scheduleMatchProvider`, `evaluateDayMatch()`, `scheduleLayoutProvider`. Remove `conditionMatchProvider`. |
+| `lib/features/home/home_providers.dart` | **Modified**: keep `activitiesProvider`, `userLocationProvider`, `weatherDataProvider`. Add `dailyForecastProvider`, `scheduleMatchProvider`, `evaluateDayMatch()`, `scheduleLayoutProvider`. Remove `conditionMatchProvider` and `evaluateMatch()` (dead code after TodayTab deletion). |
 | `lib/features/home/home_screen.dart` | **Modified**: first tab label changes from "Today" to "Schedule", icon changes. |
 | `lib/data/repositories/weather_repository.dart` | **Modified**: add `fetchForecast(lat, lng)` method calling `/v4/forecast?timesteps=1d`. |
 | `lib/data/models/daily_forecast.dart` | **New**: `DailyForecast` with `date`, `temperatureMax`, `temperatureMin`, `precipitationProbability`, `windSpeedMax`, `weatherCode`. No `toWeatherData()` adapter. |

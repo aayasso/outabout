@@ -1,41 +1,35 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:outabout/data/models/condition_profile.dart';
-import 'package:outabout/data/models/weather_data.dart';
+import 'package:outabout/data/models/daily_forecast.dart';
 import 'package:outabout/features/home/home_providers.dart';
 
 void main() {
-  const weather = WeatherData(
+  final day = DailyForecast(
+    date: DateTime(2026, 6, 27),
+    temperatureMax: 28.0,
+    temperatureMin: 18.0,
+    precipitationProbability: 10.0,
+    windSpeedMax: 15.0,
     weatherCode: 1000,
-    temperature: 22.0,
-    windSpeed: 10.0,
-    humidity: 50.0,
-    precipitationIntensity: 0.0,
-    uvIndex: 5.0,
   );
 
-  group('evaluateMatch', () {
-    test(
-      'null profile (no conditions) returns true',
-      () {
-        expect(evaluateMatch(null, weather), true);
-      },
-    );
+  group('evaluateDayMatch', () {
+    test('null profile (no conditions) returns true', () {
+      expect(evaluateDayMatch(null, day), true);
+    });
 
-    test(
-      'all conditions disabled returns true',
-      () {
-        const profile = ConditionProfile(
-          id: 'cp-1',
-          activityId: 'act-1',
-          tempEnabled: false,
-          precipEnabled: false,
-          windEnabled: false,
-        );
-        expect(evaluateMatch(profile, weather), true);
-      },
-    );
+    test('all conditions disabled returns true', () {
+      const profile = ConditionProfile(
+        id: 'cp-1',
+        activityId: 'act-1',
+        tempEnabled: false,
+        precipEnabled: false,
+        windEnabled: false,
+      );
+      expect(evaluateDayMatch(profile, day), true);
+    });
 
-    test('temp too low returns false', () {
+    test('temp overlap — day range overlaps activity range', () {
       const profile = ConditionProfile(
         id: 'cp-1',
         activityId: 'act-1',
@@ -43,52 +37,118 @@ void main() {
         tempMin: 25.0,
         tempMax: 35.0,
       );
-      expect(evaluateMatch(profile, weather), false);
+      // day max 28 >= 25, day min 18 <= 35 => overlap
+      expect(evaluateDayMatch(profile, day), true);
     });
 
-    test('temp too high returns false', () {
+    test('temp no overlap — day entirely below range', () {
       const profile = ConditionProfile(
         id: 'cp-1',
         activityId: 'act-1',
         tempEnabled: true,
-        tempMin: 10.0,
-        tempMax: 20.0,
+        tempMin: 30.0,
+        tempMax: 40.0,
       );
-      expect(evaluateMatch(profile, weather), false);
+      // day max 28 < 30 => no overlap
+      expect(evaluateDayMatch(profile, day), false);
     });
 
-    test(
-      'precip enabled with none + rain returns false',
-      () {
-        const rainyWeather = WeatherData(
-          weatherCode: 4001,
-          temperature: 22.0,
-          windSpeed: 10.0,
-          humidity: 80.0,
-          precipitationIntensity: 2.5,
-          uvIndex: 1.0,
-        );
-        const profile = ConditionProfile(
-          id: 'cp-1',
-          activityId: 'act-1',
-          precipEnabled: true,
-          precipLevel: 'none',
-        );
-        expect(
-          evaluateMatch(profile, rainyWeather),
-          false,
-        );
-      },
-    );
+    test('temp no overlap — day entirely above range', () {
+      const profile = ConditionProfile(
+        id: 'cp-1',
+        activityId: 'act-1',
+        tempEnabled: true,
+        tempMin: 5.0,
+        tempMax: 15.0,
+      );
+      // day min 18 > 15 => no overlap
+      expect(evaluateDayMatch(profile, day), false);
+    });
 
-    test('wind too high returns false', () {
-      const windyWeather = WeatherData(
+    test('precip none passes when probability <= 20', () {
+      const profile = ConditionProfile(
+        id: 'cp-1',
+        activityId: 'act-1',
+        precipEnabled: true,
+        precipLevel: 'none',
+      );
+      // precipitationProbability is 10 => passes
+      expect(evaluateDayMatch(profile, day), true);
+    });
+
+    test('precip none fails when probability > 20', () {
+      final rainyDay = DailyForecast(
+        date: DateTime(2026, 6, 27),
+        temperatureMax: 28.0,
+        temperatureMin: 18.0,
+        precipitationProbability: 25.0,
+        windSpeedMax: 15.0,
+        weatherCode: 4001,
+      );
+      const profile = ConditionProfile(
+        id: 'cp-1',
+        activityId: 'act-1',
+        precipEnabled: true,
+        precipLevel: 'none',
+      );
+      expect(evaluateDayMatch(profile, rainyDay), false);
+    });
+
+    test('precip light_ok passes when probability <= 60', () {
+      final day55 = DailyForecast(
+        date: DateTime(2026, 6, 27),
+        temperatureMax: 28.0,
+        temperatureMin: 18.0,
+        precipitationProbability: 55.0,
+        windSpeedMax: 15.0,
+        weatherCode: 4001,
+      );
+      const profile = ConditionProfile(
+        id: 'cp-1',
+        activityId: 'act-1',
+        precipEnabled: true,
+        precipLevel: 'light_ok',
+      );
+      expect(evaluateDayMatch(profile, day55), true);
+    });
+
+    test('precip light_ok fails when probability > 60', () {
+      final day65 = DailyForecast(
+        date: DateTime(2026, 6, 27),
+        temperatureMax: 28.0,
+        temperatureMin: 18.0,
+        precipitationProbability: 65.0,
+        windSpeedMax: 15.0,
+        weatherCode: 4001,
+      );
+      const profile = ConditionProfile(
+        id: 'cp-1',
+        activityId: 'act-1',
+        precipEnabled: true,
+        precipLevel: 'light_ok',
+      );
+      expect(evaluateDayMatch(profile, day65), false);
+    });
+
+    test('wind within limit passes', () {
+      const profile = ConditionProfile(
+        id: 'cp-1',
+        activityId: 'act-1',
+        windEnabled: true,
+        windMax: 20.0,
+      );
+      // windSpeedMax 15 <= 20 => passes
+      expect(evaluateDayMatch(profile, day), true);
+    });
+
+    test('wind exceeds limit fails', () {
+      final windyDay = DailyForecast(
+        date: DateTime(2026, 6, 27),
+        temperatureMax: 28.0,
+        temperatureMin: 18.0,
+        precipitationProbability: 10.0,
+        windSpeedMax: 35.0,
         weatherCode: 1000,
-        temperature: 22.0,
-        windSpeed: 30.0,
-        humidity: 50.0,
-        precipitationIntensity: 0.0,
-        uvIndex: 5.0,
       );
       const profile = ConditionProfile(
         id: 'cp-1',
@@ -96,10 +156,7 @@ void main() {
         windEnabled: true,
         windMax: 20.0,
       );
-      expect(
-        evaluateMatch(profile, windyWeather),
-        false,
-      );
+      expect(evaluateDayMatch(profile, windyDay), false);
     });
 
     test('all conditions met returns true', () {
@@ -114,7 +171,7 @@ void main() {
         windEnabled: true,
         windMax: 20.0,
       );
-      expect(evaluateMatch(profile, weather), true);
+      expect(evaluateDayMatch(profile, day), true);
     });
   });
 }

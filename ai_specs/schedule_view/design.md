@@ -1,6 +1,6 @@
 # Schedule View — Design
 
-> Spec created: 2026-06-27 | Revised: 2026-06-27
+> Spec created: 2026-06-27 | Revised: 2026-06-27 (overlap rule)
 > Branch: feature/schedule-view
 > Status: READY FOR IMPLEMENTATION
 
@@ -32,9 +32,9 @@ Tomorrow.io /v4/forecast (1d)     Tomorrow.io /v4/weather/realtime
 3. `activitiesProvider` fetches user activities (existing, unchanged).
 4. `scheduleMatchProvider` (NEW) combines daily forecasts + activities.
    For each forecast day, runs `evaluateDayMatch()` against every
-   activity using the day's ACTUAL `temperatureMax`, `temperatureMin`,
-   `precipitationProbability`, `windSpeedMax` values. No averaging
-   adapter. Returns `List<ScheduleDay>`.
+   activity using the overlap rule on `temperatureMax`/`temperatureMin`
+   and direct comparisons for `precipitationProbability` and
+   `windSpeedMax`. No averaging. No adapter. Returns `List<ScheduleDay>`.
 5. `scheduleLayoutProvider` (NEW) reads the user's layout preference
    from SharedPreferences. `ScheduleTab` watches this to decide which
    layout widget to render.
@@ -114,11 +114,12 @@ enum ScheduleLayout { dayFirst, activityFirst }
 
 ## New / Modified Providers
 
-### evaluateDayMatch() (NEW — mirrors backend conditionsMatch)
+### evaluateDayMatch() (NEW — mirrors backend conditionsMatch, overlap rule)
 
 ```dart
 /// Matches an activity's condition profile against a daily forecast.
 /// Mirrors backend conditionsMatch in check-weather/index.ts exactly.
+/// Uses overlap rule for temperature — no averaging.
 bool evaluateDayMatch(
   ConditionProfile? profile,
   DailyForecast day,
@@ -126,14 +127,12 @@ bool evaluateDayMatch(
   if (profile == null) return true;
 
   if (profile.tempEnabled) {
-    final avgTemp =
-        (day.temperatureMax + day.temperatureMin) / 2;
     if (profile.tempMin != null &&
-        avgTemp < profile.tempMin!) {
+        day.temperatureMax < profile.tempMin!) {
       return false;
     }
     if (profile.tempMax != null &&
-        avgTemp > profile.tempMax!) {
+        day.temperatureMin > profile.tempMax!) {
       return false;
     }
   }
@@ -159,11 +158,14 @@ bool evaluateDayMatch(
 }
 ```
 
-The existing `evaluateMatch()` remains for the realtime/today path
-(used by `conditionMatchProvider` and theme logic). It operates on
-`WeatherData` which has different semantics (intensity vs probability).
-The two matchers coexist: `evaluateMatch` for realtime, `evaluateDayMatch`
-for daily forecasts.
+Temperature overlap rule: the day's [temperatureMin, temperatureMax]
+must overlap the activity's [tempMin, tempMax]. If the day's max is
+below the activity's min, or the day's min is above the activity's max,
+there is no overlap and the day fails.
+
+The existing `evaluateMatch()` is deleted along with TodayTab
+(`conditionMatchProvider` is its only consumer; the theme system does
+not depend on it).
 
 ### dailyForecastProvider (NEW)
 

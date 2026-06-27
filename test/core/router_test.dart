@@ -17,8 +17,9 @@ class MockUser extends Mock implements User {}
 
 void main() {
   group('routerProvider redirect logic', () {
-    testWidgets('shows onboarding when onboarding_complete is false',
-        (tester) async {
+    testWidgets('shows onboarding when onboarding_complete is false', (
+      tester,
+    ) async {
       SharedPreferences.setMockInitialValues({});
       final prefs = await SharedPreferences.getInstance();
 
@@ -33,11 +34,13 @@ void main() {
             sharedPreferencesProvider.overrideWithValue(prefs),
             supabaseClientProvider.overrideWithValue(mockSupabase),
           ],
-          child: Builder(builder: (context) {
-            final container = ProviderScope.containerOf(context);
-            final router = container.read(routerProvider);
-            return MaterialApp.router(routerConfig: router);
-          }),
+          child: Builder(
+            builder: (context) {
+              final container = ProviderScope.containerOf(context);
+              final router = container.read(routerProvider);
+              return MaterialApp.router(routerConfig: router);
+            },
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -47,66 +50,72 @@ void main() {
     });
 
     testWidgets(
-        'shows home when onboarding_complete is true AND session exists',
-        (tester) async {
-      SharedPreferences.setMockInitialValues({'onboarding_complete': true});
-      final prefs = await SharedPreferences.getInstance();
+      'shows home when onboarding_complete is true AND session exists',
+      (tester) async {
+        SharedPreferences.setMockInitialValues({'onboarding_complete': true});
+        final prefs = await SharedPreferences.getInstance();
 
-      final mockSupabase = MockSupabaseClient();
-      final mockAuth = MockGoTrueClient();
-      final mockUser = MockUser();
-      when(() => mockSupabase.auth).thenReturn(mockAuth);
-      when(() => mockAuth.currentUser).thenReturn(mockUser);
+        final mockSupabase = MockSupabaseClient();
+        final mockAuth = MockGoTrueClient();
+        final mockUser = MockUser();
+        when(() => mockSupabase.auth).thenReturn(mockAuth);
+        when(() => mockAuth.currentUser).thenReturn(mockUser);
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            sharedPreferencesProvider.overrideWithValue(prefs),
-            supabaseClientProvider.overrideWithValue(mockSupabase),
-          ],
-          child: Builder(builder: (context) {
-            final container = ProviderScope.containerOf(context);
-            final router = container.read(routerProvider);
-            return MaterialApp.router(routerConfig: router);
-          }),
-        ),
-      );
-      await tester.pumpAndSettle();
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              sharedPreferencesProvider.overrideWithValue(prefs),
+              supabaseClientProvider.overrideWithValue(mockSupabase),
+            ],
+            child: Builder(
+              builder: (context) {
+                final container = ProviderScope.containerOf(context);
+                final router = container.read(routerProvider);
+                return MaterialApp.router(routerConfig: router);
+              },
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
 
-      expect(find.text('Today'), findsWidgets);
-    });
+        expect(find.text('Schedule'), findsWidgets);
+      },
+    );
 
     testWidgets(
-        'redirects to onboarding when onboarding_complete is true but no session (expired session)',
-        (tester) async {
-      SharedPreferences.setMockInitialValues({'onboarding_complete': true});
-      final prefs = await SharedPreferences.getInstance();
+      'redirects to onboarding when onboarding_complete is true but no session (expired session)',
+      (tester) async {
+        SharedPreferences.setMockInitialValues({'onboarding_complete': true});
+        final prefs = await SharedPreferences.getInstance();
 
-      final mockSupabase = MockSupabaseClient();
-      final mockAuth = MockGoTrueClient();
-      when(() => mockSupabase.auth).thenReturn(mockAuth);
-      when(() => mockAuth.currentUser).thenReturn(null); // No session
+        final mockSupabase = MockSupabaseClient();
+        final mockAuth = MockGoTrueClient();
+        when(() => mockSupabase.auth).thenReturn(mockAuth);
+        when(() => mockAuth.currentUser).thenReturn(null); // No session
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            sharedPreferencesProvider.overrideWithValue(prefs),
-            supabaseClientProvider.overrideWithValue(mockSupabase),
-          ],
-          child: Builder(builder: (context) {
-            final container = ProviderScope.containerOf(context);
-            final router = container.read(routerProvider);
-            return MaterialApp.router(routerConfig: router);
-          }),
-        ),
-      );
-      await tester.pumpAndSettle();
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              sharedPreferencesProvider.overrideWithValue(prefs),
+              supabaseClientProvider.overrideWithValue(mockSupabase),
+            ],
+            child: Builder(
+              builder: (context) {
+                final container = ProviderScope.containerOf(context);
+                final router = container.read(routerProvider);
+                return MaterialApp.router(routerConfig: router);
+              },
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
 
-      // Should redirect to onboarding, not home
-      expect(find.text('Welcome to OutAbout'), findsNothing);
+        // Should redirect to onboarding, not home
+        expect(find.text('Welcome to OutAbout'), findsNothing);
 
-      // Verify the flag was cleared so subsequent launches also go to onboarding
-      expect(prefs.getBool('onboarding_complete'), isFalse);
-    });
+        // Verify the flag was cleared so subsequent launches also go to onboarding
+        expect(prefs.getBool('onboarding_complete'), isFalse);
+      },
+    );
   });
 }

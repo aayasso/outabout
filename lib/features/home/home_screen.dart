@@ -26,26 +26,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         onDestinationSelected: (index) {
           widget.navigationShell.goBranch(
             index,
-            initialLocation:
-                index == widget.navigationShell.currentIndex,
+            initialLocation: index == widget.navigationShell.currentIndex,
           );
         },
         backgroundColor: colors.surface,
         indicatorColor: colors.primary.withValues(alpha: 0.15),
-        labelBehavior:
-            NavigationDestinationLabelBehavior.alwaysShow,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         destinations: [
           NavigationDestination(
             icon: Icon(
-              Icons.wb_sunny_outlined,
+              Icons.calendar_today_outlined,
               color: colors.textSecondary,
             ),
             selectedIcon: Icon(
-              Icons.wb_sunny_outlined,
+              Icons.calendar_today_outlined,
               color: colors.primary,
             ),
-            label: 'Today',
-            tooltip: 'Today',
+            label: 'Schedule',
+            tooltip: 'Schedule',
           ),
           NavigationDestination(
             icon: Icon(
@@ -60,14 +58,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             tooltip: 'Activities',
           ),
           NavigationDestination(
-            icon: Icon(
-              Icons.settings_outlined,
-              color: colors.textSecondary,
-            ),
-            selectedIcon: Icon(
-              Icons.settings_outlined,
-              color: colors.primary,
-            ),
+            icon: Icon(Icons.settings_outlined, color: colors.textSecondary),
+            selectedIcon: Icon(Icons.settings_outlined, color: colors.primary),
             label: 'Settings',
             tooltip: 'Settings',
           ),

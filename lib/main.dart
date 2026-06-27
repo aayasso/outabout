@@ -18,9 +18,7 @@ import 'services/notification_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-  ]);
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
   await dotenv.load(fileName: '.env');
 
@@ -39,9 +37,7 @@ Future<void> main() async {
 
   runApp(
     ProviderScope(
-      overrides: [
-        sharedPreferencesProvider.overrideWithValue(prefs),
-      ],
+      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
       child: const OutAboutApp(),
     ),
   );
@@ -60,9 +56,7 @@ class _OutAboutAppState extends ConsumerState<OutAboutApp> {
   @override
   void initState() {
     super.initState();
-    _lifecycleListener = AppLifecycleListener(
-      onResume: _onResume,
-    );
+    _lifecycleListener = AppLifecycleListener(onResume: _onResume);
     _setupNotificationClickHandler();
   }
 
@@ -79,6 +73,7 @@ class _OutAboutAppState extends ConsumerState<OutAboutApp> {
 
   void _onResume() {
     ref.invalidate(weatherDataProvider);
+    ref.invalidate(dailyForecastProvider);
   }
 
   @override
@@ -106,4 +101,3 @@ class _OutAboutAppState extends ConsumerState<OutAboutApp> {
     );
   }
 }
-

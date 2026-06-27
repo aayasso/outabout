@@ -1,6 +1,6 @@
 # Schedule View — Tasks
 
-> Spec created: 2026-06-27 | Revised: 2026-06-27
+> Spec created: 2026-06-27 | Revised: 2026-06-27 (overlap rule)
 > Branch: feature/schedule-view
 > Status: READY FOR IMPLEMENTATION
 
@@ -53,7 +53,8 @@ construction and parsing.
 
 - [ ] Add `evaluateDayMatch(ConditionProfile? profile, DailyForecast day)`
   function that mirrors the backend `conditionsMatch` exactly:
-  - Temperature: `avgTemp = (max + min) / 2`, check vs tempMin/tempMax
+  - Temperature (overlap rule): `day.temperatureMax < tempMin` fails,
+    `day.temperatureMin > tempMax` fails. No averaging.
   - Precipitation: `precipitationProbability > 20` fails for "none",
     `> 60` fails for "light_ok"
   - Wind: `windSpeedMax > windMax` fails
@@ -67,13 +68,13 @@ construction and parsing.
   forecast values directly, NOT via any adapter.
 - [ ] Remove `conditionMatchProvider` (replaced by schedule match).
 - [ ] Keep `weatherDataProvider` unchanged (still needed for theme).
-- [ ] Keep `evaluateMatch()` unchanged (still used for realtime path).
+- [ ] `evaluateMatch()` becomes dead code — deleted in Task 9 with TodayTab.
 
 **Test:**
 - Unit test `evaluateDayMatch` with constructed `DailyForecast` values
   and `ConditionProfile` values, verifying:
-  - Temperature averaging matches backend: profile min=15, max=25,
-    day max=30, min=20 => avg=25 => passes (not > 25).
+  - Temperature overlap matches backend: profile min=15, max=25,
+    day max=30, min=20 => day.max(30) >= 15 and day.min(20) <= 25 => passes.
   - Precip "none" with probability=15 => passes (not > 20).
   - Precip "none" with probability=25 => fails (> 20).
   - Precip "light_ok" with probability=55 => passes (not > 60).

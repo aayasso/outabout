@@ -7,7 +7,7 @@ import '../features/add_activity/add_activity_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/home/tabs/activities_tab.dart';
 import '../features/home/tabs/settings_tab.dart';
-import '../features/home/tabs/today_tab.dart';
+import '../features/home/tabs/schedule_tab.dart';
 import 'providers.dart';
 import 'theme.dart';
 import 'weather_theme_provider.dart';
@@ -36,18 +36,13 @@ CustomTransitionPage<void> _fadeTransitionPage({
   return CustomTransitionPage<void>(
     key: state.pageKey,
     child: child,
-    transitionsBuilder:
-        (context, animation, secondaryAnimation, child) {
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
       return FadeTransition(
-        opacity: CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-        ),
+        opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
         child: child,
       );
     },
-    transitionDuration:
-        OutAboutAnimations.standardDuration,
+    transitionDuration: OutAboutAnimations.standardDuration,
   );
 }
 
@@ -62,21 +57,16 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: AppRoutes.onboarding,
     redirect: (context, state) {
-      final onboardingComplete =
-          prefs.getBool('onboarding_complete') ?? false;
-      final hasSession =
-          supabase.auth.currentUser != null;
-      final isOnboarding =
-          state.matchedLocation == AppRoutes.onboarding;
+      final onboardingComplete = prefs.getBool('onboarding_complete') ?? false;
+      final hasSession = supabase.auth.currentUser != null;
+      final isOnboarding = state.matchedLocation == AppRoutes.onboarding;
 
       if (onboardingComplete && !hasSession) {
         prefs.setBool('onboarding_complete', false);
         if (!isOnboarding) return AppRoutes.onboarding;
         return null;
       }
-      if (onboardingComplete &&
-          hasSession &&
-          isOnboarding) {
+      if (onboardingComplete && hasSession && isOnboarding) {
         return AppRoutes.home;
       }
       if (!onboardingComplete && !isOnboarding) {
@@ -87,8 +77,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(
         path: AppRoutes.onboarding,
-        pageBuilder: (context, state) =>
-            _fadeTransitionPage(
+        pageBuilder: (context, state) => _fadeTransitionPage(
           child: const _OnboardingPlaceholder(),
           state: state,
         ),
@@ -96,30 +85,24 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.activity,
         pageBuilder: (context, state) {
-          final activityId =
-              state.pathParameters['id']!;
+          final activityId = state.pathParameters['id']!;
           return _fadeTransitionPage(
-            child: ActivityDetailScreen(
-              activityId: activityId,
-            ),
+            child: ActivityDetailScreen(activityId: activityId),
             state: state,
           );
         },
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
-          return HomeScreen(
-            navigationShell: navigationShell,
-          );
+          return HomeScreen(navigationShell: navigationShell);
         },
         branches: [
           StatefulShellBranch(
             routes: [
               GoRoute(
                 path: AppRoutes.home,
-                pageBuilder: (context, state) =>
-                    _fadeTransitionPage(
-                  child: const TodayTab(),
+                pageBuilder: (context, state) => _fadeTransitionPage(
+                  child: const ScheduleTab(),
                   state: state,
                 ),
               ),
@@ -129,8 +112,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: AppRoutes.activities,
-                pageBuilder: (context, state) =>
-                    _fadeTransitionPage(
+                pageBuilder: (context, state) => _fadeTransitionPage(
                   child: const ActivitiesTab(),
                   state: state,
                 ),
@@ -141,8 +123,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: AppRoutes.settings,
-                pageBuilder: (context, state) =>
-                    _fadeTransitionPage(
+                pageBuilder: (context, state) => _fadeTransitionPage(
                   child: const SettingsTab(),
                   state: state,
                 ),
@@ -154,10 +135,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.addActivity,
         pageBuilder: (context, state) =>
-            _fadeTransitionPage(
-          child: const AddActivityScreen(),
-          state: state,
-        ),
+            _fadeTransitionPage(child: const AddActivityScreen(), state: state),
       ),
     ],
   );
