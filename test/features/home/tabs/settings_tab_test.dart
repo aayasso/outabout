@@ -19,6 +19,8 @@ class MockBehavioralEventService extends Mock
     implements BehavioralEventService {}
 
 void main() {
+  late List<Uri> launched;
+  late bool launchSucceeds;
   late MockAuthService mockAuthService;
   late MockBehavioralEventService mockEventService;
   late SharedPreferences prefs;
@@ -31,6 +33,9 @@ void main() {
 
     SharedPreferences.setMockInitialValues({});
     prefs = await SharedPreferences.getInstance();
+
+    launched = [];
+    launchSucceeds = true;
   });
 
   Future<void> pumpSettings(WidgetTester tester) async {
@@ -55,6 +60,10 @@ void main() {
           profileProvider.overrideWith((ref) async => null),
           userLocationProvider.overrideWith((ref) async => null),
           authServiceProvider.overrideWithValue(mockAuthService),
+          urlLauncherProvider.overrideWithValue((Uri url) async {
+            launched.add(url);
+            return launchSucceeds;
+          }),
           behavioralEventServiceProvider.overrideWithValue(mockEventService),
         ],
         child: const MaterialApp(home: SettingsTab()),
@@ -172,6 +181,71 @@ void main() {
         () => mockEventService.log('account_deletion_requested'),
         () => mockAuthService.deleteAccount(),
       ]);
+    });
+  });
+
+  group('SettingsTab legal links', () {
+    Future<void> tapRow(WidgetTester tester, String label) async {
+      await pumpSettings(tester);
+      await tester.ensureVisible(find.text(label));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(label));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('shows both legal rows', (tester) async {
+      await pumpSettings(tester);
+
+      expect(find.text('Privacy Policy'), findsOneWidget);
+      expect(find.text('Terms of Service'), findsOneWidget);
+    });
+
+    testWidgets('privacy policy row opens the hosted URL', (tester) async {
+      await tapRow(tester, 'Privacy Policy');
+
+      // Apple reads the hosted copy, not the one in the repo.
+      expect(launched, [Uri.parse(LegalUrls.privacyPolicy)]);
+      expect(
+        LegalUrls.privacyPolicy,
+        'https://aayasso.github.io/outabout/privacy-policy.html',
+      );
+    });
+
+    testWidgets('terms row opens the hosted URL', (tester) async {
+      await tapRow(tester, 'Terms of Service');
+
+      expect(launched, [Uri.parse(LegalUrls.termsOfService)]);
+      expect(
+        LegalUrls.termsOfService,
+        'https://aayasso.github.io/outabout/terms-of-service.html',
+      );
+    });
+
+    testWidgets('surfaces a message when the link cannot open',
+        (tester) async {
+      launchSucceeds = false;
+
+      await tapRow(tester, 'Privacy Policy');
+
+      expect(find.text('Could not open Privacy Policy.'), findsOneWidget);
+    });
+
+    testWidgets('rows carry a link semantics label', (tester) async {
+      await pumpSettings(tester);
+      final handle = tester.ensureSemantics();
+
+      // The row's own Text merges into the node, so match on the part this
+      // widget contributes rather than the whole merged string.
+      expect(
+        find.bySemanticsLabel(RegExp('Privacy Policy, opens in browser')),
+        findsOneWidget,
+      );
+      expect(
+        find.bySemanticsLabel(RegExp('Terms of Service, opens in browser')),
+        findsOneWidget,
+      );
+
+      handle.dispose();
     });
   });
 }

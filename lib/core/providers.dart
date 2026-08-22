@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // ---------------------------------------------------------------------------
 // Supabase client provider
@@ -47,3 +49,33 @@ const userScopedPrefsKeys = <String>[
   cachedForecastDataKey,
   cachedForecastFetchedAtKey,
 ];
+
+// ---------------------------------------------------------------------------
+// External URL launcher
+// ---------------------------------------------------------------------------
+
+/// Opens an external URL, returning whether it was handled.
+///
+/// Injected rather than called directly so widgets that open links stay
+/// testable: a test overrides this provider and asserts the URL without
+/// launching anything.
+typedef UrlLauncher = Future<bool> Function(Uri url);
+
+final urlLauncherProvider = Provider<UrlLauncher>((ref) {
+  return (Uri url) async {
+    try {
+      return await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      debugPrint('urlLauncher: failed to open $url — $e');
+      return false;
+    }
+  };
+});
+
+/// Hosted legal documents. Apple reads these URLs, not the copies in the repo.
+abstract class LegalUrls {
+  static const String privacyPolicy =
+      'https://aayasso.github.io/outabout/privacy-policy.html';
+  static const String termsOfService =
+      'https://aayasso.github.io/outabout/terms-of-service.html';
+}

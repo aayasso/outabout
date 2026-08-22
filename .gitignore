@@ -49,3 +49,6 @@ app.*.map.json
 
 # Git worktrees
 .worktrees/
+
+# Supabase CLI scratch state (project refs, cached versions)
+supabase/.temp/

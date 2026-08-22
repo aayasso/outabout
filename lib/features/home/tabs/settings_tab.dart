@@ -109,6 +109,24 @@ class SettingsTab extends ConsumerWidget {
               ),
               const SizedBox(height: OutAboutSpacing.md),
               _SettingsSection(
+                header: 'Legal',
+                colors: colors,
+                children: [
+                  const _LegalLinkRow(
+                    icon: Icons.privacy_tip_outlined,
+                    label: 'Privacy Policy',
+                    url: LegalUrls.privacyPolicy,
+                  ),
+                  Divider(height: 1, color: colors.divider),
+                  const _LegalLinkRow(
+                    icon: Icons.description_outlined,
+                    label: 'Terms of Service',
+                    url: LegalUrls.termsOfService,
+                  ),
+                ],
+              ),
+              const SizedBox(height: OutAboutSpacing.md),
+              _SettingsSection(
                 header: 'Account',
                 colors: colors,
                 children: [
@@ -756,6 +774,66 @@ class _DeleteAccountDialogState extends ConsumerState<_DeleteAccountDialog> {
                 ),
         ),
       ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// _LegalLinkRow
+// ---------------------------------------------------------------------------
+
+/// Opens a hosted legal document in the browser.
+///
+/// Apple expects a reachable privacy policy, and linking it in-app is the
+/// convention reviewers look for.
+class _LegalLinkRow extends ConsumerWidget {
+  const _LegalLinkRow({
+    required this.icon,
+    required this.label,
+    required this.url,
+  });
+
+  final IconData icon;
+  final String label;
+  final String url;
+
+  Future<void> _open(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final colors = ref.read(weatherThemeColorsProvider);
+
+    final opened = await ref.read(urlLauncherProvider)(Uri.parse(url));
+    if (opened) return;
+
+    messenger?.showSnackBar(
+      SnackBar(
+        backgroundColor: colors.cardBackground,
+        content: Text(
+          'Could not open $label.',
+          style: OutAboutTypography.bodyMedium(colors),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = ref.watch(weatherThemeColorsProvider);
+
+    return Semantics(
+      button: true,
+      link: true,
+      label: '$label, opens in browser',
+      child: _SettingsRow(
+        icon: icon,
+        label: label,
+        colors: colors,
+        onTap: () => _open(context, ref),
+        trailing: Icon(
+          Icons.open_in_new,
+          size: 18,
+          color: colors.textSecondary,
+        ),
+      ),
     );
   }
 }

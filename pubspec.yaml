@@ -1,5 +1,5 @@
 name: outabout
-description: "A new Flutter project."
+description: "Weather-based activity reminders — know when conditions are right for the things you love."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -46,6 +46,7 @@ dependencies:
   flutter_animate: ^4.5.2
   shimmer: ^3.0.0
   http: ^1.3.0
+  url_launcher: ^6.3.1
   onesignal_flutter: ^5.3.0
 
 dev_dependencies:
