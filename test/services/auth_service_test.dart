@@ -48,7 +48,8 @@ void main() {
 
     SharedPreferences.setMockInitialValues({
       for (final key in userScopedKeys) key: 'set',
-      'theme_override': 'rainy',
+      // The real key written by UserThemeOverrideNotifier.
+      'weather_theme_override': 'rainy',
     });
     prefs = await SharedPreferences.getInstance();
 
@@ -331,7 +332,7 @@ void main() {
       await authService.deleteAccount();
 
       // Theme override is a device preference — it outlives the account.
-      expect(prefs.getString('theme_override'), 'rainy');
+      expect(prefs.getString('weather_theme_override'), 'rainy');
     });
 
     test('still signs out and clears state when the function fails', () async {

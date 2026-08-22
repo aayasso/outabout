@@ -154,12 +154,38 @@ final weatherDataProvider = FutureProvider<WeatherData>((ref) async {
     }
   }
 
-  ref
-      .read(weatherThemeProvider.notifier)
-      .setThemeFromConditions(data.weatherCode);
-  ref.read(weatherThemeProvider.notifier).setThemeFromTimeOfDay(DateTime.now());
-
   return data;
+});
+
+// ---------------------------------------------------------------------------
+// Weather-adaptive theme sync
+// ---------------------------------------------------------------------------
+
+/// Applies live conditions to [weatherThemeProvider].
+///
+/// This is what makes the theme weather-adaptive at all. The application used
+/// to be a side effect inside [weatherDataProvider], which never ran because
+/// nothing in the app watched that provider — invalidating a provider with no
+/// listeners does not execute it, so the theme sat on its constructor default
+/// forever. The root widget watches this provider to keep it alive for the
+/// app's lifetime.
+///
+/// Watching the notifier as well as the data means the theme is re-applied
+/// when the notifier is rebuilt — which happens when the user sets or clears
+/// a manual override, so clearing one returns to live conditions instead of
+/// stranding on the default.
+final weatherThemeSyncProvider = Provider<void>((ref) {
+  final notifier = ref.watch(weatherThemeProvider.notifier);
+  final data = ref.watch(weatherDataProvider).valueOrNull;
+  if (data == null) return;
+
+  // Deferred: assigning to another provider's state during this build would
+  // mutate a provider mid-build.
+  Future.microtask(() {
+    if (!notifier.mounted) return;
+    notifier.setThemeFromConditions(data.weatherCode);
+    notifier.setThemeFromTimeOfDay(DateTime.now());
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -31,8 +31,10 @@ void main() {
         ]),
       );
 
-      // Device-level display preferences must survive a sign-out.
-      expect(userScopedPrefsKeys, isNot(contains('theme_override')));
+      // Device-level display preferences must survive a sign-out. These are
+      // the real key strings — an earlier draft asserted 'theme_override',
+      // which no code writes, so the check passed without proving anything.
+      expect(userScopedPrefsKeys, isNot(contains('weather_theme_override')));
       expect(userScopedPrefsKeys, isNot(contains('schedule_layout')));
       // Temperature unit lives server-side on profiles, not in prefs.
       expect(userScopedPrefsKeys, isNot(contains('temperature_unit')));
@@ -43,7 +45,7 @@ void main() {
     test('clears user state and leaves device preferences alone', () async {
       SharedPreferences.setMockInitialValues({
         for (final key in userScopedPrefsKeys) key: 'previous-user',
-        'theme_override': 'rainy',
+        'weather_theme_override': 'rainy',
         'schedule_layout': 'activityFirst',
       });
       final prefs = await SharedPreferences.getInstance();
@@ -59,7 +61,7 @@ void main() {
       for (final key in userScopedPrefsKeys) {
         expect(prefs.get(key), isNull, reason: '$key must be cleared');
       }
-      expect(prefs.getString('theme_override'), 'rainy');
+      expect(prefs.getString('weather_theme_override'), 'rainy');
       expect(prefs.getString('schedule_layout'), 'activityFirst');
     });
 

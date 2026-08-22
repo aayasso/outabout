@@ -84,6 +84,11 @@ class _OutAboutAppState extends ConsumerState<OutAboutApp> {
 
   @override
   Widget build(BuildContext context) {
+    // Keeps the weather-adaptive theme alive: this provider applies live
+    // conditions to the theme notifier, and a provider nothing watches never
+    // runs.
+    ref.watch(weatherThemeSyncProvider);
+
     final themeData = ref.watch(themeDataProvider);
 
     final router = ref.watch(routerProvider);
