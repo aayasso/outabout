@@ -13,6 +13,8 @@ class MockSupabaseClient extends Mock implements SupabaseClient {}
 
 class MockGoTrueClient extends Mock implements GoTrueClient {}
 
+class MockUser extends Mock implements User {}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -185,12 +187,37 @@ void main() {
     late MockSupabaseClient mockSupabase;
     late MockGoTrueClient mockAuth;
 
+    const testUserId = '11111111-2222-3333-4444-555555555555';
+
+    /// Puts an authenticated user behind the mocked client.
+    void signIn() {
+      final mockUser = MockUser();
+      when(() => mockUser.id).thenReturn(testUserId);
+      when(() => mockAuth.currentUser).thenReturn(mockUser);
+    }
+
     setUp(() {
       mockSupabase = MockSupabaseClient();
       mockAuth = MockGoTrueClient();
 
       when(() => mockSupabase.auth).thenReturn(mockAuth);
+      // Default: signed out. Tests needing a session call signIn().
       when(() => mockAuth.currentUser).thenReturn(null);
+    });
+
+    test('skips the insert entirely when there is no session', () async {
+      final service = BehavioralEventService(
+        supabase: mockSupabase,
+        activeThemeName: 'sunny',
+        appVersion: '1.0.0',
+      );
+
+      // Valid event type, but no authenticated user.
+      await service.log('wishlist_added');
+
+      // Must not attempt an insert — user_id is a uuid column and there is
+      // no id to attribute the event to.
+      verifyNever(() => mockSupabase.from(any()));
     });
 
     test('rejects unknown event types without calling Supabase', () async {
@@ -207,6 +234,7 @@ void main() {
     });
 
     test('never throws — catches errors internally', () async {
+      signIn();
       // Make from() throw to simulate Supabase failure.
       when(() => mockSupabase.from(any()))
           .thenThrow(Exception('Supabase error'));
@@ -225,6 +253,7 @@ void main() {
     });
 
     test('calls from(behavioral_events) for valid event types', () async {
+      signIn();
       // Make from() throw so we can verify it was called
       // (we can't easily mock the full insert chain).
       when(() => mockSupabase.from('behavioral_events'))
@@ -251,11 +280,12 @@ void main() {
 
       final payload = service.buildPayload(
         'activity_viewed',
+        userId: testUserId,
         extra: {'activity_id': 'abc-123'},
       );
 
       expect(payload['event_type'], 'activity_viewed');
-      expect(payload['user_id'], 'anonymous');
+      expect(payload['user_id'], testUserId);
 
       // Verify all 4 context objects present.
       expect(payload['conditions_at_event'], isA<Map<String, dynamic>>());
@@ -285,7 +315,7 @@ void main() {
         appVersion: '1.0.0',
       );
 
-      final payload = service.buildPayload('wishlist_added');
+      final payload = service.buildPayload('wishlist_added', userId: testUserId);
       final temporal =
           payload['temporal_context'] as Map<String, dynamic>;
 
@@ -313,7 +343,7 @@ void main() {
         appVersion: '1.0.0',
       );
 
-      final payload = service.buildPayload('wishlist_added');
+      final payload = service.buildPayload('wishlist_added', userId: testUserId);
       final geo = payload['geographic_context'] as Map<String, dynamic>;
 
       expect(geo['country'], 'US');

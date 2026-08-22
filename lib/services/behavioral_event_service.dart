@@ -104,13 +104,17 @@ class BehavioralEventService {
 
   /// Builds the insert payload for a behavioral event.
   ///
+  /// [userId] must be a real authenticated user id — the `user_id` column is
+  /// a uuid, so no placeholder is ever substituted. Callers without a session
+  /// must not build a payload at all; see [log].
+  ///
   /// Exposed for testing. In production, use [log] instead.
   Map<String, dynamic> buildPayload(
     String eventType, {
+    required String userId,
     Map<String, dynamic>? extra,
   }) {
     final now = DateTime.now();
-    final userId = _supabase.auth.currentUser?.id ?? 'anonymous';
 
     final conditions = ConditionsAtEvent(
       tempC: 0.0,
@@ -171,7 +175,8 @@ class BehavioralEventService {
   /// Logs a behavioral event to the `behavioral_events` table.
   ///
   /// Validates [eventType] against [approvedEventTypes]. If invalid, logs a
-  /// warning and returns without inserting.
+  /// warning and returns without inserting. Also returns without inserting
+  /// when there is no authenticated session.
   ///
   /// Never throws — all errors are caught and logged via [debugPrint].
   Future<void> log(
@@ -187,7 +192,12 @@ class BehavioralEventService {
         return;
       }
 
-      final data = buildPayload(eventType, extra: extra);
+      // No session — there is no user to attribute the event to, and the
+      // user_id column is a uuid. Skip silently rather than inventing an id.
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return;
+
+      final data = buildPayload(eventType, userId: userId, extra: extra);
       await _supabase.from('behavioral_events').insert(data);
     } catch (e, st) {
       debugPrint('BehavioralEventService: failed to log "$eventType" — $e');

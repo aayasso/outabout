@@ -5,6 +5,17 @@ import 'package:http/http.dart' as http;
 import '../models/daily_forecast.dart';
 import '../models/weather_data.dart';
 
+/// Strips any `apikey=...` query parameter from an error string so the
+/// Tomorrow.io credential never reaches logs.
+///
+/// [WeatherFetchException] carries only a status code and body, but a
+/// network-layer failure throws `http.ClientException`, whose `toString()`
+/// embeds the full request URI — including the key.
+String redactApiKey(Object error) => error.toString().replaceAll(
+      RegExp(r'apikey=[^&\s)]*'),
+      'apikey=<redacted>',
+    );
+
 class WeatherFetchException implements Exception {
   final int statusCode;
   final String body;
@@ -39,7 +50,7 @@ class WeatherRepository {
 
   Future<List<DailyForecast>> fetchForecast(double lat, double lng) async {
     final uri = Uri.parse(
-      'https://api.tomorrow.io/v4/forecast'
+      'https://api.tomorrow.io/v4/weather/forecast'
       '?timesteps=1d'
       '&fields=temperatureMax,temperatureMin,'
       'precipitationProbability,windSpeedMax,weatherCode'

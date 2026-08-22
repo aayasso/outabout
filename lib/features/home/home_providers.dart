@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -83,12 +84,34 @@ class NoLocationException implements Exception {
   String toString() => 'NoLocationException: no location available';
 }
 
+/// Logs a weather-provider failure with enough detail to diagnose it.
+///
+/// Always routes through [redactApiKey] — a network-layer
+/// `http.ClientException` embeds the request URI, which carries the API key.
+void _logWeatherFailure(String provider, Object error) {
+  if (error is WeatherFetchException) {
+    debugPrint(
+      '$provider: Tomorrow.io returned HTTP ${error.statusCode} — '
+      '${redactApiKey(error.body)}',
+    );
+  } else if (error is NoLocationException) {
+    debugPrint('$provider: no location available — skipping fetch.');
+  } else {
+    debugPrint(
+      '$provider: ${error.runtimeType} — ${redactApiKey(error)}',
+    );
+  }
+}
+
 const _cacheDataKey = 'cached_weather_data';
 const _cacheFetchedAtKey = 'cached_weather_fetched_at';
 
 final weatherDataProvider = FutureProvider<WeatherData>((ref) async {
   final location = await ref.watch(userLocationProvider.future);
-  if (location == null) throw NoLocationException();
+  if (location == null) {
+    _logWeatherFailure('weatherDataProvider', NoLocationException());
+    throw NoLocationException();
+  }
 
   final prefs = ref.watch(sharedPreferencesProvider);
   final repo = ref.watch(weatherRepositoryProvider);
@@ -110,6 +133,7 @@ final weatherDataProvider = FutureProvider<WeatherData>((ref) async {
         DateTime.parse(cachedAt),
       );
     } else {
+      _logWeatherFailure('weatherDataProvider', e);
       rethrow;
     }
   }
@@ -143,7 +167,10 @@ const _cacheForecastFetchedAtKey = 'cached_forecast_fetched_at';
 
 final dailyForecastProvider = FutureProvider<List<DailyForecast>>((ref) async {
   final location = await ref.watch(userLocationProvider.future);
-  if (location == null) throw NoLocationException();
+  if (location == null) {
+    _logWeatherFailure('dailyForecastProvider', NoLocationException());
+    throw NoLocationException();
+  }
 
   final prefs = ref.watch(sharedPreferencesProvider);
   final repo = ref.watch(weatherRepositoryProvider);
@@ -168,6 +195,7 @@ final dailyForecastProvider = FutureProvider<List<DailyForecast>>((ref) async {
           .map((e) => DailyForecast.fromJson(e as Map<String, dynamic>))
           .toList();
     } else {
+      _logWeatherFailure('dailyForecastProvider', e);
       rethrow;
     }
   }

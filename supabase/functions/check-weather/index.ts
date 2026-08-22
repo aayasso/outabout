@@ -11,7 +11,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 // Fetch weather forecast for a location
 async function getWeatherForecast(lat: number, lon: number) {
-  const url = `https://api.tomorrow.io/v4/forecast?location=${lat},${lon}&apikey=${TOMORROW_API_KEY}&timesteps=1d&fields=temperatureMax,temperatureMin,precipitationProbability,windSpeedMax,uvIndex,weatherCode`;
+  const url = `https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lon}&apikey=${TOMORROW_API_KEY}&timesteps=1d&fields=temperatureMax,temperatureMin,precipitationProbability,windSpeedMax,uvIndex,weatherCode`;
   const res = await fetch(url);
   const data = await res.json();
   return data.timelines?.daily || [];

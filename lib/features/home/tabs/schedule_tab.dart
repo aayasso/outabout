@@ -10,6 +10,7 @@ import '../../../core/weather_theme_provider.dart';
 import '../../../data/models/activity.dart';
 import '../../../data/models/daily_forecast.dart';
 import '../../../data/models/schedule_day.dart';
+import '../../../data/repositories/weather_repository.dart';
 import '../../../services/behavioral_event_service.dart';
 import '../home_providers.dart';
 
@@ -170,9 +171,10 @@ class _ScheduleTabState extends ConsumerState<ScheduleTab> {
     ref.invalidate(dailyForecastProvider);
     ref.invalidate(weatherDataProvider);
     ref.invalidate(activitiesProvider);
-    await ref
-        .read(dailyForecastProvider.future)
-        .catchError((_) => <DailyForecast>[]);
+    await ref.read(dailyForecastProvider.future).catchError((Object e) {
+      debugPrint('ScheduleTab refresh: forecast failed — ${redactApiKey(e)}');
+      return <DailyForecast>[];
+    });
   }
 
   @override
@@ -220,7 +222,12 @@ class _ScheduleTabState extends ConsumerState<ScheduleTab> {
         onRefresh: _onRefresh,
         child: scheduleAsync.when(
           loading: () => _ScheduleShimmer(colors: colors),
-          error: (error, _) => const _ScheduleErrorBanner(),
+          error: (error, _) {
+            debugPrint(
+              'ScheduleTab: ${error.runtimeType} — ${redactApiKey(error)}',
+            );
+            return const _ScheduleErrorBanner();
+          },
           data: (days) {
             final allActivities = activitiesAsync.valueOrNull ?? [];
 
