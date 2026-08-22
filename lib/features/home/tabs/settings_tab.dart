@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../core/providers.dart';
+import '../../../core/router.dart';
 import '../../../core/theme.dart';
 import '../../../core/weather_theme_provider.dart';
 import '../../../data/models/schedule_day.dart';
+import '../../../services/auth_service.dart';
 import '../../../services/behavioral_event_service.dart';
 import '../../../services/notification_service.dart';
 import '../home_providers.dart';
@@ -105,7 +108,11 @@ class SettingsTab extends ConsumerWidget {
               _SettingsSection(
                 header: 'Account',
                 colors: colors,
-                children: [const _SignOutButton()],
+                children: [
+                  const _SignOutButton(),
+                  Divider(height: 1, color: colors.divider),
+                  const _DeleteAccountButton(),
+                ],
               ),
               const SizedBox(height: OutAboutSpacing.lg),
               Center(
@@ -521,5 +528,223 @@ class _SignOutButton extends ConsumerWidget {
     await client.auth.signOut();
     final prefs = ref.read(sharedPreferencesProvider);
     await prefs.setBool('onboarding_complete', false);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// _DeleteAccountButton
+// ---------------------------------------------------------------------------
+
+class _DeleteAccountButton extends ConsumerWidget {
+  const _DeleteAccountButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = ref.watch(weatherThemeColorsProvider);
+
+    return Semantics(
+      button: true,
+      label: 'Delete account. Permanently removes your account and data.',
+      child: InkWell(
+        onTap: () async {
+          final deleted = await showDialog<bool>(
+            context: context,
+            builder: (_) => const _DeleteAccountDialog(),
+          );
+          // Navigation lives here, not in the dialog: this context is inside
+          // the router's tree, and the dialog's own context is defunct by the
+          // time it pops.
+          if (deleted == true && context.mounted) {
+            context.go(AppRoutes.onboarding);
+          }
+        },
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: OutAboutSpacing.md,
+              vertical: OutAboutSpacing.sm,
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.delete_forever_outlined,
+                  size: 22,
+                  color: OutAboutColors.errorColor,
+                ),
+                const SizedBox(width: OutAboutSpacing.sm),
+                Text(
+                  'Delete Account',
+                  style: OutAboutTypography.bodyMedium(
+                    colors,
+                  ).copyWith(color: OutAboutColors.errorColor),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// _DeleteAccountDialog
+// ---------------------------------------------------------------------------
+
+/// Confirmation for an irreversible account deletion.
+///
+/// The confirm control stays disabled until [_confirmationWord] is typed
+/// exactly, so the action cannot be triggered by a stray tap.
+class _DeleteAccountDialog extends ConsumerStatefulWidget {
+  const _DeleteAccountDialog();
+
+  @override
+  ConsumerState<_DeleteAccountDialog> createState() =>
+      _DeleteAccountDialogState();
+}
+
+class _DeleteAccountDialogState extends ConsumerState<_DeleteAccountDialog> {
+  static const _confirmationWord = 'DELETE';
+
+  final _controller = TextEditingController();
+  bool _isDeleting = false;
+  String? _errorMessage;
+
+  /// Exact match — not trimmed, not case-insensitive. This is deliberate
+  /// friction on an irreversible action.
+  bool get _canConfirm => _controller.text == _confirmationWord;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleDelete() async {
+    if (!_canConfirm || _isDeleting) return;
+
+    setState(() {
+      _isDeleting = true;
+      _errorMessage = null;
+    });
+    OutAboutHaptics.onActivitySave();
+
+    // Logged before the delete call. The row is removed along with the rest
+    // of the user's data — that is intended; it only needs to exist long
+    // enough to appear in a replica or backup taken mid-deletion.
+    await ref
+        .read(behavioralEventServiceProvider)
+        .log('account_deletion_requested');
+
+    final result = await ref.read(authServiceProvider).deleteAccount();
+    if (!mounted) return;
+
+    if (result.success) {
+      Navigator.of(context).pop(true);
+      return;
+    }
+
+    setState(() {
+      _isDeleting = false;
+      _errorMessage = result.errorMessage;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = ref.watch(weatherThemeColorsProvider);
+
+    return AlertDialog(
+      backgroundColor: colors.cardBackground,
+      title: Text(
+        'Delete account?',
+        style: OutAboutTypography.headingMedium(colors),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'This permanently deletes your account and everything in it — '
+            'your activities, categories, saved location and preferences. '
+            'This cannot be undone, and your account cannot be recovered.',
+            style: OutAboutTypography.bodyMedium(colors),
+          ),
+          const SizedBox(height: OutAboutSpacing.md),
+          Text(
+            'Type $_confirmationWord to confirm.',
+            style: OutAboutTypography.labelMedium(colors),
+          ),
+          const SizedBox(height: OutAboutSpacing.sm),
+          Semantics(
+            label: 'Type $_confirmationWord to enable deletion',
+            child: TextField(
+              controller: _controller,
+              enabled: !_isDeleting,
+              autocorrect: false,
+              enableSuggestions: false,
+              textCapitalization: TextCapitalization.characters,
+              style: OutAboutTypography.bodyMedium(colors),
+              decoration: InputDecoration(
+                hintText: _confirmationWord,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(
+                    OutAboutRadius.buttons,
+                  ),
+                ),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+          if (_errorMessage != null) ...[
+            const SizedBox(height: OutAboutSpacing.sm),
+            Text(
+              _errorMessage!,
+              style: OutAboutTypography.bodySmall(
+                colors,
+              ).copyWith(color: OutAboutColors.errorColor),
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isDeleting ? null : () => Navigator.of(context).pop(),
+          style: TextButton.styleFrom(
+            minimumSize: const Size(64, 48),
+          ),
+          child: Text(
+            'Cancel',
+            style: OutAboutTypography.labelLarge(
+              colors,
+            ).copyWith(color: colors.textSecondary),
+          ),
+        ),
+        TextButton(
+          onPressed: _canConfirm && !_isDeleting ? _handleDelete : null,
+          style: TextButton.styleFrom(
+            minimumSize: const Size(64, 48),
+          ),
+          child: _isDeleting
+              ? SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: OutAboutColors.errorColor,
+                  ),
+                )
+              : Text(
+                  'Delete Account',
+                  style: OutAboutTypography.labelLarge(colors).copyWith(
+                    color: _canConfirm
+                        ? OutAboutColors.errorColor
+                        : colors.textSecondary,
+                  ),
+                ),
+        ),
+      ],
+    );
   }
 }

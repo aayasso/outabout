@@ -38,6 +38,8 @@ const approvedEventTypes = <String>[
   'filter_cleared',
   'weather_refreshed',
   'settings_changed',
+  // Added for account deletion
+  'account_deletion_requested',
 ];
 
 // ---------------------------------------------------------------------------

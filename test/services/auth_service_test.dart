@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:outabout/services/auth_service.dart';
@@ -14,6 +15,8 @@ class MockGoTrueClient extends Mock implements GoTrueClient {}
 
 class MockUser extends Mock implements User {}
 
+class MockFunctionsClient extends Mock implements FunctionsClient {}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -21,13 +24,35 @@ class MockUser extends Mock implements User {}
 void main() {
   late MockSupabaseClient mockSupabase;
   late MockGoTrueClient mockAuth;
+  late MockFunctionsClient mockFunctions;
+  late SharedPreferences prefs;
   late AuthService authService;
 
-  setUp(() {
+  /// Keys AuthService clears on deletion, plus one it must leave alone.
+  const userScopedKeys = <String>[
+    'onboarding_complete',
+    'categories_seeded',
+    'cached_weather_data',
+    'cached_weather_fetched_at',
+    'cached_forecast_data',
+    'cached_forecast_fetched_at',
+  ];
+
+  setUp(() async {
     mockSupabase = MockSupabaseClient();
     mockAuth = MockGoTrueClient();
+    mockFunctions = MockFunctionsClient();
     when(() => mockSupabase.auth).thenReturn(mockAuth);
-    authService = AuthService(supabase: mockSupabase);
+    when(() => mockSupabase.functions).thenReturn(mockFunctions);
+    when(() => mockAuth.signOut()).thenAnswer((_) async {});
+
+    SharedPreferences.setMockInitialValues({
+      for (final key in userScopedKeys) key: 'set',
+      'theme_override': 'rainy',
+    });
+    prefs = await SharedPreferences.getInstance();
+
+    authService = AuthService(supabase: mockSupabase, prefs: prefs);
   });
 
   // -------------------------------------------------------------------------
@@ -274,6 +299,76 @@ void main() {
       when(() => mockAuth.currentUser).thenReturn(null);
 
       expect(authService.currentUser, isNull);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // deleteAccount
+  // -------------------------------------------------------------------------
+
+  group('AuthService.deleteAccount', () {
+    FunctionResponse response(Object? data, int status) =>
+        FunctionResponse(data: data, status: status);
+
+    test('returns success and clears local state when the function '
+        'reports ok', () async {
+      when(() => mockFunctions.invoke('delete-account'))
+          .thenAnswer((_) async => response({'ok': true}, 200));
+
+      final result = await authService.deleteAccount();
+
+      expect(result.success, isTrue);
+      verify(() => mockAuth.signOut()).called(1);
+      for (final key in userScopedKeys) {
+        expect(prefs.get(key), isNull, reason: '$key should be cleared');
+      }
+    });
+
+    test('leaves device-level preferences alone', () async {
+      when(() => mockFunctions.invoke('delete-account'))
+          .thenAnswer((_) async => response({'ok': true}, 200));
+
+      await authService.deleteAccount();
+
+      // Theme override is a device preference — it outlives the account.
+      expect(prefs.getString('theme_override'), 'rainy');
+    });
+
+    test('still signs out and clears state when the function fails', () async {
+      when(() => mockFunctions.invoke('delete-account'))
+          .thenAnswer((_) async => response({'ok': false}, 500));
+
+      final result = await authService.deleteAccount();
+
+      expect(result.success, isFalse);
+      expect(result.errorMessage, isNotNull);
+      // Staying signed in would leave a token for a possibly-deleted user.
+      verify(() => mockAuth.signOut()).called(1);
+      for (final key in userScopedKeys) {
+        expect(prefs.get(key), isNull);
+      }
+    });
+
+    test('still signs out and clears state when invoke throws', () async {
+      when(() => mockFunctions.invoke('delete-account'))
+          .thenThrow(Exception('network down'));
+
+      final result = await authService.deleteAccount();
+
+      expect(result.success, isFalse);
+      verify(() => mockAuth.signOut()).called(1);
+      for (final key in userScopedKeys) {
+        expect(prefs.get(key), isNull);
+      }
+    });
+
+    test('treats a non-map response body as failure', () async {
+      when(() => mockFunctions.invoke('delete-account'))
+          .thenAnswer((_) async => response('unexpected', 200));
+
+      final result = await authService.deleteAccount();
+
+      expect(result.success, isFalse);
     });
   });
 }

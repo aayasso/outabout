@@ -381,7 +381,9 @@ void main() {
       expect(approvedEventTypes, contains('filter_cleared'));
       expect(approvedEventTypes, contains('weather_refreshed'));
       expect(approvedEventTypes, contains('settings_changed'));
-      expect(approvedEventTypes.length, 24);
+      // Added for account deletion
+      expect(approvedEventTypes, contains('account_deletion_requested'));
+      expect(approvedEventTypes.length, 25);
     });
   });
 }

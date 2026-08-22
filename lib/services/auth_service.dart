@@ -1,7 +1,11 @@
+import 'dart:developer';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:outabout/core/providers.dart';
+import 'package:outabout/core/weather_theme_provider.dart';
 
 // ---------------------------------------------------------------------------
 // AuthResult
@@ -33,10 +37,28 @@ class AuthResult {
 // AuthService
 // ---------------------------------------------------------------------------
 
+/// SharedPreferences keys holding state scoped to the signed-in user.
+///
+/// Cleared on account deletion. Device-level preferences (theme override,
+/// schedule layout) are deliberately left alone — they outlive the account.
+const _userScopedPrefsKeys = <String>[
+  'onboarding_complete',
+  'categories_seeded',
+  'cached_weather_data',
+  'cached_weather_fetched_at',
+  'cached_forecast_data',
+  'cached_forecast_fetched_at',
+];
+
 class AuthService {
   final SupabaseClient _supabase;
+  final SharedPreferences _prefs;
 
-  AuthService({required SupabaseClient supabase}) : _supabase = supabase;
+  AuthService({
+    required SupabaseClient supabase,
+    required SharedPreferences prefs,
+  })  : _supabase = supabase,
+        _prefs = prefs;
 
   /// Returns the currently signed-in user, or `null`.
   User? get currentUser => _supabase.auth.currentUser;
@@ -108,6 +130,55 @@ class AuthService {
     }
   }
 
+  /// Permanently deletes the signed-in account and all of its data.
+  ///
+  /// The server-side `delete-account` edge function does the actual removal;
+  /// the session JWT is attached by [FunctionsClient] so no token is handled
+  /// here. Works identically for anonymous accounts, which are real
+  /// `auth.users` rows.
+  ///
+  /// Local sign-out and pref clearing happen **regardless of the outcome**: if
+  /// the account really was deleted, staying signed in leaves the app holding
+  /// a token for a user that no longer exists.
+  Future<AuthResult> deleteAccount() async {
+    AuthResult result;
+    try {
+      final response = await _supabase.functions.invoke('delete-account');
+      final body = response.data;
+      final ok = body is Map && body['ok'] == true;
+      result = ok
+          ? const AuthResult._(success: true)
+          : AuthResult.failure(
+              'We could not delete your account. Please try again.',
+            );
+    } catch (e) {
+      log('Account deletion failed', error: e, name: 'AuthService');
+      result = AuthResult.failure(
+        'We could not delete your account. Please try again.',
+      );
+    }
+
+    await _clearLocalSession();
+    return result;
+  }
+
+  /// Signs out and drops user-scoped local state. Never throws — the caller
+  /// has already committed to leaving this account behind.
+  Future<void> _clearLocalSession() async {
+    try {
+      await _supabase.auth.signOut();
+    } catch (e) {
+      log('Sign-out during deletion failed', error: e, name: 'AuthService');
+    }
+    for (final key in _userScopedPrefsKeys) {
+      try {
+        await _prefs.remove(key);
+      } catch (e) {
+        log('Clearing "$key" failed', error: e, name: 'AuthService');
+      }
+    }
+  }
+
   /// Maps Supabase [AuthException] messages to user-friendly strings.
   /// Never exposes raw error details.
   String _mapAuthError(AuthException e) {
@@ -131,7 +202,8 @@ class AuthService {
 
 final authServiceProvider = Provider<AuthService>((ref) {
   final supabase = ref.watch(supabaseClientProvider);
-  return AuthService(supabase: supabase);
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return AuthService(supabase: supabase, prefs: prefs);
 });
 
 final authStateProvider = StreamProvider<AuthState>((ref) {
