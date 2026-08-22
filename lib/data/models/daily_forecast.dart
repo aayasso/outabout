@@ -1,10 +1,4 @@
-import 'package:flutter/foundation.dart';
-
-/// Tomorrow.io reports wind in metres per second when `units=metric`.
-/// OutAbout stores wind in km/h everywhere — the condition sliders, the
-/// matcher and the UI all speak km/h — so the conversion happens once, at
-/// parse time, in [DailyForecast.fromJson].
-const double _metersPerSecondToKmh = 3.6;
+import 'json_number.dart';
 
 class DailyForecast {
   final DateTime date;
@@ -25,30 +19,7 @@ class DailyForecast {
     required this.weatherCode,
   });
 
-  /// Returns the first numeric value present among [keys], or null.
-  static num? _firstNum(Map<String, dynamic> values, List<String> keys) {
-    for (final key in keys) {
-      final value = values[key];
-      if (value is num) return value;
-    }
-    return null;
-  }
-
-  /// Reads a numeric field, logging and falling back when none of [keys]
-  /// is present. Never casts a nullable lookup directly.
-  static num _numOr(
-    Map<String, dynamic> values,
-    List<String> keys,
-    num fallback,
-  ) {
-    final value = _firstNum(values, keys);
-    if (value != null) return value;
-    debugPrint(
-      'DailyForecast: none of $keys present in forecast values — '
-      'defaulting to $fallback.',
-    );
-    return fallback;
-  }
+  static const _label = 'DailyForecast';
 
   /// Returns max wind in km/h.
   ///
@@ -57,10 +28,11 @@ class DailyForecast {
   /// converted. A cache written before this distinction existed holds raw
   /// m/s under `windSpeedMax`, so it converts correctly too.
   static double _windKmh(Map<String, dynamic> values) {
-    final cached = _firstNum(values, const ['windSpeedMaxKmh']);
+    final cached = firstNum(values, const ['windSpeedMaxKmh']);
     if (cached != null) return cached.toDouble();
-    return _numOr(values, const ['windSpeedMax'], 0).toDouble() *
-        _metersPerSecondToKmh;
+    return numOr(values, const ['windSpeedMax'], 0, label: _label)
+            .toDouble() *
+        metersPerSecondToKmh;
   }
 
   /// Parses one entry of Tomorrow.io's `timelines.daily` array.
@@ -75,20 +47,24 @@ class DailyForecast {
     return DailyForecast(
       date: DateTime.parse(json['time'] as String),
       temperatureMax:
-          _numOr(values, const ['temperatureMax'], 0).toDouble(),
+          numOr(values, const ['temperatureMax'], 0, label: _label).toDouble(),
       temperatureMin:
-          _numOr(values, const ['temperatureMin'], 0).toDouble(),
-      precipitationProbability: _numOr(
+          numOr(values, const ['temperatureMin'], 0, label: _label).toDouble(),
+      precipitationProbability: numOr(
         values,
         const ['precipitationProbabilityMax', 'precipitationProbability'],
         0,
+        label: _label,
       ).toDouble(),
       windSpeedMax: _windKmh(values),
       // 1000 is Tomorrow.io's "Clear" code — a neutral default that keeps
       // the schedule rendering if the code is ever missing.
-      weatherCode:
-          _numOr(values, const ['weatherCodeMax', 'weatherCode'], 1000)
-              .toInt(),
+      weatherCode: numOr(
+        values,
+        const ['weatherCodeMax', 'weatherCode'],
+        1000,
+        label: _label,
+      ).toInt(),
     );
   }
 
