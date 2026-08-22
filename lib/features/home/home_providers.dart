@@ -19,6 +19,7 @@ import '../../data/repositories/category_repository.dart';
 import '../../data/repositories/weather_repository.dart';
 import '../../data/models/activity.dart';
 import '../../services/location_service.dart';
+import '../onboarding/onboarding_provider.dart';
 
 // ---------------------------------------------------------------------------
 // Repository providers
@@ -60,19 +61,36 @@ final userLocationProvider = FutureProvider<UserLocation?>((ref) async {
       .maybeSingle();
   if (data != null) return UserLocation.fromJson(data);
 
+  final locationService = ref.read(locationServiceProvider);
+
+  final ({double lat, double lng}) pos;
   try {
-    final locationService = ref.read(locationServiceProvider);
-    final pos = await locationService.getCurrentPosition();
-    final geo = await locationService.reverseGeocode(pos.lat, pos.lng);
-    return UserLocation(
-      userId: userId,
-      latitude: pos.lat,
-      longitude: pos.lng,
-      city: '${geo.city}, ${geo.state}',
-    );
-  } catch (_) {
+    pos = await locationService.getCurrentPosition();
+  } catch (e) {
+    // Without coordinates there is nothing to forecast. Log the reason —
+    // a bare `return null` here made every downstream failure look
+    // identical and unattributable.
+    debugPrint('userLocationProvider: position unavailable — $e');
     return null;
   }
+
+  // The city name is cosmetic; the forecast only needs coordinates. Apple's
+  // geocoder throttles repeated lookups, so a failure here must not cost the
+  // user their weather.
+  var city = '';
+  try {
+    final geo = await locationService.reverseGeocode(pos.lat, pos.lng);
+    city = '${geo.city}, ${geo.state}';
+  } catch (e) {
+    debugPrint('userLocationProvider: reverse geocode failed — $e');
+  }
+
+  return UserLocation(
+    userId: userId,
+    latitude: pos.lat,
+    longitude: pos.lng,
+    city: city,
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -324,15 +342,37 @@ final profileProvider = FutureProvider<Profile?>((ref) async {
 
 /// Drops every cached trace of the signed-in user.
 ///
-/// Called from the sign-out path *and* from account deletion, so the two can
-/// never drift apart. Safe to call when already signed out, and safe to call
-/// twice — clearing a missing key and invalidating a provider are both no-ops.
-Future<void> clearUserScopedState(WidgetRef ref) async {
+/// Driven by the auth stream rather than by a screen: a sign-out redirects
+/// immediately, disposing whichever widget triggered it, so a widget-scoped
+/// `ref` is already dead by the time this would run. Taking the container's
+/// [Ref] also means deletion and sign-out share one path automatically —
+/// both end in a `signedOut` event.
+///
+/// Safe to call when already signed out, and safe to call twice — clearing a
+/// missing key and invalidating a provider are both no-ops.
+Future<void> clearUserScopedState(Ref ref) async {
   final prefs = ref.read(sharedPreferencesProvider);
   for (final key in userScopedPrefsKeys) {
     await prefs.remove(key);
   }
+  invalidateUserScopedProviders(ref);
 
+  // Sign-out only: the cursor survives otherwise, pinned at the last page
+  // where next() is a no-op, so "Get Started" did nothing and the user could
+  // never re-onboard. Must NOT run on sign-in — the anonymous sign-in happens
+  // at step 5, and resetting there would bounce the user back to step 1.
+  ref.invalidate(onboardingStepProvider);
+}
+
+/// Forces every user-scoped provider to refetch.
+///
+/// Needed on sign-*in* as well as sign-out: these are FutureProviders, so a
+/// value resolved while signed out — `userLocationProvider` returning null,
+/// for instance — is cached and never recomputed just because a widget
+/// rebuilt. Without this the second session of an app run gets the first
+/// session's empty results. Deliberately does *not* touch preferences, which
+/// would wipe `onboarding_complete` mid-flow.
+void invalidateUserScopedProviders(Ref ref) {
   ref.invalidate(activitiesProvider);
   ref.invalidate(categoriesProvider);
   ref.invalidate(profileProvider);

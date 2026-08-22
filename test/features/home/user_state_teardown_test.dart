@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,6 +9,12 @@ import 'package:outabout/core/providers.dart';
 import 'package:outabout/core/router.dart';
 import 'package:outabout/core/weather_theme_provider.dart';
 import 'package:outabout/features/home/home_providers.dart';
+import 'package:outabout/features/onboarding/onboarding_provider.dart';
+
+/// Exposes the container's own [Ref], which is what clearUserScopedState
+/// takes — a widget's ref is already disposed by the time a sign-out
+/// redirect fires.
+final _refProvider = Provider<Ref>((ref) => ref);
 
 void main() {
   group('userScopedPrefsKeys', () {
@@ -35,8 +40,7 @@ void main() {
   });
 
   group('clearUserScopedState', () {
-    testWidgets('clears user state and leaves device preferences alone',
-        (tester) async {
+    test('clears user state and leaves device preferences alone', () async {
       SharedPreferences.setMockInitialValues({
         for (final key in userScopedPrefsKeys) key: 'previous-user',
         'theme_override': 'rainy',
@@ -44,20 +48,11 @@ void main() {
       });
       final prefs = await SharedPreferences.getInstance();
 
-      late WidgetRef captured;
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            sharedPreferencesProvider.overrideWithValue(prefs),
-          ],
-          child: Consumer(
-            builder: (context, ref, _) {
-              captured = ref;
-              return const SizedBox.shrink();
-            },
-          ),
-        ),
+      final container = ProviderContainer(
+        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
       );
+      addTearDown(container.dispose);
+      final captured = container.read(_refProvider);
 
       await clearUserScopedState(captured);
 
@@ -68,24 +63,69 @@ void main() {
       expect(prefs.getString('schedule_layout'), 'activityFirst');
     });
 
-    testWidgets('is safe to call twice', (tester) async {
+    test('resets the onboarding cursor so re-onboarding works', () async {
+      // Regression: the step notifier clamps at 5, so a cursor left at the
+      // last page made next() a no-op and "Get Started" did nothing after
+      // signing out — onboarding became unreachable.
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+
+      final container = ProviderContainer(
+        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      );
+      addTearDown(container.dispose);
+      final captured = container.read(_refProvider);
+
+      // Walk to the final onboarding page, as a completed run would.
+      captured.read(onboardingStepProvider.notifier).goTo(5);
+      expect(captured.read(onboardingStepProvider), 5);
+
+      await clearUserScopedState(captured);
+
+      expect(captured.read(onboardingStepProvider), 0);
+      // And the cursor advances again rather than sticking.
+      captured.read(onboardingStepProvider.notifier).next();
+      expect(captured.read(onboardingStepProvider), 1);
+    });
+
+    test('invalidateUserScopedProviders leaves prefs and the cursor alone',
+        () async {
+      // Runs on sign-IN: a new session must not inherit provider results
+      // resolved while signed out, but wiping onboarding_complete or the
+      // cursor mid-flow would break the very flow that just signed in.
+      SharedPreferences.setMockInitialValues({
+        for (final key in userScopedPrefsKeys) key: 'in-flight',
+      });
+      final prefs = await SharedPreferences.getInstance();
+
+      final container = ProviderContainer(
+        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      );
+      addTearDown(container.dispose);
+      final ref = container.read(_refProvider);
+
+      ref.read(onboardingStepProvider.notifier).goTo(5);
+      invalidateUserScopedProviders(ref);
+
+      for (final key in userScopedPrefsKeys) {
+        expect(prefs.get(key), 'in-flight', reason: '$key must survive');
+      }
+      expect(
+        ref.read(onboardingStepProvider),
+        5,
+        reason: 'the anonymous sign-in happens at step 5',
+      );
+    });
+
+    test('is safe to call twice', () async {
       SharedPreferences.setMockInitialValues({'onboarding_complete': true});
       final prefs = await SharedPreferences.getInstance();
 
-      late WidgetRef captured;
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            sharedPreferencesProvider.overrideWithValue(prefs),
-          ],
-          child: Consumer(
-            builder: (context, ref, _) {
-              captured = ref;
-              return const SizedBox.shrink();
-            },
-          ),
-        ),
+      final container = ProviderContainer(
+        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
       );
+      addTearDown(container.dispose);
+      final captured = container.read(_refProvider);
 
       await clearUserScopedState(captured);
       await clearUserScopedState(captured);

@@ -30,7 +30,10 @@ class SettingsTab extends ConsumerWidget {
     final displayName =
         profileAsync.valueOrNull?.displayName ?? 'OutAbout User';
     final location = locationAsync.valueOrNull;
-    final cityName = location?.city ?? 'Location not set';
+    // City can be empty when reverse geocoding was throttled — the
+    // location itself is still valid.
+    final city = location?.city ?? '';
+    final cityName = city.isEmpty ? 'Location set' : city;
 
     return Scaffold(
       backgroundColor: colors.background,
@@ -531,10 +534,6 @@ class _SignOutButton extends ConsumerWidget {
     final client = ref.read(supabaseClientProvider);
     await client.auth.signOut();
 
-    // Drop the previous user's cached data before the next session starts.
-    // Shared with the deletion path so the two cannot drift.
-    await clearUserScopedState(ref);
-
     // Navigate explicitly. The redirect would also fire via the router's
     // auth refreshListenable, but relying on it alone left the user sitting
     // on a signed-out Settings tab.
@@ -650,9 +649,6 @@ class _DeleteAccountDialogState extends ConsumerState<_DeleteAccountDialog> {
 
     final result = await ref.read(authServiceProvider).deleteAccount();
 
-    // Regardless of the server outcome — if the account really is gone,
-    // keeping its cached data around is worse than losing local state.
-    await clearUserScopedState(ref);
     if (!mounted) return;
 
     if (result.success) {

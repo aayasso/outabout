@@ -9,6 +9,7 @@ import '../../../core/providers.dart';
 import '../../../core/theme.dart';
 import '../../../core/weather_theme_provider.dart';
 import '../../../data/repositories/category_repository.dart';
+import '../../home/home_providers.dart';
 import '../../../services/behavioral_event_service.dart';
 import '../widgets/onboarding_button.dart';
 
@@ -126,6 +127,13 @@ class _FirstActivityPageState extends ConsumerState<FirstActivityPage> {
     }
 
     OutAboutHaptics.onActivitySave();
+
+    // The activity and seeded categories were written after these providers
+    // may already have resolved — the sign-in on the previous page
+    // invalidates them, so without this the schedule opens on its empty
+    // state until the user pulls to refresh.
+    ref.invalidate(activitiesProvider);
+    ref.invalidate(categoriesProvider);
 
     // Navigate to home
     if (mounted) {

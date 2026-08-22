@@ -10,6 +10,7 @@ import '../features/add_activity/add_activity_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/home/tabs/activities_tab.dart';
 import '../features/home/tabs/settings_tab.dart';
+import '../features/home/home_providers.dart';
 import '../features/home/tabs/schedule_tab.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import 'providers.dart';
@@ -61,8 +62,14 @@ extension SafePop on BuildContext {
 /// mid-flow — sign-out, or a refresh token rejected because the user was
 /// deleted — left the user sitting on a sub-route with a dead session.
 class AuthRefreshNotifier extends ChangeNotifier {
-  AuthRefreshNotifier(Stream<AuthState> stream) {
-    _subscription = stream.listen((_) => notifyListeners());
+  AuthRefreshNotifier(
+    Stream<AuthState> stream, {
+    void Function(AuthState)? onEvent,
+  }) {
+    _subscription = stream.listen((state) {
+      onEvent?.call(state);
+      notifyListeners();
+    });
   }
 
   late final StreamSubscription<AuthState> _subscription;
@@ -103,7 +110,26 @@ final routerProvider = Provider<GoRouter>((ref) {
   final prefs = ref.watch(sharedPreferencesProvider);
   final supabase = ref.watch(supabaseClientProvider);
 
-  final authRefresh = AuthRefreshNotifier(supabase.auth.onAuthStateChange);
+  final authRefresh = AuthRefreshNotifier(
+    supabase.auth.onAuthStateChange,
+    onEvent: (authState) {
+      // Drop the previous user's cached data the moment the session ends —
+      // sign-out, account deletion, or a refresh token rejected because the
+      // user no longer exists. Runs before notifyListeners so the redirect
+      // sees cleared state.
+      switch (authState.event) {
+        case AuthChangeEvent.signedOut:
+          clearUserScopedState(ref);
+        case AuthChangeEvent.signedIn:
+          // A new session must not inherit results the providers resolved
+          // while signed out — those are cached and would otherwise persist
+          // for the whole app run. Preferences are left alone here.
+          invalidateUserScopedProviders(ref);
+        default:
+          break;
+      }
+    },
+  );
   ref.onDispose(authRefresh.dispose);
 
   return GoRouter(
