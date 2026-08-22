@@ -31,6 +31,8 @@ void main() {
       final mockAuth = MockGoTrueClient();
       when(() => mockSupabase.auth).thenReturn(mockAuth);
       when(() => mockAuth.currentUser).thenReturn(null);
+      when(() => mockAuth.onAuthStateChange)
+          .thenAnswer((_) => const Stream<AuthState>.empty());
 
       await tester.pumpWidget(
         ProviderScope(
@@ -65,6 +67,8 @@ void main() {
         final mockUser = MockUser();
         when(() => mockSupabase.auth).thenReturn(mockAuth);
         when(() => mockAuth.currentUser).thenReturn(mockUser);
+        when(() => mockAuth.onAuthStateChange)
+            .thenAnswer((_) => const Stream<AuthState>.empty());
 
         await tester.pumpWidget(
           ProviderScope(
@@ -97,6 +101,8 @@ void main() {
         final mockAuth = MockGoTrueClient();
         when(() => mockSupabase.auth).thenReturn(mockAuth);
         when(() => mockAuth.currentUser).thenReturn(null); // No session
+        when(() => mockAuth.onAuthStateChange)
+            .thenAnswer((_) => const Stream<AuthState>.empty());
 
         await tester.pumpWidget(
           ProviderScope(

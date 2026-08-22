@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
+import '../../core/router.dart';
 import '../../core/theme.dart';
 import '../../core/weather_theme_provider.dart';
 import '../../data/models/condition_profile.dart';
@@ -166,7 +166,7 @@ class _ActivityDetailScreenState
       ref.invalidate(
         activityDetailProvider(widget.activityId),
       );
-      if (mounted) context.pop();
+      if (mounted) context.popOrGo();
     } catch (e) {
       setState(() {
         _errorMessage = 'Failed to save. Please try again.';
@@ -235,7 +235,7 @@ class _ActivityDetailScreenState
       );
       OutAboutHaptics.onActivitySave();
       ref.invalidate(activitiesProvider);
-      if (mounted) context.pop();
+      if (mounted) context.popOrGo();
     } catch (e) {
       setState(() {
         _errorMessage =
@@ -265,7 +265,7 @@ class _ActivityDetailScreenState
               color: colors.text,
             ),
             onPressed:
-                _isSaving ? null : () => context.pop(),
+                _isSaving ? null : () => context.popOrGo(),
             tooltip: 'Go back',
           ),
           title: Text(
@@ -673,7 +673,7 @@ class _ActivityNotFound extends StatelessWidget {
           ),
           const SizedBox(height: OutAboutSpacing.sm),
           TextButton(
-            onPressed: () => context.pop(),
+            onPressed: () => context.popOrGo(),
             child: const Text('Go back'),
           ),
         ],
@@ -708,7 +708,7 @@ class _ArchivedBanner extends StatelessWidget {
           ),
           const SizedBox(height: OutAboutSpacing.sm),
           TextButton(
-            onPressed: () => context.pop(),
+            onPressed: () => context.popOrGo(),
             child: const Text('Go back'),
           ),
         ],

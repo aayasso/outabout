@@ -485,6 +485,9 @@ class _SignOutButton extends ConsumerWidget {
 
   Future<void> _showSignOutDialog(BuildContext context, WidgetRef ref) async {
     final colors = ref.read(weatherThemeColorsProvider);
+    // Captured before the dialog await — this widget is stateless, so there
+    // is no `mounted` to check on the far side of the gap.
+    final router = GoRouter.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -524,10 +527,18 @@ class _SignOutButton extends ConsumerWidget {
     if (confirmed != true) return;
 
     ref.read(notificationServiceProvider).clearUserTag();
+
     final client = ref.read(supabaseClientProvider);
     await client.auth.signOut();
-    final prefs = ref.read(sharedPreferencesProvider);
-    await prefs.setBool('onboarding_complete', false);
+
+    // Drop the previous user's cached data before the next session starts.
+    // Shared with the deletion path so the two cannot drift.
+    await clearUserScopedState(ref);
+
+    // Navigate explicitly. The redirect would also fire via the router's
+    // auth refreshListenable, but relying on it alone left the user sitting
+    // on a signed-out Settings tab.
+    router.go(AppRoutes.onboarding);
   }
 }
 
@@ -638,6 +649,10 @@ class _DeleteAccountDialogState extends ConsumerState<_DeleteAccountDialog> {
         .log('account_deletion_requested');
 
     final result = await ref.read(authServiceProvider).deleteAccount();
+
+    // Regardless of the server outcome — if the account really is gone,
+    // keeping its cached data around is worse than losing local state.
+    await clearUserScopedState(ref);
     if (!mounted) return;
 
     if (result.success) {

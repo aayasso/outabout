@@ -103,8 +103,6 @@ void _logWeatherFailure(String provider, Object error) {
   }
 }
 
-const _cacheDataKey = 'cached_weather_data';
-const _cacheFetchedAtKey = 'cached_weather_fetched_at';
 
 final weatherDataProvider = FutureProvider<WeatherData>((ref) async {
   final location = await ref.watch(userLocationProvider.future);
@@ -121,12 +119,12 @@ final weatherDataProvider = FutureProvider<WeatherData>((ref) async {
     data = await repo.fetchCurrent(location.latitude, location.longitude);
 
     // Cache the result
-    await prefs.setString(_cacheDataKey, jsonEncode(data.toJson()));
-    await prefs.setString(_cacheFetchedAtKey, DateTime.now().toIso8601String());
+    await prefs.setString(cachedWeatherDataKey, jsonEncode(data.toJson()));
+    await prefs.setString(cachedWeatherFetchedAtKey, DateTime.now().toIso8601String());
   } catch (e) {
     // On failure, try to load from cache
-    final cachedJson = prefs.getString(_cacheDataKey);
-    final cachedAt = prefs.getString(_cacheFetchedAtKey);
+    final cachedJson = prefs.getString(cachedWeatherDataKey);
+    final cachedAt = prefs.getString(cachedWeatherFetchedAtKey);
     if (cachedJson != null && cachedAt != null) {
       data = WeatherData.fromCacheJson(
         jsonDecode(cachedJson) as Map<String, dynamic>,
@@ -162,8 +160,6 @@ final activitiesProvider = FutureProvider<List<Activity>>((ref) async {
 // Daily forecast provider
 // ---------------------------------------------------------------------------
 
-const _cacheForecastKey = 'cached_forecast_data';
-const _cacheForecastFetchedAtKey = 'cached_forecast_fetched_at';
 
 final dailyForecastProvider = FutureProvider<List<DailyForecast>>((ref) async {
   final location = await ref.watch(userLocationProvider.future);
@@ -180,15 +176,15 @@ final dailyForecastProvider = FutureProvider<List<DailyForecast>>((ref) async {
     forecasts = await repo.fetchForecast(location.latitude, location.longitude);
 
     await prefs.setString(
-      _cacheForecastKey,
+      cachedForecastDataKey,
       jsonEncode(forecasts.map((f) => f.toJson()).toList()),
     );
     await prefs.setString(
-      _cacheForecastFetchedAtKey,
+      cachedForecastFetchedAtKey,
       DateTime.now().toIso8601String(),
     );
   } catch (e) {
-    final cachedJson = prefs.getString(_cacheForecastKey);
+    final cachedJson = prefs.getString(cachedForecastDataKey);
     if (cachedJson != null) {
       final list = jsonDecode(cachedJson) as List<dynamic>;
       forecasts = list
@@ -321,3 +317,29 @@ final profileProvider = FutureProvider<Profile?>((ref) async {
       .maybeSingle();
   return data != null ? Profile.fromJson(data) : null;
 });
+
+// ---------------------------------------------------------------------------
+// User-scoped state teardown
+// ---------------------------------------------------------------------------
+
+/// Drops every cached trace of the signed-in user.
+///
+/// Called from the sign-out path *and* from account deletion, so the two can
+/// never drift apart. Safe to call when already signed out, and safe to call
+/// twice — clearing a missing key and invalidating a provider are both no-ops.
+Future<void> clearUserScopedState(WidgetRef ref) async {
+  final prefs = ref.read(sharedPreferencesProvider);
+  for (final key in userScopedPrefsKeys) {
+    await prefs.remove(key);
+  }
+
+  ref.invalidate(activitiesProvider);
+  ref.invalidate(categoriesProvider);
+  ref.invalidate(profileProvider);
+  ref.invalidate(userLocationProvider);
+  ref.invalidate(weatherDataProvider);
+  ref.invalidate(dailyForecastProvider);
+  // Invalidating the family drops every per-activity entry.
+  ref.invalidate(activityDetailProvider);
+  // scheduleMatchProvider is derived from the above and recomputes itself.
+}

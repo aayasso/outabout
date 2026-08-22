@@ -56,7 +56,7 @@ class _ActivitiesTabState
       floatingActionButton: FloatingActionButton(
         backgroundColor: colors.primary,
         onPressed: () =>
-            context.go(AppRoutes.addActivity),
+            context.push(AppRoutes.addActivity),
         tooltip: 'Add activity',
         child: Icon(
           Icons.add,
@@ -569,7 +569,7 @@ class _ActivityListCard extends StatelessWidget {
         child: GestureDetector(
           onTap: () {
             if (activity.id != null) {
-              context.go(
+              context.push(
                 '/activity/${activity.id}',
               );
             }
@@ -808,7 +808,7 @@ class _ActivitiesEmptyState extends ConsumerWidget {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () =>
-                    context.go(AppRoutes.addActivity),
+                    context.push(AppRoutes.addActivity),
                 child: const Text('Add Activity'),
               ),
             ),

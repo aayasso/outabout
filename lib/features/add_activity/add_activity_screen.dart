@@ -3,9 +3,9 @@ import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../core/providers.dart';
+import '../../core/router.dart';
 import '../../core/theme.dart';
 import '../../core/weather_theme_provider.dart';
 import '../../data/models/activity.dart';
@@ -128,7 +128,7 @@ class _AddActivityScreenState
       OutAboutHaptics.onActivitySave();
       ref.invalidate(activitiesProvider);
 
-      if (mounted) context.pop();
+      if (mounted) context.popOrGo();
     } catch (e, st) {
       log(
         'Failed to save activity',
@@ -166,7 +166,7 @@ class _AddActivityScreenState
             icon: const Icon(Icons.close),
             tooltip: 'Close',
             onPressed:
-                _isSaving ? null : () => context.pop(),
+                _isSaving ? null : () => context.popOrGo(),
           ),
         ),
         body: SingleChildScrollView(

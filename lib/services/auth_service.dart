@@ -37,19 +37,6 @@ class AuthResult {
 // AuthService
 // ---------------------------------------------------------------------------
 
-/// SharedPreferences keys holding state scoped to the signed-in user.
-///
-/// Cleared on account deletion. Device-level preferences (theme override,
-/// schedule layout) are deliberately left alone — they outlive the account.
-const _userScopedPrefsKeys = <String>[
-  'onboarding_complete',
-  'categories_seeded',
-  'cached_weather_data',
-  'cached_weather_fetched_at',
-  'cached_forecast_data',
-  'cached_forecast_fetched_at',
-];
-
 class AuthService {
   final SupabaseClient _supabase;
   final SharedPreferences _prefs;
@@ -170,7 +157,7 @@ class AuthService {
     } catch (e) {
       log('Sign-out during deletion failed', error: e, name: 'AuthService');
     }
-    for (final key in _userScopedPrefsKeys) {
+    for (final key in userScopedPrefsKeys) {
       try {
         await _prefs.remove(key);
       } catch (e) {

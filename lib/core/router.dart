@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../features/activity_detail/activity_detail_screen.dart';
 import '../features/add_activity/add_activity_screen.dart';
@@ -22,8 +25,53 @@ abstract class AppRoutes {
   static const String home = '/home';
   static const String activities = '/activities';
   static const String settings = '/settings';
-  static const String addActivity = '/activity/add';
+  // Deliberately NOT '/activity/add': go_router matches top-level routes in
+  // declaration order and returns the first hit, so '/activity/add' resolved
+  // to '/activity/:id' with id='add' and the add screen was unreachable.
+  static const String addActivity = '/add-activity';
   static const String activity = '/activity/:id';
+}
+
+// ---------------------------------------------------------------------------
+// Safe pop
+// ---------------------------------------------------------------------------
+
+extension SafePop on BuildContext {
+  /// Pops when there is something to pop, otherwise navigates to [fallback].
+  ///
+  /// Screens reachable by deep link — or entered with `go()` rather than
+  /// `push()` — can be the only page on the stack, where a bare `pop()`
+  /// throws `GoError: There is nothing to pop`.
+  void popOrGo([String fallback = AppRoutes.home]) {
+    if (canPop()) {
+      pop();
+    } else {
+      go(fallback);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Auth-driven router refresh
+// ---------------------------------------------------------------------------
+
+/// Re-runs the router's [GoRouter.redirect] whenever the auth state changes.
+///
+/// Without this the redirect only runs on navigation, so a session ending
+/// mid-flow — sign-out, or a refresh token rejected because the user was
+/// deleted — left the user sitting on a sub-route with a dead session.
+class AuthRefreshNotifier extends ChangeNotifier {
+  AuthRefreshNotifier(Stream<AuthState> stream) {
+    _subscription = stream.listen((_) => notifyListeners());
+  }
+
+  late final StreamSubscription<AuthState> _subscription;
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -55,8 +103,12 @@ final routerProvider = Provider<GoRouter>((ref) {
   final prefs = ref.watch(sharedPreferencesProvider);
   final supabase = ref.watch(supabaseClientProvider);
 
+  final authRefresh = AuthRefreshNotifier(supabase.auth.onAuthStateChange);
+  ref.onDispose(authRefresh.dispose);
+
   return GoRouter(
     initialLocation: AppRoutes.onboarding,
+    refreshListenable: authRefresh,
     redirect: (context, state) {
       final onboardingComplete = prefs.getBool('onboarding_complete') ?? false;
       final hasSession = supabase.auth.currentUser != null;

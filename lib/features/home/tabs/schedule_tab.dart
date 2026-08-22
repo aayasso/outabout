@@ -207,7 +207,7 @@ class _ScheduleTabState extends ConsumerState<ScheduleTab> {
       floatingActionButton:
           FloatingActionButton(
             backgroundColor: colors.primary,
-            onPressed: () => context.go(AppRoutes.addActivity),
+            onPressed: () => context.push(AppRoutes.addActivity),
             tooltip: 'Add activity',
             child: Icon(Icons.add, color: isDark ? Colors.black : Colors.white),
           ).animate().scale(
@@ -496,7 +496,7 @@ class _ScheduleActivityCard extends StatelessWidget {
           child: GestureDetector(
             onTap: () {
               if (activity.id != null) {
-                context.go('/activity/${activity.id}');
+                context.push('/activity/${activity.id}');
               }
             },
             child: Container(
@@ -892,7 +892,7 @@ class _ScheduleEmptyState extends ConsumerWidget {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: () => context.go(AppRoutes.addActivity),
+                      onPressed: () => context.push(AppRoutes.addActivity),
                       child: const Text('Add Activity'),
                     ),
                   ),
