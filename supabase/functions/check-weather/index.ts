@@ -11,7 +11,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 // Fetch weather forecast for a location
 async function getWeatherForecast(lat: number, lon: number) {
-  const url = `https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lon}&apikey=${TOMORROW_API_KEY}&timesteps=1d&fields=temperatureMax,temperatureMin,precipitationProbability,windSpeedMax,uvIndex,weatherCode`;
+  const url = `https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lon}&apikey=${TOMORROW_API_KEY}&timesteps=1d&fields=temperatureMax,temperatureMin,precipitationProbabilityMax,windSpeedMax,uvIndexMax,weatherCodeMax`;
   const res = await fetch(url);
   const data = await res.json();
   return data.timelines?.daily || [];
@@ -27,7 +27,8 @@ function conditionsMatch(forecast: any, profile: any): boolean {
   }
 
   if (profile.precip_enabled) {
-    const precip = day.precipitationProbability;
+    const precip = day.precipitationProbabilityMax ??
+      day.precipitationProbability;
     if (profile.precip_level === "none" && precip > 20) return false;
     if (profile.precip_level === "light_ok" && precip > 60) return false;
   }
@@ -45,10 +46,11 @@ function buildConditionsSnapshot(forecastDay: any, daysAhead: number): Record<st
   return {
     temp_max_c: day.temperatureMax,
     temp_min_c: day.temperatureMin,
-    precipitation_probability: day.precipitationProbability,
+    precipitation_probability: day.precipitationProbabilityMax ??
+      day.precipitationProbability,
     wind_kph: day.windSpeedMax,
-    uv_index: day.uvIndex,
-    weather_code: day.weatherCode ?? null,
+    uv_index: day.uvIndexMax ?? day.uvIndex ?? null,
+    weather_code: day.weatherCodeMax ?? day.weatherCode ?? null,
     forecast_window_hours: daysAhead * 24,
     forecast_date: forecastDay.time,
   };

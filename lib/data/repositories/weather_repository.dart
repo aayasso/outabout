@@ -53,7 +53,7 @@ class WeatherRepository {
       'https://api.tomorrow.io/v4/weather/forecast'
       '?timesteps=1d'
       '&fields=temperatureMax,temperatureMin,'
-      'precipitationProbability,windSpeedMax,weatherCode'
+      'precipitationProbabilityMax,windSpeedMax,weatherCodeMax'
       '&units=metric'
       '&apikey=$_apiKey'
       '&location=$lat,$lng',
