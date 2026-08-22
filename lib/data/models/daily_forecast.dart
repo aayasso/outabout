@@ -1,10 +1,18 @@
 import 'package:flutter/foundation.dart';
 
+/// Tomorrow.io reports wind in metres per second when `units=metric`.
+/// OutAbout stores wind in km/h everywhere — the condition sliders, the
+/// matcher and the UI all speak km/h — so the conversion happens once, at
+/// parse time, in [DailyForecast.fromJson].
+const double _metersPerSecondToKmh = 3.6;
+
 class DailyForecast {
   final DateTime date;
   final double temperatureMax;
   final double temperatureMin;
   final double precipitationProbability;
+
+  /// Maximum wind speed in **km/h** (converted from the API's m/s).
   final double windSpeedMax;
   final int weatherCode;
 
@@ -42,6 +50,19 @@ class DailyForecast {
     return fallback;
   }
 
+  /// Returns max wind in km/h.
+  ///
+  /// [toJson] writes the already-converted value under `windSpeedMaxKmh`, so
+  /// a cached entry is used as-is. The API's `windSpeedMax` is m/s and gets
+  /// converted. A cache written before this distinction existed holds raw
+  /// m/s under `windSpeedMax`, so it converts correctly too.
+  static double _windKmh(Map<String, dynamic> values) {
+    final cached = _firstNum(values, const ['windSpeedMaxKmh']);
+    if (cached != null) return cached.toDouble();
+    return _numOr(values, const ['windSpeedMax'], 0).toDouble() *
+        _metersPerSecondToKmh;
+  }
+
   /// Parses one entry of Tomorrow.io's `timelines.daily` array.
   ///
   /// The daily timestep reports aggregates rather than bare field names —
@@ -62,7 +83,7 @@ class DailyForecast {
         const ['precipitationProbabilityMax', 'precipitationProbability'],
         0,
       ).toDouble(),
-      windSpeedMax: _numOr(values, const ['windSpeedMax'], 0).toDouble(),
+      windSpeedMax: _windKmh(values),
       // 1000 is Tomorrow.io's "Clear" code — a neutral default that keeps
       // the schedule rendering if the code is ever missing.
       weatherCode:
@@ -77,7 +98,7 @@ class DailyForecast {
       'temperatureMax': temperatureMax,
       'temperatureMin': temperatureMin,
       'precipitationProbability': precipitationProbability,
-      'windSpeedMax': windSpeedMax,
+      'windSpeedMaxKmh': windSpeedMax,
       'weatherCode': weatherCode,
     },
   };

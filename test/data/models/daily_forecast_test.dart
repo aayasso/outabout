@@ -23,7 +23,8 @@ void main() {
       expect(forecast.temperatureMax, 21.61);
       expect(forecast.temperatureMin, 14.94);
       expect(forecast.precipitationProbability, 25.0);
-      expect(forecast.windSpeedMax, 4.4);
+      // 4.4 m/s from the API becomes 15.84 km/h in storage.
+      expect(forecast.windSpeedMax, closeTo(15.84, 0.001));
       expect(forecast.weatherCode, 1101);
     });
 
@@ -67,7 +68,7 @@ void main() {
       expect(forecast.temperatureMax, 22.0);
       expect(forecast.temperatureMin, 15.0);
       expect(forecast.precipitationProbability, 0.0);
-      expect(forecast.windSpeedMax, 5.0);
+      expect(forecast.windSpeedMax, closeTo(18.0, 0.001));
       expect(forecast.weatherCode, 1000);
     });
 
@@ -86,6 +87,60 @@ void main() {
       expect(forecast.precipitationProbability, 0.0);
       expect(forecast.windSpeedMax, 0.0);
       expect(forecast.weatherCode, 1000); // Tomorrow.io "Clear"
+    });
+
+    test('converts the API m/s wind into stored km/h', () {
+      final json = <String, dynamic>{
+        'time': '2026-08-22T13:00:00Z',
+        'values': {
+          'temperatureMax': 20.0,
+          'temperatureMin': 12.0,
+          'precipitationProbabilityMax': 0,
+          'windSpeedMax': 10.0, // m/s
+          'weatherCodeMax': 1000,
+        },
+      };
+
+      expect(DailyForecast.fromJson(json).windSpeedMax, closeTo(36.0, 0.001));
+    });
+
+    test('does not re-convert wind when reading its own cache', () {
+      // toJson writes km/h under windSpeedMaxKmh; a naive round-trip that
+      // reused the API key name would multiply by 3.6 on every read.
+      final original = DailyForecast(
+        date: DateTime.parse('2026-08-22T13:00:00Z'),
+        temperatureMax: 20.0,
+        temperatureMin: 12.0,
+        precipitationProbability: 0.0,
+        windSpeedMax: 36.0, // already km/h
+        weatherCode: 1000,
+      );
+
+      var restored = DailyForecast.fromJson(original.toJson());
+      expect(restored.windSpeedMax, closeTo(36.0, 0.001));
+
+      // Stable across repeated cache round-trips.
+      restored = DailyForecast.fromJson(restored.toJson());
+      expect(restored.windSpeedMax, closeTo(36.0, 0.001));
+    });
+
+    test('converts a legacy cache that stored raw m/s', () {
+      // Caches written before the km/h split hold m/s under windSpeedMax.
+      final legacy = <String, dynamic>{
+        'time': '2026-08-22T13:00:00Z',
+        'values': {
+          'temperatureMax': 20.0,
+          'temperatureMin': 12.0,
+          'precipitationProbability': 0.0,
+          'windSpeedMax': 4.4,
+          'weatherCode': 1000,
+        },
+      };
+
+      expect(
+        DailyForecast.fromJson(legacy).windSpeedMax,
+        closeTo(15.84, 0.001),
+      );
     });
 
     test('ignores non-numeric values and falls back', () {

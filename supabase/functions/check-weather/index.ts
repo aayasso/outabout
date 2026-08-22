@@ -9,6 +9,14 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
+// Tomorrow.io reports wind in m/s with units=metric, but condition profiles
+// store wind_max in km/h (the slider is 0-80 km/h). Convert before comparing.
+const METERS_PER_SECOND_TO_KMH = 3.6;
+
+function windKmh(day: any): number {
+  return (day.windSpeedMax ?? 0) * METERS_PER_SECOND_TO_KMH;
+}
+
 // Fetch weather forecast for a location
 async function getWeatherForecast(lat: number, lon: number) {
   const url = `https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lon}&apikey=${TOMORROW_API_KEY}&timesteps=1d&fields=temperatureMax,temperatureMin,precipitationProbabilityMax,windSpeedMax,uvIndexMax,weatherCodeMax`;
@@ -34,7 +42,9 @@ function conditionsMatch(forecast: any, profile: any): boolean {
   }
 
   if (profile.wind_enabled) {
-    if (profile.wind_max !== null && day.windSpeedMax > profile.wind_max) return false;
+    if (profile.wind_max !== null && windKmh(day) > profile.wind_max) {
+      return false;
+    }
   }
 
   return true;
@@ -48,7 +58,7 @@ function buildConditionsSnapshot(forecastDay: any, daysAhead: number): Record<st
     temp_min_c: day.temperatureMin,
     precipitation_probability: day.precipitationProbabilityMax ??
       day.precipitationProbability,
-    wind_kph: day.windSpeedMax,
+    wind_kph: windKmh(day),
     uv_index: day.uvIndexMax ?? day.uvIndex ?? null,
     weather_code: day.weatherCodeMax ?? day.weatherCode ?? null,
     forecast_window_hours: daysAhead * 24,
