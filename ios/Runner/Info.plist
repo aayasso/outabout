@@ -24,6 +24,8 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>
@@ -68,7 +70,5 @@
 	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>OutAbout uses your location to show weather conditions and activities near you.</string>
-	<key>NSLocationAlwaysUsageDescription</key>
-	<string>OutAbout uses your location in the background to notify you when weather matches your activities.</string>
 </dict>
 </plist>

@@ -103,22 +103,6 @@ class SettingsTab extends ConsumerWidget {
               ),
               const SizedBox(height: OutAboutSpacing.md),
               _SettingsSection(
-                header: 'Notifications',
-                colors: colors,
-                children: [
-                  _SettingsRow(
-                    icon: Icons.notifications_outlined,
-                    label: 'Manage notifications',
-                    trailing: Icon(
-                      Icons.chevron_right,
-                      color: colors.textSecondary,
-                    ),
-                    colors: colors,
-                  ),
-                ],
-              ),
-              const SizedBox(height: OutAboutSpacing.md),
-              _SettingsSection(
                 header: 'Account',
                 colors: colors,
                 children: [const _SignOutButton()],

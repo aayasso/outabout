@@ -8,6 +8,7 @@ import '../features/home/home_screen.dart';
 import '../features/home/tabs/activities_tab.dart';
 import '../features/home/tabs/settings_tab.dart';
 import '../features/home/tabs/schedule_tab.dart';
+import '../features/onboarding/onboarding_screen.dart';
 import 'providers.dart';
 import 'theme.dart';
 import 'weather_theme_provider.dart';
@@ -78,7 +79,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.onboarding,
         pageBuilder: (context, state) => _fadeTransitionPage(
-          child: const _OnboardingPlaceholder(),
+          child: const OnboardingScreen(),
           state: state,
         ),
       ),
@@ -140,26 +141,3 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
-
-// ---------------------------------------------------------------------------
-// Temporary placeholder — will be replaced when onboarding feature merges
-// ---------------------------------------------------------------------------
-
-class _OnboardingPlaceholder extends ConsumerWidget {
-  const _OnboardingPlaceholder();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final colors = ref.watch(weatherThemeColorsProvider);
-
-    return Scaffold(
-      backgroundColor: colors.background,
-      body: Center(
-        child: Text(
-          'Onboarding',
-          style: OutAboutTypography.headingLarge(colors),
-        ),
-      ),
-    );
-  }
-}

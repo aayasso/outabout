@@ -15,6 +15,10 @@ class MockGoTrueClient extends Mock implements GoTrueClient {}
 
 class MockUser extends Mock implements User {}
 
+/// Headline rendered by ValuePropositionPage, the first onboarding page.
+const _onboardingHeadline =
+    'Never miss perfect weather for the things you love';
+
 void main() {
   group('routerProvider redirect logic', () {
     testWidgets('shows onboarding when onboarding_complete is false', (
@@ -45,8 +49,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Should show onboarding (the OnboardingScreen renders page content)
-      expect(find.text('Welcome to OutAbout'), findsNothing);
+      // Onboarding is wired: the real OnboardingScreen renders its
+      // first page rather than a placeholder.
+      expect(find.text(_onboardingHeadline), findsOneWidget);
     });
 
     testWidgets(
@@ -111,7 +116,7 @@ void main() {
         await tester.pumpAndSettle();
 
         // Should redirect to onboarding, not home
-        expect(find.text('Welcome to OutAbout'), findsNothing);
+        expect(find.text(_onboardingHeadline), findsOneWidget);
 
         // Verify the flag was cleared so subsequent launches also go to onboarding
         expect(prefs.getBool('onboarding_complete'), isFalse);
