@@ -570,7 +570,6 @@ void main() {
       expect(approvedEventTypes, contains('condition_match_ignored'));
       expect(approvedEventTypes, contains('affiliate_link_clicked'));
       expect(approvedEventTypes, contains('partner_impression_viewed'));
-      expect(approvedEventTypes, contains('partner_cta_clicked'));
       expect(approvedEventTypes, contains('theme_override_set'));
       expect(approvedEventTypes, contains('booking_integration_viewed'));
       expect(approvedEventTypes, contains('auth_completed'));
@@ -586,11 +585,25 @@ void main() {
       expect(approvedEventTypes, contains('settings_changed'));
       // Added for account deletion
       expect(approvedEventTypes, contains('account_deletion_requested'));
-      // Present in the DB CHECK constraint since 20260520000000 but missing
-      // from this list until the dataset-outcomes sprint, so calls were
-      // dropped client-side before reaching Postgres.
-      expect(approvedEventTypes, contains('notification_preference_changed'));
-      expect(approvedEventTypes.length, 26);
+      // Added for one-shot calendar export
+      expect(approvedEventTypes, contains('calendar_event_added'));
+
+      // Removed: neither ever had a call site. 'partner_cta_clicked' is
+      // covered by partner_impression_viewed + affiliate_link_clicked, and
+      // the feature behind 'notification_preference_changed' was deleted in
+      // 49760bf. Both remain permitted by the DB constraint on purpose — see
+      // 20260824000000 — so this asserts the client gate, not the schema.
+      expect(approvedEventTypes, isNot(contains('partner_cta_clicked')));
+      expect(
+        approvedEventTypes,
+        isNot(contains('notification_preference_changed')),
+      );
+
+      // Kept although this app never logs it: the check-weather edge function
+      // writes it, and dropping it would silently reject a future client call.
+      expect(approvedEventTypes, contains('condition_match_notified'));
+
+      expect(approvedEventTypes.length, 25);
     });
 
     test('the outcome-stage event types are all loggable', () {

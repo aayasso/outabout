@@ -34,11 +34,21 @@ const cachedForecastFetchedAtKey = 'cached_forecast_fetched_at';
 /// dismissed, as a JSON list of `"<activityId>|<yyyy-MM-dd>"` entries.
 const outcomePromptHandledKey = 'outcome_prompt_handled';
 
+/// SharedPreferences flag recording that the calendar-permission explainer
+/// has been shown once.
+///
+/// Device-level, like `schedule_layout`: a refusal is a fact about this
+/// device's settings, not about the account, and re-explaining after a
+/// sign-out would be exactly the nagging the flag exists to prevent. So it is
+/// deliberately absent from [userScopedPrefsKeys].
+const calendarPermissionExplainedKey = 'calendar_permission_explained';
+
 /// Every SharedPreferences key scoped to the signed-in user.
 ///
 /// Cleared on both sign-out and account deletion so a new session never
 /// inherits the previous user's state. Device-level preferences —
-/// `theme_override` and `schedule_layout` — are deliberately absent: they
+/// `theme_override`, `schedule_layout` and `calendar_permission_explained` —
+/// are deliberately absent: they
 /// describe the device, not the account. Temperature unit is not here either;
 /// it lives server-side on `profiles.temperature_unit`, so it is already
 /// per-user.

@@ -91,3 +91,32 @@ class NotificationService {
 final notificationServiceProvider = Provider<NotificationService>((ref) {
   return NotificationService();
 });
+
+/// Decides whether a notification tap counts as *opening* the app.
+///
+/// `notification_opened` says a notification was tapped.
+/// `app_opened_post_notification` says the app came to the foreground because
+/// of one — which a tap taken while the app is already open is not. Keeping
+/// that decision here rather than inline in `main.dart` is what makes it
+/// assertable without booting the app.
+class NotificationOpenTracker {
+  String? _pending;
+
+  /// Records a tap. Only a tap arriving while the app is *not* foreground can
+  /// have brought it to the foreground.
+  void recordTap(String activityId, {required bool appIsForeground}) {
+    if (appIsForeground) return;
+    _pending = activityId;
+  }
+
+  /// Returns the pending id once, then forgets it.
+  ///
+  /// Consumed on resume and again on the first frame — a cold start delivers
+  /// the tap before any lifecycle event, so there is no resume to catch it.
+  /// Whichever runs first wins; the second gets null and logs nothing.
+  String? takePending() {
+    final pending = _pending;
+    _pending = null;
+    return pending;
+  }
+}

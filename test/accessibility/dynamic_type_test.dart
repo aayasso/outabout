@@ -221,6 +221,12 @@ void _scheduleTests() {
         expect(find.text('Today'), findsOneWidget);
         expect(find.textContaining('H:'), findsOneWidget);
         expect(find.text('Cycle the long river loop'), findsWidgets);
+        // Two 48pt actions now share the row with the name. The decorative
+        // chevron was removed to pay for the second one; if it ever comes
+        // back this is where the squeeze shows up first.
+        expect(find.byTooltip('Find & book'), findsWidgets);
+        expect(find.byTooltip(RegExp('^Add .* to calendar')), findsWidgets);
+        expect(find.byIcon(Icons.chevron_right), findsNothing);
       });
     }
   });

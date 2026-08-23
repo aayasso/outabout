@@ -55,6 +55,10 @@ class OutAboutApp extends ConsumerStatefulWidget {
 class _OutAboutAppState extends ConsumerState<OutAboutApp> {
   late final AppLifecycleListener _lifecycleListener;
 
+  /// Separates "a notification was tapped" from "the app opened because of
+  /// one" — see [NotificationOpenTracker].
+  final _notificationOpens = NotificationOpenTracker();
+
   @override
   void initState() {
     super.initState();
@@ -80,13 +84,36 @@ class _OutAboutAppState extends ConsumerState<OutAboutApp> {
     final eventService = ref.read(behavioralEventServiceProvider);
     notificationService.setupClickHandler(
       onActivityTap: (activityId) {
+        _notificationOpens.recordTap(
+          activityId,
+          appIsForeground: ref.read(appIsForegroundProvider),
+        );
         ref.read(routerProvider).go('/activity/$activityId');
       },
       eventService: eventService,
     );
+    // A cold start from a notification tap delivers the click before any
+    // lifecycle event, so there is no resume to consume the marker. Drain it
+    // on the first frame instead.
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _flushNotificationOpen(),
+    );
+  }
+
+  /// Logs `app_opened_post_notification` once, if a tap brought us here.
+  void _flushNotificationOpen() {
+    final activityId = _notificationOpens.takePending();
+    if (activityId == null) return;
+    ref
+        .read(behavioralEventServiceProvider)
+        .log(
+          'app_opened_post_notification',
+          extra: {'activity_id': activityId},
+        );
   }
 
   void _onResume() {
+    _flushNotificationOpen();
     ref.invalidate(weatherDataProvider);
     ref.invalidate(dailyForecastProvider);
   }

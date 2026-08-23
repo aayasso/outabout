@@ -193,4 +193,49 @@ void main() {
       );
     });
   });
+
+  // The other half of the notification funnel. `notification_opened` had a
+  // call site; this never did, so nothing counted an app open.
+  group('NotificationOpenTracker', () {
+    test('a tap while backgrounded counts as an app open', () {
+      final tracker = NotificationOpenTracker();
+      tracker.recordTap('act-1', appIsForeground: false);
+
+      expect(tracker.takePending(), 'act-1');
+    });
+
+    test('a tap while already foregrounded does not', () {
+      // The app did not *open* — it was already open. Counting this would
+      // inflate the funnel with taps that opened nothing.
+      final tracker = NotificationOpenTracker();
+      tracker.recordTap('act-1', appIsForeground: true);
+
+      expect(tracker.takePending(), isNull);
+    });
+
+    test('the pending id is consumed exactly once', () {
+      // Both _onResume and the first-frame callback drain it, so a second
+      // read has to be empty or a cold start would log twice.
+      final tracker = NotificationOpenTracker();
+      tracker.recordTap('act-1', appIsForeground: false);
+
+      expect(tracker.takePending(), 'act-1');
+      expect(tracker.takePending(), isNull);
+    });
+
+    test('nothing pending yields null, so nothing is logged', () {
+      expect(NotificationOpenTracker().takePending(), isNull);
+    });
+
+    test('a later tap replaces an unconsumed one', () {
+      // Two notifications tapped before a resume: the one that actually
+      // brought the app up is the last.
+      final tracker = NotificationOpenTracker();
+      tracker.recordTap('act-1', appIsForeground: false);
+      tracker.recordTap('act-2', appIsForeground: false);
+
+      expect(tracker.takePending(), 'act-2');
+      expect(tracker.takePending(), isNull);
+    });
+  });
 }

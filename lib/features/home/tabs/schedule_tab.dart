@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/motion.dart';
+import '../../../core/units.dart';
+import '../../../widgets/add_to_calendar_action.dart';
 import '../../../core/router.dart';
 import '../../../core/theme.dart';
 import '../../../core/weather_theme_provider.dart';
@@ -44,105 +46,40 @@ BoxDecoration _sceneSurface(WeatherThemeColors colors) => BoxDecoration(
 // Unit conversion helpers
 // -------------------------------------------------------------------
 
-int _celsiusToFahrenheit(double c) => (c * 9 / 5 + 32).round();
-
-int _kmhToMph(double kmh) => (kmh * 0.621371).round();
-
-// -------------------------------------------------------------------
-// Weather icon helper
-// -------------------------------------------------------------------
-
-({IconData icon, Color tint, String name}) _weatherIconData(int weatherCode) {
+({IconData icon, Color tint}) _weatherIconStyle(int weatherCode) {
   return switch (weatherCode) {
-    1000 => (icon: Icons.wb_sunny, tint: OutAboutColors.sunny, name: 'Clear'),
-    1100 => (
-      icon: Icons.wb_sunny,
-      tint: OutAboutColors.sunny,
-      name: 'Mostly Clear',
-    ),
-    1101 => (
-      icon: Icons.cloud_outlined,
-      tint: OutAboutColors.cloudy,
-      name: 'Partly Cloudy',
-    ),
-    1102 => (
-      icon: Icons.cloud_outlined,
-      tint: OutAboutColors.cloudy,
-      name: 'Mostly Cloudy',
-    ),
-    1001 => (icon: Icons.cloud, tint: OutAboutColors.cloudy, name: 'Cloudy'),
-    2000 => (icon: Icons.cloud, tint: OutAboutColors.cloudy, name: 'Fog'),
-    2100 => (icon: Icons.cloud, tint: OutAboutColors.cloudy, name: 'Light Fog'),
-    4000 => (
-      icon: Icons.water_drop,
-      tint: OutAboutColors.rainy,
-      name: 'Drizzle',
-    ),
-    4001 => (icon: Icons.water_drop, tint: OutAboutColors.rainy, name: 'Rain'),
-    4200 => (
-      icon: Icons.water_drop,
-      tint: OutAboutColors.rainy,
-      name: 'Light Rain',
-    ),
-    4201 => (
-      icon: Icons.water_drop,
-      tint: OutAboutColors.rainy,
-      name: 'Heavy Rain',
-    ),
-    5000 => (icon: Icons.ac_unit, tint: OutAboutColors.cold, name: 'Snow'),
-    5001 => (icon: Icons.ac_unit, tint: OutAboutColors.cold, name: 'Flurries'),
-    5100 => (
-      icon: Icons.ac_unit,
-      tint: OutAboutColors.cold,
-      name: 'Light Snow',
-    ),
-    5101 => (
-      icon: Icons.ac_unit,
-      tint: OutAboutColors.cold,
-      name: 'Heavy Snow',
-    ),
-    6000 => (
-      icon: Icons.water_drop,
-      tint: OutAboutColors.cold,
-      name: 'Freezing Drizzle',
-    ),
-    6001 => (
-      icon: Icons.water_drop,
-      tint: OutAboutColors.cold,
-      name: 'Freezing Rain',
-    ),
-    6200 => (
-      icon: Icons.water_drop,
-      tint: OutAboutColors.cold,
-      name: 'Light Freezing Rain',
-    ),
-    6201 => (
-      icon: Icons.water_drop,
-      tint: OutAboutColors.cold,
-      name: 'Heavy Freezing Rain',
-    ),
-    7000 => (
-      icon: Icons.ac_unit,
-      tint: OutAboutColors.cold,
-      name: 'Ice Pellets',
-    ),
-    7101 => (
-      icon: Icons.ac_unit,
-      tint: OutAboutColors.cold,
-      name: 'Heavy Ice Pellets',
-    ),
-    7102 => (
-      icon: Icons.ac_unit,
-      tint: OutAboutColors.cold,
-      name: 'Light Ice Pellets',
-    ),
-    8000 => (
-      icon: Icons.thunderstorm,
-      tint: OutAboutColors.rainy,
-      name: 'Thunderstorm',
-    ),
-    _ => (icon: Icons.wb_sunny, tint: OutAboutColors.sunny, name: 'Clear'),
+    1000 || 1100 => (icon: Icons.wb_sunny, tint: OutAboutColors.sunny),
+    1101 || 1102 => (icon: Icons.cloud_outlined, tint: OutAboutColors.cloudy),
+    1001 || 2000 || 2100 => (icon: Icons.cloud, tint: OutAboutColors.cloudy),
+    4000 ||
+    4001 ||
+    4200 ||
+    4201 => (icon: Icons.water_drop, tint: OutAboutColors.rainy),
+    5000 ||
+    5001 ||
+    5100 ||
+    5101 => (icon: Icons.ac_unit, tint: OutAboutColors.cold),
+    6000 ||
+    6001 ||
+    6200 ||
+    6201 => (icon: Icons.water_drop, tint: OutAboutColors.cold),
+    7000 || 7101 || 7102 => (icon: Icons.ac_unit, tint: OutAboutColors.cold),
+    8000 => (icon: Icons.thunderstorm, tint: OutAboutColors.rainy),
+    _ => (icon: Icons.wb_sunny, tint: OutAboutColors.sunny),
   };
+}
+
+/// Icon, tint and name for a weather code.
+///
+/// The name comes from [weatherConditionName] so the schedule and the calendar
+/// event can never disagree about what a code is called.
+({IconData icon, Color tint, String name}) _weatherIconData(int weatherCode) {
+  final style = _weatherIconStyle(weatherCode);
+  return (
+    icon: style.icon,
+    tint: style.tint,
+    name: weatherConditionName(weatherCode),
+  );
 }
 
 // -------------------------------------------------------------------
@@ -556,15 +493,15 @@ class _DayHeader extends StatelessWidget {
     final iconData = _weatherIconData(forecast.weatherCode);
 
     final highTemp = temperatureUnit == 'F'
-        ? _celsiusToFahrenheit(forecast.temperatureMax)
+        ? celsiusToFahrenheit(forecast.temperatureMax)
         : forecast.temperatureMax.round();
     final lowTemp = temperatureUnit == 'F'
-        ? _celsiusToFahrenheit(forecast.temperatureMin)
+        ? celsiusToFahrenheit(forecast.temperatureMin)
         : forecast.temperatureMin.round();
     final tempSuffix = temperatureUnit == 'F' ? '\u00B0F' : '\u00B0C';
 
     final windDisplay = temperatureUnit == 'F'
-        ? '${_kmhToMph(forecast.windSpeedMax)} mph'
+        ? '${kmhToMph(forecast.windSpeedMax)} mph'
         : '${forecast.windSpeedMax.round()} km/h';
 
     return Container(
@@ -724,9 +661,15 @@ class _ScheduleActivityCard extends ConsumerWidget {
     }
 
     // `explicitChildNodes` is what keeps this card from collapsing into one
-    // node. The subtree holds three further controls — Find & book, and the
-    // outcome prompt's Yes / Not today / Dismiss — and without it they merge
-    // into the card's own button and stop being reachable.
+    // node. The subtree holds four further controls — Find & book, Add to
+    // calendar, and the outcome prompt's Yes / Not today / Dismiss — and
+    // without it they merge into the card's own button and stop being
+    // reachable.
+    //
+    // The decorative chevron that used to sit at the end is gone: it was
+    // already excluded from semantics, the whole card is announced as a
+    // button, and its 24pt of width is better spent on a real action than on
+    // restating what the card already says.
     //
     // The tap action is declared on this node rather than inherited from the
     // GestureDetector below, which is excluded from semantics for the same
@@ -814,10 +757,25 @@ class _ScheduleActivityCard extends ConsumerWidget {
                                     ),
                                   ),
                                 ),
-                                ExcludeSemantics(
-                                  child: Icon(
-                                    Icons.chevron_right,
-                                    color: colors.textSecondary,
+                                SizedBox(
+                                  width: 48,
+                                  height: 48,
+                                  child: IconButton(
+                                    icon: Icon(
+                                      Icons.event_available_outlined,
+                                      size: 20,
+                                      color: colors.primaryInteractive,
+                                    ),
+                                    tooltip:
+                                        'Add ${activity.name} to '
+                                        'calendar',
+                                    onPressed: () => addActivityToCalendar(
+                                      context,
+                                      ref,
+                                      activityName: activity.name,
+                                      activityId: activity.id,
+                                      forecast: forecast,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -1055,10 +1013,10 @@ class _MatchingDayBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final iconData = _weatherIconData(forecast.weatherCode);
     final highTemp = temperatureUnit == 'F'
-        ? _celsiusToFahrenheit(forecast.temperatureMax)
+        ? celsiusToFahrenheit(forecast.temperatureMax)
         : forecast.temperatureMax.round();
     final lowTemp = temperatureUnit == 'F'
-        ? _celsiusToFahrenheit(forecast.temperatureMin)
+        ? celsiusToFahrenheit(forecast.temperatureMin)
         : forecast.temperatureMin.round();
     final tempSuffix = temperatureUnit == 'F' ? '\u00B0' : '\u00B0';
 

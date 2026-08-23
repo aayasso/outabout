@@ -19,6 +19,8 @@ const approvedEventTypes = <String>[
   'wishlist_removed',
   'activity_viewed',
   'condition_profile_updated',
+  // Written by the check-weather edge function, never by this app. Kept in
+  // the list so a future client-side call is not silently dropped.
   'condition_match_notified',
   'notification_opened',
   'app_opened_post_notification',
@@ -26,7 +28,10 @@ const approvedEventTypes = <String>[
   'condition_match_ignored',
   'affiliate_link_clicked',
   'partner_impression_viewed',
-  'partner_cta_clicked',
+  // 'partner_cta_clicked' removed: no call site ever existed. The Find & book
+  // sheet logs partner_impression_viewed and affiliate_link_clicked, which
+  // between them describe the whole funnel. Still permitted by the DB
+  // constraint — see 20260824000000.
   'theme_override_set',
   'booking_integration_viewed',
   'auth_completed',
@@ -40,12 +45,13 @@ const approvedEventTypes = <String>[
   'filter_cleared',
   'weather_refreshed',
   'settings_changed',
-  // Present in the DB CHECK constraint since 20260520000000 but missing here,
-  // so any call would have been dropped by the guard in [log] before it ever
-  // reached Postgres.
-  'notification_preference_changed',
+  // 'notification_preference_changed' removed: the per-activity notification
+  // preference UI it described was deleted in 3d3e4f2, and the model and
+  // repository behind it in 49760bf. It never had a call site in this app.
   // Added for account deletion
   'account_deletion_requested',
+  // Added for one-shot calendar export
+  'calendar_event_added',
 ];
 
 // ---------------------------------------------------------------------------

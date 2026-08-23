@@ -12,6 +12,7 @@ import '../../data/models/activity.dart';
 import '../../data/models/daily_forecast.dart';
 import '../../data/models/schedule_day.dart';
 import '../../services/behavioral_event_service.dart';
+import '../../widgets/add_to_calendar_action.dart';
 import '../../widgets/category_chip_picker.dart';
 import '../../widgets/find_and_book_sheet.dart';
 import '../../widgets/outcome_prompt.dart';
@@ -67,6 +68,21 @@ class _ActivityDetailScreenState extends ConsumerState<ActivityDetailScreen> {
   ///
   /// Drives both the outcome prompt (which asks only about today) and the
   /// weather attached to anything this screen logs.
+  /// The soonest upcoming day this activity matches, today included.
+  ///
+  /// The calendar action needs *a* day, and unlike the schedule card this
+  /// screen usually has no today-match. Days arrive in forecast order, so the
+  /// first hit is the nearest one.
+  DailyForecast? _nextMatch(List<ScheduleDay> days) {
+    for (final day in days) {
+      final matches = day.matchedActivities.any(
+        (a) => a.id == widget.activityId,
+      );
+      if (matches) return day.forecast;
+    }
+    return null;
+  }
+
   DailyForecast? _todaysMatch(List<ScheduleDay> days) {
     final now = ref.read(nowProvider)();
     for (final day in days) {
@@ -319,6 +335,7 @@ class _ActivityDetailScreenState extends ConsumerState<ActivityDetailScreen> {
   ) {
     final schedule = ref.watch(scheduleMatchProvider).valueOrNull;
     final todaysForecast = schedule == null ? null : _todaysMatch(schedule);
+    final nextForecast = schedule == null ? null : _nextMatch(schedule);
 
     return SingleChildScrollView(
           padding: const EdgeInsets.all(OutAboutSpacing.md),
@@ -461,6 +478,16 @@ class _ActivityDetailScreenState extends ConsumerState<ActivityDetailScreen> {
                 colors: colors,
                 forecastDay: todaysForecast,
               ),
+              // Hidden only when nothing matches in the whole 5-day window —
+              // there would be no honest date to put on the event.
+              if (nextForecast case final forecast?) ...[
+                const SizedBox(height: OutAboutSpacing.sm),
+                _AddToCalendarButton(
+                  activity: activity,
+                  colors: colors,
+                  forecast: forecast,
+                ),
+              ],
               // Silent unless this activity matches today and it is past the
               // prompt hour — see OutcomePrompt.
               if (todaysForecast != null && activity.id != null)
@@ -527,6 +554,56 @@ class _ActivityDetailScreenState extends ConsumerState<ActivityDetailScreen> {
 // ---------------------------------------------------------------------------
 // _FindAndBookButton
 // ---------------------------------------------------------------------------
+
+/// Adds this activity's next matching day to the device calendar.
+///
+/// One-shot: the event is created and forgotten. Nothing here syncs it,
+/// updates it, or removes it later.
+class _AddToCalendarButton extends ConsumerWidget {
+  const _AddToCalendarButton({
+    required this.activity,
+    required this.colors,
+    required this.forecast,
+  });
+
+  final Activity activity;
+  final WeatherThemeColors colors;
+  final DailyForecast forecast;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        icon: Icon(
+          Icons.event_available_outlined,
+          size: 20,
+          color: colors.primaryInteractive,
+        ),
+        label: Text(
+          'Add to Calendar',
+          style: OutAboutTypography.labelLarge(
+            colors,
+          ).copyWith(color: colors.primaryInteractive),
+        ),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size.fromHeight(48),
+          side: BorderSide(color: colors.primaryInteractive),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(OutAboutRadius.buttons),
+          ),
+        ),
+        onPressed: () => addActivityToCalendar(
+          context,
+          ref,
+          activityName: activity.name,
+          activityId: activity.id,
+          forecast: forecast,
+        ),
+      ),
+    );
+  }
+}
 
 /// Opens the provider sheet for this activity.
 ///
