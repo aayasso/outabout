@@ -153,7 +153,7 @@ final activityRepositoryProvider = Provider<ActivityRepository>((ref) {
 | Column | Type | Nullable | Default | Notes |
 |---|---|---|---|---|
 | `id` | uuid PK | NO | `gen_random_uuid()` | |
-| `user_id` | uuid | NO | — | |
+| `user_id` | uuid FK | YES | — | → auth.users.id, ON DELETE SET NULL; null = de-identified |
 | `activity_id` | uuid FK | YES | — | → activities.id |
 | `event_type` | text | NO | — | CHECK constraint, see approved types below |
 | `conditions_at_event` | jsonb | NO | `'{}'` | see CLAUDE.md for schema |
@@ -178,7 +178,8 @@ final activityRepositoryProvider = Provider<ActivityRepository>((ref) {
 | Table | Column | References |
 |---|---|---|
 | `activities` | `user_id` | `profiles.id` |
-| `behavioral_events` | `activity_id` | `activities.id` |
+| `behavioral_events` | `user_id` | `auth.users.id` (ON DELETE SET NULL) |
+| `behavioral_events` | `activity_id` | `activities.id` (ON DELETE SET NULL) |
 | `behavioral_events` | `monetization_event_id` | `monetization_events.id` |
 | `categories` | `user_id` | `profiles.id` |
 | `condition_profile_history` | `activity_id` | `activities.id` |

@@ -30,6 +30,10 @@ const cachedWeatherFetchedAtKey = 'cached_weather_fetched_at';
 const cachedForecastDataKey = 'cached_forecast_data';
 const cachedForecastFetchedAtKey = 'cached_forecast_fetched_at';
 
+/// SharedPreferences key holding the outcome prompts already answered or
+/// dismissed, as a JSON list of `"<activityId>|<yyyy-MM-dd>"` entries.
+const outcomePromptHandledKey = 'outcome_prompt_handled';
+
 /// Every SharedPreferences key scoped to the signed-in user.
 ///
 /// Cleared on both sign-out and account deletion so a new session never
@@ -48,6 +52,7 @@ const userScopedPrefsKeys = <String>[
   cachedWeatherFetchedAtKey,
   cachedForecastDataKey,
   cachedForecastFetchedAtKey,
+  outcomePromptHandledKey,
 ];
 
 // ---------------------------------------------------------------------------

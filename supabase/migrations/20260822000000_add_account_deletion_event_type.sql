@@ -6,9 +6,10 @@
 -- and the event is dropped silently, exactly like the onboarding event types
 -- were before 20260415000000.
 --
--- The event row is itself deleted along with the rest of the user's data —
--- that is intended; it exists so the request is visible in any replica or
--- backup taken before the deletion completes.
+-- Superseded by 20260823000000: this row used to be deleted along with the
+-- rest of the user's data. behavioral_events is now de-identified on deletion
+-- instead, so the row survives with a null user_id — the request stays visible
+-- in the dataset without being attributable to anyone.
 --
 -- Drops and recreates the CHECK constraint with all existing + new values.
 -- Idempotent: safe to run multiple times.

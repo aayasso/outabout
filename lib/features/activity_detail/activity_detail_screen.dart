@@ -7,8 +7,12 @@ import '../../core/theme.dart';
 import '../../core/weather_theme_provider.dart';
 import '../../data/models/condition_profile.dart';
 import '../../data/models/activity.dart';
+import '../../data/models/daily_forecast.dart';
+import '../../data/models/schedule_day.dart';
 import '../../services/behavioral_event_service.dart';
 import '../../widgets/category_chip_picker.dart';
+import '../../widgets/find_and_book_sheet.dart';
+import '../../widgets/outcome_prompt.dart';
 import '../home/home_providers.dart';
 import '../shared/condition_profile_form.dart';
 
@@ -61,6 +65,25 @@ class _ActivityDetailScreenState
     super.dispose();
   }
 
+  /// Today's forecast, if this activity matches it.
+  ///
+  /// Drives both the outcome prompt (which asks only about today) and the
+  /// weather attached to anything this screen logs.
+  DailyForecast? _todaysMatch(List<ScheduleDay> days) {
+    final now = ref.read(nowProvider)();
+    for (final day in days) {
+      final date = day.forecast.date;
+      final isToday = date.year == now.year &&
+          date.month == now.month &&
+          date.day == now.day;
+      if (!isToday) continue;
+      final matches =
+          day.matchedActivities.any((a) => a.id == widget.activityId);
+      return matches ? day.forecast : null;
+    }
+    return null;
+  }
+
   void _initializeControllers(Activity activity) {
     if (_initialized) return;
     _nameController.text = activity.name;
@@ -78,6 +101,17 @@ class _ActivityDetailScreenState
       _windMax = profile.windMax ?? 25.0;
     }
     _initialized = true;
+
+    // One per screen entry. Deferred because this runs inside build() and
+    // logging synchronously would mutate providers mid-build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(behavioralEventServiceProvider).log(
+            'activity_viewed',
+            extra: {'activity_id': activity.id},
+            conditions: ref.read(conditionsSnapshotProvider)(),
+          );
+    });
   }
 
   bool get _canSave {
@@ -304,6 +338,10 @@ class _ActivityDetailScreenState
     WeatherThemeColors colors,
     String temperatureUnit,
   ) {
+    final schedule = ref.watch(scheduleMatchProvider).valueOrNull;
+    final todaysForecast =
+        schedule == null ? null : _todaysMatch(schedule);
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(OutAboutSpacing.md),
       child: Column(
@@ -471,6 +509,21 @@ class _ActivityDetailScreenState
             ),
           ),
           const SizedBox(height: OutAboutSpacing.lg),
+          _FindAndBookButton(
+            activity: activity,
+            colors: colors,
+            forecastDay: todaysForecast,
+          ),
+          // Silent unless this activity matches today and it is past the
+          // prompt hour — see OutcomePrompt.
+          if (todaysForecast != null && activity.id != null)
+            OutcomePrompt(
+              activityId: activity.id!,
+              activityName: activity.name,
+              matchedDay: todaysForecast.date,
+              forecastDay: todaysForecast,
+            ),
+          const SizedBox(height: OutAboutSpacing.md),
           if (_errorMessage != null) ...[
             _ErrorBanner(
               colors: colors,
@@ -537,6 +590,62 @@ class _ActivityDetailScreenState
         );
   }
 
+}
+
+// ---------------------------------------------------------------------------
+// _FindAndBookButton
+// ---------------------------------------------------------------------------
+
+/// Opens the provider sheet for this activity.
+///
+/// Secondary to Save: this screen's job is editing, and finding somewhere to
+/// go is the optional next step rather than the reason the user came here.
+class _FindAndBookButton extends ConsumerWidget {
+  const _FindAndBookButton({
+    required this.activity,
+    required this.colors,
+    required this.forecastDay,
+  });
+
+  final Activity activity;
+  final WeatherThemeColors colors;
+  final DailyForecast? forecastDay;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
+    final categoryNames = categories
+        .where((c) => activity.categoryIds.contains(c.id))
+        .map((c) => c.name)
+        .toList();
+
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        icon: Icon(Icons.travel_explore, size: 20, color: colors.primary),
+        label: Text(
+          'Find & book',
+          style: OutAboutTypography.labelLarge(colors)
+              .copyWith(color: colors.primary),
+        ),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size.fromHeight(48),
+          side: BorderSide(color: colors.primary),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(OutAboutRadius.buttons),
+          ),
+        ),
+        onPressed: () => showFindAndBookSheet(
+          context,
+          ref,
+          activityName: activity.name,
+          activityId: activity.id,
+          categoryNames: categoryNames,
+          forecastDay: forecastDay,
+        ),
+      ),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------

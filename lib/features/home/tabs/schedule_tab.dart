@@ -12,6 +12,8 @@ import '../../../data/models/daily_forecast.dart';
 import '../../../data/models/schedule_day.dart';
 import '../../../data/repositories/weather_repository.dart';
 import '../../../services/behavioral_event_service.dart';
+import '../../../widgets/find_and_book_sheet.dart';
+import '../../../widgets/outcome_prompt.dart';
 import '../../weather_scene/weather_scene_background.dart';
 import '../home_providers.dart';
 
@@ -363,6 +365,7 @@ class _DaySection extends StatelessWidget {
                     padding: const EdgeInsets.only(bottom: OutAboutSpacing.sm),
                     child: _ScheduleActivityCard(
                       activity: scheduleDay.matchedActivities[cardIndex],
+                      forecast: scheduleDay.forecast,
                       cardIndex: cardIndex,
                       sectionIndex: sectionIndex,
                       colors: colors,
@@ -494,9 +497,10 @@ class _DayHeader extends StatelessWidget {
 // _ScheduleActivityCard
 // -------------------------------------------------------------------
 
-class _ScheduleActivityCard extends StatelessWidget {
+class _ScheduleActivityCard extends ConsumerWidget {
   const _ScheduleActivityCard({
     required this.activity,
+    required this.forecast,
     required this.cardIndex,
     required this.sectionIndex,
     required this.colors,
@@ -504,13 +508,24 @@ class _ScheduleActivityCard extends StatelessWidget {
   });
 
   final Activity activity;
+
+  /// The day this card sits under. Carried so the outcome prompt knows which
+  /// day it is asking about, and so the weather that day is attached to any
+  /// event the card logs.
+  final DailyForecast forecast;
   final int cardIndex;
   final int sectionIndex;
   final WeatherThemeColors colors;
   final bool isDark;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
+    final categoryNames = categories
+        .where((c) => activity.categoryIds.contains(c.id))
+        .map((c) => c.name)
+        .toList();
+
     return Semantics(
           label: 'Activity: ${activity.name}',
           button: true,
@@ -544,22 +559,60 @@ class _ScheduleActivityCard extends StatelessWidget {
                       ),
                     ),
                     Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.all(OutAboutSpacing.md),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                activity.name,
-                                style: OutAboutTypography.bodyMedium(colors),
-                              ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Padding(
+                            padding:
+                                const EdgeInsets.all(OutAboutSpacing.md),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    activity.name,
+                                    style: OutAboutTypography.bodyMedium(
+                                      colors,
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 48,
+                                  height: 48,
+                                  child: IconButton(
+                                    icon: Icon(
+                                      Icons.travel_explore,
+                                      size: 20,
+                                      color: colors.primary,
+                                    ),
+                                    tooltip: 'Find & book',
+                                    onPressed: () => showFindAndBookSheet(
+                                      context,
+                                      ref,
+                                      activityName: activity.name,
+                                      activityId: activity.id,
+                                      categoryNames: categoryNames,
+                                      forecastDay: forecast,
+                                    ),
+                                  ),
+                                ),
+                                Icon(
+                                  Icons.chevron_right,
+                                  color: colors.textSecondary,
+                                ),
+                              ],
                             ),
-                            Icon(
-                              Icons.chevron_right,
-                              color: colors.textSecondary,
+                          ),
+                          // Renders nothing unless this is today's match and
+                          // it is past the prompt hour — see OutcomePrompt.
+                          if (activity.id case final id?)
+                            OutcomePrompt(
+                              activityId: id,
+                              activityName: activity.name,
+                              matchedDay: forecast.date,
+                              forecastDay: forecast,
                             ),
-                          ],
-                        ),
+                        ],
                       ),
                     ),
                   ],

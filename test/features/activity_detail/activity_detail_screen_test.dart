@@ -27,8 +27,11 @@ void main() {
 
   MockBehavioralEventService buildMockEventService() {
     final mock = MockBehavioralEventService();
-    when(() => mock.log(any(), extra: any(named: 'extra')))
-        .thenAnswer((_) async {});
+    when(() => mock.log(
+          any(),
+          extra: any(named: 'extra'),
+          conditions: any(named: 'conditions'),
+        )).thenAnswer((_) async {});
     return mock;
   }
 

@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/providers.dart';
 import '../../core/weather_theme_provider.dart';
+import '../../data/models/behavioral_event.dart';
 import '../../data/models/condition_profile.dart';
 import '../../data/models/daily_forecast.dart';
 import '../../data/models/profile.dart';
@@ -194,6 +195,35 @@ final weatherThemeSyncProvider = Provider<void>((ref) {
     notifier.setThemeFromConditions(data.weatherCode);
     notifier.setThemeFromTimeOfDay(now());
   });
+});
+
+// ---------------------------------------------------------------------------
+// Conditions snapshot
+// ---------------------------------------------------------------------------
+
+/// Builds a snapshot for the day being acted on, using live conditions.
+typedef ConditionsSnapshotBuilder = ConditionsAtEvent Function({
+  DailyForecast? forecastDay,
+  int forecastWindowHours,
+});
+
+/// Supplies [buildConditionsSnapshot] with the live weather and active theme.
+///
+/// Exposed as a function rather than a `family` because the natural key would
+/// be a [DailyForecast], which has no value equality — a family would allocate
+/// a fresh provider per rebuild and never dispose them. The pure builder stays
+/// in `data/models` so it is testable without a container.
+final conditionsSnapshotProvider = Provider<ConditionsSnapshotBuilder>((ref) {
+  final themeName = ref.watch(weatherThemeProvider.notifier).activeThemeName;
+  final current = ref.watch(weatherDataProvider).valueOrNull;
+
+  return ({DailyForecast? forecastDay, int forecastWindowHours = 0}) =>
+      buildConditionsSnapshot(
+        weatherTheme: themeName,
+        current: current,
+        forecastDay: forecastDay,
+        forecastWindowHours: forecastWindowHours,
+      );
 });
 
 // ---------------------------------------------------------------------------

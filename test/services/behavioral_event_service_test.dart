@@ -3,6 +3,8 @@ import 'package:mocktail/mocktail.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:outabout/data/models/behavioral_event.dart';
+import 'package:outabout/data/models/daily_forecast.dart';
+import 'package:outabout/data/models/weather_data.dart';
 import 'package:outabout/services/behavioral_event_service.dart';
 
 // ---------------------------------------------------------------------------
@@ -47,6 +49,108 @@ void main() {
 
       // No null values.
       expect(json.values.any((v) => v == null), isFalse);
+    });
+  });
+
+  group('buildConditionsSnapshot', () {
+    final forecastDay = DailyForecast(
+      date: DateTime(2026, 8, 23),
+      temperatureMax: 26.0,
+      temperatureMin: 14.0,
+      precipitationProbability: 18.6,
+      windSpeedMax: 12.0,
+      weatherCode: 1000,
+    );
+
+    const current = WeatherData(
+      weatherCode: 1101,
+      temperature: 21.0,
+      windSpeed: 9.5,
+      humidity: 55.0,
+      precipitationIntensity: 0.0,
+      uvIndex: 5.4,
+    );
+
+    test('emits the server-compatible keys when a forecast is supplied', () {
+      final json = buildConditionsSnapshot(
+        weatherTheme: 'sunny',
+        current: current,
+        forecastDay: forecastDay,
+        forecastWindowHours: 24,
+      ).toJson();
+
+      // The four keys that mirror check-weather's buildConditionsSnapshot,
+      // so client and server rows can be queried together.
+      expect(json['weather_code'], 1000);
+      expect(json['temp_max_c'], 26.0);
+      expect(json['temp_min_c'], 14.0);
+      expect(json['forecast_date'], '2026-08-23T00:00:00.000');
+      expect(json.length, 12);
+    });
+
+    test('prefers live conditions for the right-now fields', () {
+      final snapshot = buildConditionsSnapshot(
+        weatherTheme: 'sunny',
+        current: current,
+        forecastDay: forecastDay,
+      );
+
+      expect(snapshot.tempC, 21.0);
+      expect(snapshot.windKph, 9.5);
+      expect(snapshot.uvIndex, 5);
+    });
+
+    test('converts to Fahrenheit rather than reporting zero', () {
+      final snapshot = buildConditionsSnapshot(
+        weatherTheme: 'sunny',
+        current: current,
+      );
+
+      expect(snapshot.tempF, closeTo(69.8, 0.01));
+    });
+
+    test('falls back to the day midpoint when live weather is missing', () {
+      final snapshot = buildConditionsSnapshot(
+        weatherTheme: 'overcast',
+        forecastDay: forecastDay,
+      );
+
+      // (26 + 14) / 2
+      expect(snapshot.tempC, 20.0);
+      expect(snapshot.windKph, 12.0);
+      // No live reading to take a code from, so the day's applies.
+      expect(snapshot.weatherCode, 1000);
+    });
+
+    test('rounds precipitation probability to an integer percentage', () {
+      final snapshot = buildConditionsSnapshot(
+        weatherTheme: 'rainy',
+        forecastDay: forecastDay,
+      );
+
+      expect(snapshot.precipitationProbability, 19);
+    });
+
+    test('with neither source it degrades to zeros, not to nulls', () {
+      final snapshot = buildConditionsSnapshot(weatherTheme: 'night');
+      final json = snapshot.toJson();
+
+      expect(snapshot.tempC, 0.0);
+      expect(snapshot.windKph, 0.0);
+      expect(json['weather_theme'], 'night');
+      // The optional server keys are omitted entirely rather than sent null.
+      expect(json.length, 8);
+      expect(json.values.any((v) => v == null), isFalse);
+    });
+
+    test('takes the weather code from live conditions when no day is given',
+        () {
+      final snapshot = buildConditionsSnapshot(
+        weatherTheme: 'overcast',
+        current: current,
+      );
+
+      expect(snapshot.weatherCode, 1101);
     });
   });
 
@@ -383,7 +487,77 @@ void main() {
       expect(approvedEventTypes, contains('settings_changed'));
       // Added for account deletion
       expect(approvedEventTypes, contains('account_deletion_requested'));
-      expect(approvedEventTypes.length, 25);
+      // Present in the DB CHECK constraint since 20260520000000 but missing
+      // from this list until the dataset-outcomes sprint, so calls were
+      // dropped client-side before reaching Postgres.
+      expect(approvedEventTypes, contains('notification_preference_changed'));
+      expect(approvedEventTypes.length, 26);
+    });
+
+    test('the outcome-stage event types are all loggable', () {
+      // These four close the funnel. Before this sprint every one of them was
+      // approved but had no call site; the guard in log() silently drops
+      // anything absent from this list, so keep them asserted.
+      for (final eventType in const [
+        'activity_confirmed',
+        'condition_match_ignored',
+        'affiliate_link_clicked',
+        'activity_viewed',
+      ]) {
+        expect(approvedEventTypes, contains(eventType), reason: eventType);
+      }
+    });
+
+    test('buildPayload carries a supplied snapshot instead of the zero one',
+        () {
+      final service = BehavioralEventService(
+        supabase: mockSupabase,
+        activeThemeName: 'sunny',
+        appVersion: '1.0.0',
+      );
+
+      final payload = service.buildPayload(
+        'activity_confirmed',
+        userId: testUserId,
+        conditions: buildConditionsSnapshot(
+          weatherTheme: 'sunny',
+          forecastDay: DailyForecast(
+            date: DateTime(2026, 8, 23),
+            temperatureMax: 26.0,
+            temperatureMin: 14.0,
+            precipitationProbability: 18.6,
+            windSpeedMax: 12.0,
+            weatherCode: 1000,
+          ),
+        ),
+      );
+
+      final conditions =
+          payload['conditions_at_event'] as Map<String, dynamic>;
+
+      expect(conditions['temp_c'], 20.0);
+      expect(conditions['weather_code'], 1000);
+      expect(conditions['temp_max_c'], 26.0);
+    });
+
+    test('buildPayload without a snapshot keeps the historical zero shape',
+        () {
+      final service = BehavioralEventService(
+        supabase: mockSupabase,
+        activeThemeName: 'sunny',
+        appVersion: '1.0.0',
+      );
+
+      final conditions = service.buildPayload(
+        'wishlist_added',
+        userId: testUserId,
+      )['conditions_at_event'] as Map<String, dynamic>;
+
+      // The many existing call sites that have no weather in scope must be
+      // byte-for-byte unchanged.
+      expect(conditions.length, 8);
+      expect(conditions['temp_c'], 0.0);
+      expect(conditions.containsKey('weather_code'), isFalse);
     });
   });
 }

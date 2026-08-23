@@ -38,6 +38,10 @@ const approvedEventTypes = <String>[
   'filter_cleared',
   'weather_refreshed',
   'settings_changed',
+  // Present in the DB CHECK constraint since 20260520000000 but missing here,
+  // so any call would have been dropped by the guard in [log] before it ever
+  // reached Postgres.
+  'notification_preference_changed',
   // Added for account deletion
   'account_deletion_requested',
 ];
@@ -115,19 +119,26 @@ class BehavioralEventService {
     String eventType, {
     required String userId,
     Map<String, dynamic>? extra,
+    ConditionsAtEvent? conditions,
   }) {
     final now = DateTime.now();
 
-    final conditions = ConditionsAtEvent(
-      tempC: 0.0,
-      tempF: 0.0,
-      precipitationProbability: 0,
-      windKph: 0.0,
-      uvIndex: 0,
-      airQualityIndex: 0,
-      weatherTheme: _activeThemeName,
-      forecastWindowHours: 0,
-    );
+    // Callers that have live weather pass a real snapshot built by
+    // [buildConditionsSnapshot]. The zero-filled fallback is what every event
+    // in this app used to log unconditionally; it is kept so the many existing
+    // call sites that have no weather in scope behave exactly as before rather
+    // than silently gaining a wrong one.
+    final resolvedConditions = conditions ??
+        ConditionsAtEvent(
+          tempC: 0.0,
+          tempF: 0.0,
+          precipitationProbability: 0,
+          windKph: 0.0,
+          uvIndex: 0,
+          airQualityIndex: 0,
+          weatherTheme: _activeThemeName,
+          forecastWindowHours: 0,
+        );
 
     final geographic = GeographicContext(
       metro: '',
@@ -167,7 +178,7 @@ class BehavioralEventService {
     return <String, dynamic>{
       'event_type': eventType,
       'user_id': userId,
-      'conditions_at_event': conditions.toJson(),
+      'conditions_at_event': resolvedConditions.toJson(),
       'geographic_context': geographic.toJson(),
       'temporal_context': temporal.toJson(),
       'session_context': {...session.toJson(), if (extra != null) ...extra},
@@ -184,6 +195,7 @@ class BehavioralEventService {
   Future<void> log(
     String eventType, {
     Map<String, dynamic>? extra,
+    ConditionsAtEvent? conditions,
   }) async {
     try {
       // Validate event type.
@@ -199,7 +211,12 @@ class BehavioralEventService {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return;
 
-      final data = buildPayload(eventType, userId: userId, extra: extra);
+      final data = buildPayload(
+        eventType,
+        userId: userId,
+        extra: extra,
+        conditions: conditions,
+      );
       await _supabase.from('behavioral_events').insert(data);
     } catch (e, st) {
       debugPrint('BehavioralEventService: failed to log "$eventType" — $e');

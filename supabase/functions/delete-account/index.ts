@@ -1,4 +1,8 @@
-// Hard-deletes the calling user's account and all of their data.
+// Deletes the calling user's account and all of their personal data.
+//
+// Two tables are de-identified instead of deleted — monetization_events and
+// behavioral_events, both owned by the intelligence platform. Everything else
+// is hard-deleted.
 //
 // Required by App Store Review Guideline 5.1.1(v): any app offering account
 // creation must offer in-app account deletion.
@@ -76,12 +80,12 @@ async function deleteUserData(
     counts["notification_preferences"] = 0;
   }
 
-  // 5. The one intentional exception to "delete everything": monetization_events
-  // belongs to the intelligence platform. Its rows are de-identified rather
-  // than destroyed, which removes every personal linkage while leaving the
-  // anonymised revenue record intact. This also has to happen BEFORE steps 6
-  // and 9, because its activity_id / behavioral_event_id foreign keys point at
-  // rows those steps delete.
+  // 5. The intelligence platform's two tables are the intentional exception to
+  // "delete everything": monetization_events and behavioral_events are
+  // de-identified rather than destroyed, which removes every personal linkage
+  // while leaving the anonymised record intact. monetization_events still has
+  // to happen BEFORE step 9, because its activity_id foreign key points at
+  // rows that step deletes.
   const { data: deIdentified, error: monErr } = await admin
     .from("monetization_events")
     .update({
@@ -94,8 +98,22 @@ async function deleteUserData(
   if (monErr) throw new Error(`monetization_events: ${monErr.message}`);
   counts["monetization_events_deidentified"] = deIdentified?.length ?? 0;
 
-  // 6. Must precede activities — behavioral_events.activity_id references it.
-  await del("behavioral_events", (q) => q.eq("user_id", userId));
+  // 6. De-identified, not deleted — see the note on step 5.
+  //
+  // Goes through an RPC because the JS client sends literal values and cannot
+  // express the jsonb `-` operator needed to strip activity_name/category from
+  // session_context. The migration that defines this function
+  // (20260823000000) must be applied BEFORE this version of the function is
+  // deployed: without it the RPC 404s, deleteUserData throws, and in-app
+  // account deletion breaks — an App Store 5.1.1(v) blocker.
+  //
+  // The FK on user_id is ON DELETE SET NULL as of that same migration, so the
+  // rows would survive the deleteUser() call below even if this step were
+  // skipped. This call is what strips the rest of the payload.
+  const { data: deidentifiedEvents, error: behErr } = await admin
+    .rpc("deidentify_behavioral_events", { p_user_id: userId });
+  if (behErr) throw new Error(`behavioral_events: ${behErr.message}`);
+  counts["behavioral_events_deidentified"] = (deidentifiedEvents as number) ?? 0;
 
   // 7-9.
   await del("user_locations", (q) => q.eq("user_id", userId));
