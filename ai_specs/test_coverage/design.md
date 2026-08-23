@@ -156,15 +156,26 @@ real id exists.
 
 ### 1.13 Not fixed — for your decision
 
-**Five allowlisted event types have no call site anywhere in `lib/`:**
+**`partner_impression_viewed` is now wired** (2026-08-23, follow-up). The
+Find & book sheet logs one impression per provider rendered, with the same
+`provider` / `activity_id` keys and the same conditions snapshot as
+`affiliate_link_clicked`, so click-through is a division on `provider`.
+
+The sheet became a `ConsumerStatefulWidget` to hold the per-open set of
+providers already counted: `build` re-runs when the location resolves or the
+theme changes, and an unguarded impression would multiply. Logging is driven
+by the *rendered* list rather than by mount, because `providersFor` drops
+AllTrails while the city is unresolved — so the list grows after
+`userLocationProvider` lands, and a mount-time snapshot would under-count the
+rows the user can see. A second sheet-open counts again; that is the unit an
+impression is measured in.
+
+**Four allowlisted event types still have no call site:**
 `condition_match_notified` (server-only, written by the edge function),
-`app_opened_post_notification`, `partner_impression_viewed`,
-`partner_cta_clicked`, `notification_preference_changed` (its feature was
-deleted in `49760bf`). Each is currently covered only by a membership
-assertion. `partner_impression_viewed` is the notable one: the Find & book
-sheet logs `affiliate_link_clicked` on tap but never the impression, so
-click-through rate is uncomputable. **No UI was wired for these** — they need a
-product decision: wire them, or drop them from the allowlist.
+`app_opened_post_notification`, `partner_cta_clicked`, and
+`notification_preference_changed` (its feature was deleted in `49760bf`).
+Each is covered only by a membership assertion. **No UI was wired for these** —
+they need a product decision: wire them, or drop them from the allowlist.
 
 **Also left alone, deliberately:** `airQualityIndex`, `daysSinceLastMatch`,
 `daysSinceActivityCreated` and `consecutiveMatchCount` are permanently zero.

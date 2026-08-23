@@ -34,7 +34,10 @@ class _RecordingEventService extends BehavioralEventService {
         appVersion: 'test',
       );
 
-  final List<({String type, Map<String, dynamic>? extra})> logged = [];
+  final List<
+    ({String type, Map<String, dynamic>? extra, ConditionsAtEvent? conditions})
+  >
+  logged = [];
 
   @override
   Future<void> log(
@@ -42,8 +45,22 @@ class _RecordingEventService extends BehavioralEventService {
     Map<String, dynamic>? extra,
     ConditionsAtEvent? conditions,
   }) async {
-    logged.add((type: eventType, extra: extra));
+    logged.add((type: eventType, extra: extra, conditions: conditions));
   }
+
+  /// The `provider` values logged under [type], in order.
+  List<String> providersFor(String type) => logged
+      .where((e) => e.type == type)
+      .map((e) => e.extra?['provider'] as String)
+      .toList();
+
+  /// Only the click events. The sheet also logs an impression per provider on
+  /// open, so asserting over the whole log would conflate the two.
+  List<
+    ({String type, Map<String, dynamic>? extra, ConditionsAtEvent? conditions})
+  >
+  get clicks =>
+      logged.where((e) => e.type == 'affiliate_link_clicked').toList();
 }
 
 final _categories = [
@@ -66,6 +83,7 @@ void main() {
     List<String> categoryNames = const [],
     String city = 'San Francisco, CA',
     bool launchSucceeds = true,
+    Duration locationDelay = Duration.zero,
   }) {
     return ProviderScope(
       overrides: [
@@ -74,14 +92,20 @@ void main() {
         ),
         weatherThemeColorsProvider.overrideWithValue(WeatherThemeColors.sunny),
         categoriesProvider.overrideWith((ref) async => _categories),
-        userLocationProvider.overrideWith(
-          (ref) async => UserLocation(
+        userLocationProvider.overrideWith((ref) async {
+          // A non-zero delay lets a test open the sheet before the city
+          // exists and then watch it rebuild — which is the only way to
+          // exercise the impression de-duplication for real.
+          if (locationDelay > Duration.zero) {
+            await Future<void>.delayed(locationDelay);
+          }
+          return UserLocation(
             userId: 'user-1',
             latitude: 37.77,
             longitude: -122.42,
             city: city,
-          ),
-        ),
+          );
+        }),
         urlLauncherProvider.overrideWithValue((Uri url) async {
           launched.add(url);
           return launchSucceeds;
@@ -200,7 +224,7 @@ void main() {
 
     expect(launched.single.host, 'www.alltrails.com');
     expect(launched.single.path, '/us/california/san-francisco');
-    expect(events.logged.single.extra?['provider'], 'allTrails');
+    expect(events.clicks.single.extra?['provider'], 'allTrails');
   });
 
   testWidgets('tapping a provider launches the constructed URL', (
@@ -222,10 +246,9 @@ void main() {
     );
 
     // The outcome signal: which provider, for which activity.
-    expect(events.logged, hasLength(1));
-    expect(events.logged.single.type, 'affiliate_link_clicked');
-    expect(events.logged.single.extra?['provider'], 'openTable');
-    expect(events.logged.single.extra?['activity_id'], 'act-1');
+    expect(events.clicks, hasLength(1));
+    expect(events.clicks.single.extra?['provider'], 'openTable');
+    expect(events.clicks.single.extra?['activity_id'], 'act-1');
   });
 
   testWidgets('logs the click even when the launch fails', (tester) async {
@@ -239,8 +262,8 @@ void main() {
 
     // Tapping is the behaviour worth recording; whether the handset had a
     // browser to hand is not a fact about the user.
-    expect(events.logged.single.type, 'affiliate_link_clicked');
-    expect(events.logged.single.extra?['provider'], 'googleMaps');
+    expect(events.clicks, hasLength(1));
+    expect(events.clicks.single.extra?['provider'], 'googleMaps');
   });
 
   testWidgets('closes itself once the link opens', (tester) async {
@@ -295,5 +318,159 @@ void main() {
       );
       expect(size.height, greaterThanOrEqualTo(48.0), reason: label);
     }
+  });
+
+  // -------------------------------------------------------------------------
+  // partner_impression_viewed
+  //
+  // The sheet logged affiliate_link_clicked on tap but never the impression,
+  // so click-through rate had no denominator and was uncomputable.
+  // -------------------------------------------------------------------------
+
+  group('partner_impression_viewed', () {
+    testWidgets('one impression per provider rendered, on open', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        harness(activityName: 'Dinner out', categoryNames: ['Dining']),
+      );
+      await openSheet(tester);
+
+      // The three rows the dining rule renders, and nothing else.
+      expect(
+        events.providersFor('partner_impression_viewed'),
+        containsAll(<String>['openTable', 'yelp', 'googleMaps']),
+      );
+      expect(events.providersFor('partner_impression_viewed'), hasLength(3));
+      expect(find.text('OpenTable'), findsOneWidget);
+      expect(find.text('Yelp'), findsOneWidget);
+      expect(find.text('Google Maps'), findsOneWidget);
+    });
+
+    testWidgets('carries the conditions snapshot, like the click does', (
+      tester,
+    ) async {
+      await tester.pumpWidget(harness(activityName: 'Dinner out'));
+      await openSheet(tester);
+
+      final impressions = events.logged
+          .where((e) => e.type == 'partner_impression_viewed')
+          .toList();
+      expect(impressions, isNotEmpty);
+      for (final impression in impressions) {
+        expect(impression.conditions, isNotNull);
+        expect(impression.extra?['activity_id'], 'act-1');
+      }
+    });
+
+    testWidgets('a rebuild does not log the same provider twice', (
+      tester,
+    ) async {
+      // Opened before the location resolves, so the sheet is guaranteed to
+      // build at least twice: once with no city, once with it. Without that
+      // forced rebuild this test passes even with the guard removed, which
+      // is exactly the hole it exists to close.
+      await tester.pumpWidget(
+        harness(
+          activityName: 'Dinner out',
+          categoryNames: ['Dining'],
+          locationDelay: const Duration(milliseconds: 50),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pump();
+      await tester.pump();
+
+      final afterFirstBuild = events.providersFor('partner_impression_viewed');
+      expect(
+        afterFirstBuild,
+        isNotEmpty,
+        reason: 'the rows visible before the city lands still count',
+      );
+
+      // Let the location land and the sheet rebuild.
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
+
+      final counts = <String, int>{};
+      for (final provider in events.providersFor('partner_impression_viewed')) {
+        counts[provider] = (counts[provider] ?? 0) + 1;
+      }
+      expect(
+        counts.values,
+        everyElement(1),
+        reason: 'rebuilds must not multiply impressions: $counts',
+      );
+    });
+
+    testWidgets('a second open counts again', (tester) async {
+      await tester.pumpWidget(harness(activityName: 'Dinner out'));
+
+      await openSheet(tester);
+      final first = events.providersFor('partner_impression_viewed').length;
+      expect(first, greaterThan(0));
+
+      // Dismiss and reopen: a fresh sheet is a fresh impression.
+      Navigator.of(tester.element(find.text('Find & book'))).pop();
+      await tester.pumpAndSettle();
+      await openSheet(tester);
+
+      expect(
+        events.providersFor('partner_impression_viewed'),
+        hasLength(first * 2),
+      );
+    });
+
+    testWidgets('click-through is computable from the two event types', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        harness(activityName: 'Dinner out', categoryNames: ['Dining']),
+      );
+      await openSheet(tester);
+
+      await tester.tap(find.text('Yelp'));
+      await tester.pumpAndSettle();
+
+      final impressions = events.providersFor('partner_impression_viewed');
+      final clicks = events.providersFor('affiliate_link_clicked');
+
+      // The whole point: same key, same shape, so CTR is a division.
+      expect(clicks, ['yelp']);
+      expect(impressions, contains('yelp'));
+
+      double ctrFor(String provider) =>
+          clicks.where((p) => p == provider).length /
+          impressions.where((p) => p == provider).length;
+
+      expect(ctrFor('yelp'), 1.0);
+      expect(ctrFor('openTable'), 0.0);
+      expect(ctrFor('googleMaps'), 0.0);
+    });
+
+    testWidgets('a provider that appears only once the city resolves is '
+        'still counted', (tester) async {
+      // providersFor drops AllTrails while the city is empty, so the row list
+      // grows after userLocationProvider lands. An impression pass that ran
+      // only at mount would miss the row the user can actually see.
+      await tester.pumpWidget(
+        harness(activityName: 'Hiking the ridge', categoryNames: ['Hiking']),
+      );
+      await openSheet(tester);
+
+      final shown = <String>[
+        if (find.text('AllTrails').evaluate().isNotEmpty) 'allTrails',
+        if (find.text('Google Maps').evaluate().isNotEmpty) 'googleMaps',
+      ];
+      expect(shown, isNotEmpty);
+
+      for (final provider in shown) {
+        expect(
+          events.providersFor('partner_impression_viewed'),
+          contains(provider),
+          reason: '$provider is on screen but was never counted',
+        );
+      }
+    });
   });
 }

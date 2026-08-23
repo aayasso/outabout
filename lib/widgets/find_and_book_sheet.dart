@@ -48,7 +48,7 @@ Future<void> showFindAndBookSheet(
   );
 }
 
-class _FindAndBookSheet extends ConsumerWidget {
+class _FindAndBookSheet extends ConsumerStatefulWidget {
   const _FindAndBookSheet({
     required this.activityName,
     required this.activityId,
@@ -61,9 +61,59 @@ class _FindAndBookSheet extends ConsumerWidget {
   final List<String> categoryNames;
   final DailyForecast? forecastDay;
 
+  @override
+  ConsumerState<_FindAndBookSheet> createState() => _FindAndBookSheetState();
+}
+
+class _FindAndBookSheetState extends ConsumerState<_FindAndBookSheet> {
+  /// Providers already counted as seen during this sheet-open.
+  ///
+  /// Stateful for exactly this: `build` runs again whenever the theme or the
+  /// location resolves, and an impression logged from `build` unguarded would
+  /// multiply. The set is per-State, so it dies with the sheet and a second
+  /// open counts again — which is the unit an impression is measured in.
+  final Set<BookingProvider> _impressionsLogged = {};
+
+  String get activityName => widget.activityName;
+  String? get activityId => widget.activityId;
+  List<String> get categoryNames => widget.categoryNames;
+  DailyForecast? get forecastDay => widget.forecastDay;
+
+  /// Records one `partner_impression_viewed` per provider actually rendered.
+  ///
+  /// Deferred to after the frame rather than fired from `build`: logging is a
+  /// side effect and `build` must stay pure. Driven by the rendered list, not
+  /// by mount, because [providersFor] drops AllTrails while the city is
+  /// unresolved — so the list grows once `userLocationProvider` lands, and a
+  /// mount-time snapshot would under-count the rows the user can see.
+  void _logImpressions(List<BookingProvider> providers) {
+    final fresh = providers
+        .where((p) => !_impressionsLogged.contains(p))
+        .toList();
+    if (fresh.isEmpty) return;
+    _impressionsLogged.addAll(fresh);
+
+    final eventService = ref.read(behavioralEventServiceProvider);
+    final conditions = ref.read(conditionsSnapshotProvider)(
+      forecastDay: forecastDay,
+    );
+
+    for (final provider in fresh) {
+      // Same shape as affiliate_link_clicked, so the two join on
+      // `provider` and click-through is a division.
+      eventService.log(
+        'partner_impression_viewed',
+        extra: {
+          'provider': provider.name,
+          if (activityId != null) 'activity_id': activityId,
+        },
+        conditions: conditions,
+      );
+    }
+  }
+
   Future<void> _open(
     BuildContext context,
-    WidgetRef ref,
     BookingProvider provider,
     String city,
   ) async {
@@ -111,7 +161,7 @@ class _FindAndBookSheet extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final colors = ref.watch(weatherThemeColorsProvider);
     final city = ref.watch(userLocationProvider).valueOrNull?.city ?? '';
 
@@ -120,6 +170,10 @@ class _FindAndBookSheet extends ConsumerWidget {
       categoryNames: categoryNames,
       city: city,
     );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _logImpressions(providers);
+    });
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -155,7 +209,7 @@ class _FindAndBookSheet extends ConsumerWidget {
               _ProviderRow(
                 provider: provider,
                 colors: colors,
-                onTap: () => _open(context, ref, provider, city),
+                onTap: () => _open(context, provider, city),
               ),
           ],
         ),

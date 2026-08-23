@@ -60,8 +60,11 @@ Ticks record what shipped, not what was planned.
       hero exceptions 4 → 0.
 
 ## Open, awaiting a decision
-- [ ] The five allowlisted event types with no call site — wire them or drop
-      them from the allowlist. See `design.md` §1.13.
+- [x] `partner_impression_viewed` wired in the Find & book sheet, with tests
+      proving one impression per provider on open, no repeat on rebuild, and
+      a computable click-through rate.
+- [ ] The remaining four allowlisted event types with no call site — wire them
+      or drop them from the allowlist. See `design.md` §1.13.
 - [ ] 45 theme-parameterised widget tests are change-detectors that read their
       expected value from the code under test. See `design.md` §2.4.
 - [ ] `integration_test` is still not a dependency, so there is no end-to-end
