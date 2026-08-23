@@ -587,6 +587,9 @@ void main() {
       expect(approvedEventTypes, contains('account_deletion_requested'));
       // Added for one-shot calendar export
       expect(approvedEventTypes, contains('calendar_event_added'));
+      // Added for the outcome loop's streak milestones. One type carrying the
+      // threshold in session_context, not four — see 20260825000100.
+      expect(approvedEventTypes, contains('activity_milestone_reached'));
 
       // Removed: neither ever had a call site. 'partner_cta_clicked' is
       // covered by partner_impression_viewed + affiliate_link_clicked, and
@@ -603,7 +606,7 @@ void main() {
       // writes it, and dropping it would silently reject a future client call.
       expect(approvedEventTypes, contains('condition_match_notified'));
 
-      expect(approvedEventTypes.length, 25);
+      expect(approvedEventTypes.length, 26);
     });
 
     test('the outcome-stage event types are all loggable', () {

@@ -5,6 +5,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../outcomes/outcome_providers.dart';
 import 'outcome_prompt_provider.dart';
 import '../../core/providers.dart';
 import '../../core/weather_theme_provider.dart';
@@ -476,5 +477,12 @@ void invalidateUserScopedProviders(Ref ref) {
   // markHandled wrote them straight back into the pref key
   // clearUserScopedState had just removed.
   ref.invalidate(outcomePromptProvider);
+  // Same failure mode one layer down: OpportunityRecorder captures the signed
+  // in user's id and keeps an in-memory set of days it has already written, so
+  // without this the next user's matches are attributed to the previous one
+  // and suppressed as already-recorded.
+  ref.invalidate(opportunityRecorderProvider);
+  ref.invalidate(matchedDayRecorderProvider);
+  ref.invalidate(activityOutcomesProvider);
   // scheduleMatchProvider is derived from the above and recomputes itself.
 }

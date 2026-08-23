@@ -11,6 +11,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/motion.dart';
 import 'core/router.dart';
 import 'core/theme.dart';
+import 'features/outcomes/outcome_providers.dart';
 import 'core/weather_theme_provider.dart';
 import 'features/home/home_providers.dart';
 import 'features/weather_scene/weather_scene_provider.dart';
@@ -130,6 +131,11 @@ class _OutAboutAppState extends ConsumerState<OutAboutApp> {
     // conditions to the theme notifier, and a provider nothing watches never
     // runs.
     ref.watch(weatherThemeSyncProvider);
+
+    // Same reason: this one records today's matched days as opportunities, and
+    // a provider nothing watches never runs. Without it the streak has a
+    // numerator and no denominator.
+    ref.watch(matchedDayRecorderProvider);
 
     final themeData = ref.watch(themeDataProvider);
 

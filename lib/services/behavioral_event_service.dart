@@ -52,6 +52,11 @@ const approvedEventTypes = <String>[
   'account_deletion_requested',
   // Added for one-shot calendar export
   'calendar_event_added',
+  // Added for the outcome loop. One type carrying the threshold in
+  // session_context rather than four separate types, so a future milestone
+  // needs no migration. The value is bounded vocabulary (1|5|10|25), so it
+  // survives deidentify_behavioral_events' key-drop list intact.
+  'activity_milestone_reached',
 ];
 
 // ---------------------------------------------------------------------------
