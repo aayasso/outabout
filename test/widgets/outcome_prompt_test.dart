@@ -29,13 +29,20 @@ class _MockUser extends Mock implements User {}
 /// part between the tap and the frame.
 class _StubOutcomeRepository implements ActivityDayOutcomeRepository {
   List<ActivityDayOutcome> rows = [];
+
+  /// When true every read and write throws, standing in for being offline or
+  /// for a schema the shipped build has run ahead of.
+  bool fails = false;
   final List<({String outcome, String localDate, String? reason})> answers = [];
 
   @override
   Future<List<ActivityDayOutcome>> fetchForActivity(
     String userId,
     String activityId,
-  ) async => rows;
+  ) async {
+    if (fails) throw Exception('relation does not exist');
+    return rows;
+  }
 
   @override
   Future<void> recordMatchedDays(List<ActivityDayOutcome> rows) async {}
@@ -431,6 +438,46 @@ void main() {
       events.logged.where((e) => e.type == 'condition_match_ignored'),
       hasLength(1),
     );
+  });
+
+  testWidgets('a failed history write still settles the prompt', (
+    tester,
+  ) async {
+    // The table may be missing or the device offline. The answer is already in
+    // behavioral_events, and the confirmation must still take itself away —
+    // an exception escaping the handler would leave it on the card forever
+    // with no way to dismiss it.
+    outcomes.fails = true;
+
+    await tester.pumpWidget(harness(now: DateTime(2026, 8, 23, 18)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Yes'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Logged.'), findsOneWidget);
+
+    await tester.pump(outcomeCelebrationDuration);
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.check_circle), findsNothing);
+    expect(find.text('Did you go?'), findsNothing);
+  });
+
+  testWidgets('a failed history write still records the reason chips', (
+    tester,
+  ) async {
+    outcomes.fails = true;
+
+    await tester.pumpWidget(harness(now: DateTime(2026, 8, 23, 18)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Not today'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Too busy'), findsOneWidget);
+    await tester.tap(find.text('Too busy'));
+    await tester.pumpAndSettle();
+
+    expect(events.logged.last.extra!['reason'], 'too_busy');
   });
 
   testWidgets('says nothing about an activity that set no conditions', (

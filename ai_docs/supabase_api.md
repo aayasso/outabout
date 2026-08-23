@@ -93,6 +93,36 @@ final activityRepositoryProvider = Provider<ActivityRepository>((ref) {
 | `created_at` | timestamptz | YES | `now()` | |
 | `updated_at` | timestamptz | YES | `now()` | |
 
+### activity_day_outcomes
+One row per activity per local calendar day. The user's own outcome history —
+readable by its owner, unlike `behavioral_events`, and **hard deleted** with
+the account rather than de-identified. Added in `20260825000000`.
+
+| Column | Type | Nullable | Default | Notes |
+|---|---|---|---|---|
+| `id` | uuid PK | NO | `gen_random_uuid()` | |
+| `user_id` | uuid FK | NO | — | → `auth.users.id`, **ON DELETE CASCADE** |
+| `activity_id` | uuid FK | NO | — | → `activities.id`, **ON DELETE CASCADE** |
+| `local_date` | date | NO | — | the *device's* local calendar day; the client is its sole author |
+| `matched` | boolean | NO | `true` | the app claimed this day's weather suited the activity |
+| `outcome` | text | YES | — | `'done'` \| `'skipped'`; null = unanswered |
+| `reason` | text | YES | — | optional "why not" chip |
+| `answered_at` | timestamptz | YES | — | CHECK: null exactly when `outcome` is null |
+| `created_at` | timestamptz | NO | `now()` | |
+
+Unique index on `(user_id, activity_id, local_date)` — also the `on_conflict`
+target for both writes. RLS: full CRUD on `auth.uid() = user_id`.
+
+> `local_date` is stored as a bare `date` and must never be re-parsed into a
+> `DateTime` on the client. Tomorrow.io returns forecast days as UTC instants,
+> and the device is the only place the user's real timezone is known, so
+> normalisation happens there. See `localDateKeyOf` in
+> `lib/features/outcomes/outcome_stats.dart`.
+
+**Repository:** `ActivityDayOutcomeRepository`. `recordMatchedDays` upserts with
+`ignoreDuplicates: true` so re-observing a day cannot overwrite an answer;
+`answer` upserts *without* it, because that write must win.
+
 ### condition_profile_history
 | Column | Type | Nullable | Default | Notes |
 |---|---|---|---|---|

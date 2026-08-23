@@ -29,7 +29,7 @@ const Duration outcomeCelebrationDuration = Duration(milliseconds: 2200);
 /// this is a bonus question — a longer list reads as a form.
 const List<({String value, String label})> outcomeReasons = [
   (value: 'too_busy', label: 'Too busy'),
-  (value: 'conditions_wrong', label: "Conditions weren't right"),
+  (value: 'conditions_wrong', label: 'Wrong conditions'),
   (value: 'not_feeling_it', label: 'Not feeling it'),
 ];
 
@@ -162,18 +162,33 @@ class _OutcomePromptState extends ConsumerState<OutcomePrompt> {
     });
 
     await _answer('activity_confirmed');
-    final result = await ref
-        .read(outcomeAnswerControllerProvider)
-        .submit(
-          activityId: widget.activityId,
-          matchedDay: widget.matchedDay,
-          outcome: DayOutcome.done,
-        );
+
+    // The history write is allowed to fail — offline, or a schema that has not
+    // caught up with the build. What must not happen is the failure escaping
+    // this handler: the collapse timer below would never be set and the
+    // confirmation would sit on the card forever, with no way to dismiss it.
+    // A plain "Logged." is the honest fallback; the answer itself is already
+    // recorded in behavioral_events either way.
+    OutcomeMilestone? milestone;
+    OutcomeStats? stats;
+    try {
+      final result = await ref
+          .read(outcomeAnswerControllerProvider)
+          .submit(
+            activityId: widget.activityId,
+            matchedDay: widget.matchedDay,
+            outcome: DayOutcome.done,
+          );
+      milestone = result.milestone;
+      stats = result.stats;
+    } catch (e) {
+      debugPrint('OutcomePrompt: could not record the completed day — $e');
+    }
     if (!mounted) return;
 
     final line = celebrationLine(
-      milestone: result.milestone,
-      currentStreak: result.stats?.currentStreak ?? 0,
+      milestone: milestone,
+      currentStreak: stats?.currentStreak ?? 0,
     );
     setState(() => _celebration = line);
 
@@ -197,13 +212,7 @@ class _OutcomePromptState extends ConsumerState<OutcomePrompt> {
     // Recorded before the chips are even offered. The reason is a bonus; the
     // answer must never depend on the user engaging with the follow-up.
     await _answer('condition_match_ignored');
-    await ref
-        .read(outcomeAnswerControllerProvider)
-        .submit(
-          activityId: widget.activityId,
-          matchedDay: widget.matchedDay,
-          outcome: DayOutcome.skipped,
-        );
+    await _record(DayOutcome.skipped);
   }
 
   Future<void> _onReason(String value) async {
@@ -219,14 +228,27 @@ class _OutcomePromptState extends ConsumerState<OutcomePrompt> {
             forecastDay: widget.forecastDay,
           ),
         );
-    await ref
-        .read(outcomeAnswerControllerProvider)
-        .submit(
-          activityId: widget.activityId,
-          matchedDay: widget.matchedDay,
-          outcome: DayOutcome.skipped,
-          reason: value,
-        );
+    await _record(DayOutcome.skipped, reason: value);
+  }
+
+  /// Writes an outcome, swallowing failures.
+  ///
+  /// Symmetric with the Yes path and with `BehavioralEventService.log`: a
+  /// history write that fails must never surface as a red screen over a card
+  /// the user has already answered.
+  Future<void> _record(String outcome, {String? reason}) async {
+    try {
+      await ref
+          .read(outcomeAnswerControllerProvider)
+          .submit(
+            activityId: widget.activityId,
+            matchedDay: widget.matchedDay,
+            outcome: outcome,
+            reason: reason,
+          );
+    } catch (e) {
+      debugPrint('OutcomePrompt: could not record the outcome — $e');
+    }
   }
 
   Future<void> _onDismiss() async {
@@ -418,13 +440,20 @@ class _ReasonRow extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 for (final reason in outcomeReasons)
-                  _OutcomeChip(
-                    label: reason.label,
-                    semanticLabel:
-                        '${reason.label} — why I did not go to $activityName',
-                    colors: colors,
-                    emphasised: false,
-                    onTap: () => onSelected(reason.value),
+                  // IntrinsicWidth, because a Wrap hands its children loose
+                  // constraints and _OutcomeChip's Container centres its text
+                  // — which makes it expand to the full width on offer. Three
+                  // full-bleed stacked buttons read as a form, which is the
+                  // one thing this follow-up must not be.
+                  IntrinsicWidth(
+                    child: _OutcomeChip(
+                      label: reason.label,
+                      semanticLabel:
+                          '${reason.label} — why I did not go to $activityName',
+                      colors: colors,
+                      emphasised: false,
+                      onTap: () => onSelected(reason.value),
+                    ),
                   ),
                 SizedBox(
                   width: 48,

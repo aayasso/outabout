@@ -768,9 +768,14 @@ class _DeleteAccountDialogState extends ConsumerState<_DeleteAccountDialog> {
     });
     OutAboutHaptics.onActivitySave();
 
-    // Logged before the delete call. The row is removed along with the rest
-    // of the user's data — that is intended; it only needs to exist long
-    // enough to appear in a replica or backup taken mid-deletion.
+    // Logged before the delete call, and it survives: 20260823000000 made
+    // behavioral_events de-identified rather than deleted on account
+    // deletion, so this row persists with its user_id nulled. That is the
+    // intent — see 20260822000000, which added the type precisely so the
+    // dataset keeps a record that someone left.
+    //
+    // The user's own history in activity_day_outcomes is the opposite case
+    // and is hard deleted, by cascade on both foreign keys.
     await ref
         .read(behavioralEventServiceProvider)
         .log('account_deletion_requested');
