@@ -17,6 +17,8 @@ import '../../widgets/category_chip_picker.dart';
 import '../../widgets/find_and_book_sheet.dart';
 import '../../widgets/outcome_prompt.dart';
 import '../home/home_providers.dart';
+import '../outcomes/outcome_providers.dart';
+import 'widgets/activity_record_section.dart';
 import '../shared/condition_profile_form.dart';
 
 const int maxNameLength = 50;
@@ -328,6 +330,27 @@ class _ActivityDetailScreenState extends ConsumerState<ActivityDetailScreen> {
     );
   }
 
+  /// Records an answer for a day the user reached from the heat map.
+  ///
+  /// Only offered for days still inside the grace window. Parsing the civil
+  /// date back to a local DateTime here is safe and necessary: the controller
+  /// normalises it straight back with localDateKeyOf, and the round trip
+  /// cannot cross a day boundary because midday is nowhere near one.
+  Future<void> _answerPastDay(
+    String activityId,
+    String localDate,
+    String outcome,
+  ) async {
+    final parts = localDate.split('-').map(int.parse).toList();
+    await ref
+        .read(outcomeAnswerControllerProvider)
+        .submit(
+          activityId: activityId,
+          matchedDay: DateTime(parts[0], parts[1], parts[2], 12),
+          outcome: outcome,
+        );
+  }
+
   Widget _buildForm(
     Activity activity,
     WeatherThemeColors colors,
@@ -342,6 +365,15 @@ class _ActivityDetailScreenState extends ConsumerState<ActivityDetailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // The record comes first. The history is why this screen is
+              // worth opening; the form is what you do once you have seen it.
+              if (activity.id case final id?)
+                ActivityRecordSection(
+                  activityId: id,
+                  activityName: activity.name,
+                  onAnswerDay: (localDate, outcome) =>
+                      _answerPastDay(id, localDate, outcome),
+                ),
               TextField(
                 controller: _nameController,
                 style: OutAboutTypography.bodyLarge(colors),

@@ -7,7 +7,11 @@ import 'package:shimmer/shimmer.dart';
 import 'package:outabout/core/motion.dart';
 import 'package:outabout/core/theme.dart';
 import 'package:outabout/core/weather_theme_provider.dart';
+import 'package:outabout/data/models/activity_day_outcome.dart';
+import 'package:outabout/features/activity_detail/widgets/activity_record_section.dart';
+import 'package:outabout/features/home/home_providers.dart';
 import 'package:outabout/features/onboarding/widgets/progress_dots.dart';
+import 'package:outabout/features/outcomes/outcome_providers.dart';
 
 void main() {
   Widget host({required bool reduceMotion, required Widget child}) {
@@ -89,13 +93,13 @@ void main() {
 
   group('entrance animations', () {
     Widget subject(bool reduceMotion) => host(
-          reduceMotion: reduceMotion,
-          child: Builder(
-            builder: (context) => const Text('Hello')
-                .animateSafely(context)
-                .fadeIn(duration: const Duration(seconds: 1)),
-          ),
-        );
+      reduceMotion: reduceMotion,
+      child: Builder(
+        builder: (context) => const Text(
+          'Hello',
+        ).animateSafely(context).fadeIn(duration: const Duration(seconds: 1)),
+      ),
+    );
 
     // Scoped to the Text: MaterialApp puts its own FadeTransition on the
     // route, and it is already complete by the first frame.
@@ -111,8 +115,9 @@ void main() {
         .opacity
         .value;
 
-    testWidgets('are fully visible on the first frame when reduced',
-        (tester) async {
+    testWidgets('are fully visible on the first frame when reduced', (
+      tester,
+    ) async {
       await tester.pumpWidget(subject(true));
       await tester.pump();
 
@@ -138,15 +143,98 @@ void main() {
     });
   });
 
+  group('the activity record', () {
+    final rows = [
+      for (final day in ['21', '22', '23'])
+        ActivityDayOutcome(
+          userId: 'u',
+          activityId: 'act-1',
+          localDate: '2026-08-$day',
+          outcome: DayOutcome.done,
+          answeredAt: DateTime.utc(2026, 8, int.parse(day), 18),
+        ),
+    ];
+
+    Widget recordHost({required bool reduceMotion}) => ProviderScope(
+      overrides: [
+        weatherThemeProvider.overrideWith(
+          (ref) => WeatherThemeNotifier(WeatherTheme.sunny),
+        ),
+        weatherThemeColorsProvider.overrideWithValue(WeatherThemeColors.sunny),
+        nowProvider.overrideWithValue(() => DateTime(2026, 8, 23, 12)),
+        activityOutcomesProvider('act-1').overrideWith((ref) async => rows),
+      ],
+      child: MaterialApp(
+        home: MediaQuery(
+          data: MediaQueryData(disableAnimations: reduceMotion),
+          child: const Scaffold(
+            body: SingleChildScrollView(
+              child: ActivityRecordSection(
+                activityId: 'act-1',
+                activityName: 'Morning trail run',
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    testWidgets('shows its final numbers on the first frame when reduced', (
+      tester,
+    ) async {
+      await tester.pumpWidget(recordHost(reduceMotion: true));
+      // Enough pumps to resolve the history, and not one more: the counters
+      // must already be at their end value rather than counting up to it.
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('3'), findsNWidgets(3)); // streak, best, total
+      expect(find.text('100%'), findsOneWidget);
+
+      // Drained after the assertions, not before: flutter_animate leaves a
+      // zero-duration timer even when it is pinned at its end state, and the
+      // binding fails the test on a pending one.
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('counts up when motion is allowed', (tester) async {
+      await tester.pumpWidget(recordHost(reduceMotion: false));
+      await tester.pump();
+      await tester.pump();
+
+      // Mid-tween, so the end value is not on screen yet.
+      expect(find.text('100%'), findsNothing);
+
+      await tester.pumpAndSettle();
+      expect(find.text('100%'), findsOneWidget);
+    });
+
+    testWidgets('heat map cells are all present on the first frame when '
+        'reduced', (tester) async {
+      await tester.pumpWidget(recordHost(reduceMotion: true));
+      await tester.pump();
+      await tester.pump();
+
+      // The staggered settle-in must not leave cells invisible for a user who
+      // asked for less motion — animateSafely pins the chain at its end.
+      expect(
+        find.bySemanticsLabel(RegExp('conditions matched, you went')),
+        findsNWidgets(3),
+      );
+
+      await tester.pumpAndSettle();
+    });
+  });
+
   group('MotionSafeShimmer', () {
     Widget subject(bool reduceMotion) => host(
-          reduceMotion: reduceMotion,
-          child: MotionSafeShimmer(
-            baseColor: WeatherThemeColors.sunny.surface,
-            highlightColor: WeatherThemeColors.sunny.divider,
-            child: const SizedBox(width: 100, height: 20),
-          ),
-        );
+      reduceMotion: reduceMotion,
+      child: MotionSafeShimmer(
+        baseColor: WeatherThemeColors.sunny.surface,
+        highlightColor: WeatherThemeColors.sunny.divider,
+        child: const SizedBox(width: 100, height: 20),
+      ),
+    );
 
     testWidgets('drops the sweep when motion is reduced', (tester) async {
       await tester.pumpWidget(subject(true));
@@ -166,13 +254,11 @@ void main() {
   });
 
   group('ProgressDots', () {
-    testWidgets('announces the step and holds still when reduced',
-        (tester) async {
+    testWidgets('announces the step and holds still when reduced', (
+      tester,
+    ) async {
       await tester.pumpWidget(
-        host(
-          reduceMotion: true,
-          child: const ProgressDots(currentPage: 2),
-        ),
+        host(reduceMotion: true, child: const ProgressDots(currentPage: 2)),
       );
       await tester.pump();
       final handle = tester.ensureSemantics();

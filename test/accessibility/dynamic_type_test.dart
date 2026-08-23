@@ -5,6 +5,9 @@ import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:outabout/core/theme.dart';
+import 'package:outabout/data/models/activity_day_outcome.dart';
+import 'package:outabout/features/activity_detail/widgets/activity_record_section.dart';
+import 'package:outabout/features/outcomes/outcome_providers.dart';
 import 'package:outabout/core/weather_theme_provider.dart';
 import 'package:outabout/data/models/condition_profile.dart';
 import 'package:outabout/data/models/activity.dart';
@@ -49,6 +52,66 @@ void main() {
     final errors = tester.takeException();
     expect(errors, isNull, reason: 'overflowed at textScaler ${scale}x');
   }
+
+  group('the activity record survives the accessibility text sizes', () {
+    // A mixed history, so every cell state and every stat is on screen.
+    final rows = [
+      for (var day = 1; day <= 20; day++)
+        ActivityDayOutcome(
+          userId: 'u',
+          activityId: 'act-1',
+          localDate: '2026-08-${day.toString().padLeft(2, '0')}',
+          outcome: day.isEven ? DayOutcome.done : DayOutcome.skipped,
+          answeredAt: DateTime.utc(2026, 8, day, 18),
+        ),
+      const ActivityDayOutcome(
+        userId: 'u',
+        activityId: 'act-1',
+        localDate: '2026-08-22',
+      ),
+    ];
+
+    for (final scale in _scales) {
+      testWidgets('stats and heat map at ${scale}x', (tester) async {
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              weatherThemeProvider.overrideWith(
+                (ref) => WeatherThemeNotifier(WeatherTheme.sunny),
+              ),
+              weatherThemeColorsProvider.overrideWithValue(
+                WeatherThemeColors.sunny,
+              ),
+              nowProvider.overrideWithValue(() => DateTime(2026, 8, 23, 12)),
+              activityOutcomesProvider(
+                'act-1',
+              ).overrideWith((ref) async => rows),
+            ],
+            child: MaterialApp(
+              home: MediaQuery(
+                data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+                child: const Scaffold(
+                  body: SingleChildScrollView(
+                    child: ActivityRecordSection(
+                      activityId: 'act-1',
+                      activityName: 'Morning trail run',
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expectNoOverflow(tester, scale);
+        // The positive half: the section actually rendered rather than
+        // taking an early-return empty branch.
+        expect(find.text('Your record'), findsOneWidget);
+        expect(find.text('Current streak'), findsOneWidget);
+      });
+    }
+  });
 
   _scheduleTests();
 

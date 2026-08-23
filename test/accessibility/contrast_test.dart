@@ -4,6 +4,8 @@ import 'dart:ui';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:outabout/core/theme.dart';
+import 'package:outabout/features/activity_detail/widgets/activity_record_section.dart';
+import 'package:outabout/features/outcomes/outcome_stats.dart';
 import 'package:outabout/features/weather_scene/weather_scene_spec.dart';
 
 /// WCAG 2.1 relative luminance.
@@ -207,6 +209,51 @@ void main() {
           contrast(c.primaryInteractive, c.cardBackground),
           greaterThanOrEqualTo(_aaLarge),
           reason: '$name UI indicator on a card',
+        );
+      });
+    });
+  });
+
+  group('heat map cells', () {
+    // Each cell is a small non-text block whose colour *is* the information.
+    // WCAG treats that as a graphical object: 3:1 against what surrounds it.
+    palettes.forEach((name, c) {
+      test('$name completed and missed cells are distinguishable', () {
+        final done = heatMapFill(OutcomeDayState.done, c);
+        final skipped = over(c.textSecondary, 0.35, c.cardBackground);
+
+        expect(
+          contrast(done, c.cardBackground),
+          greaterThanOrEqualTo(_aaLarge),
+          reason: '$name: a completed day must read against the card',
+        );
+        expect(
+          contrast(done, skipped),
+          greaterThanOrEqualTo(1.5),
+          reason: '$name: went and did-not-go must not look alike',
+        );
+      });
+
+      test('$name outlined cells are visible against the card', () {
+        // Pending and expired days are drawn as an outline only, so this one
+        // colour carries the whole cell — and a pending cell is tappable, so
+        // it has to be findable, not merely present.
+        expect(
+          contrast(
+            over(c.textSecondary, 0.6, c.cardBackground),
+            c.cardBackground,
+          ),
+          greaterThanOrEqualTo(2.0),
+          reason: '$name: an unanswered day must still be findable',
+        );
+      });
+
+      test('$name the streak figure clears AA as large text', () {
+        // displayMedium at 28px, drawn in primaryInteractive on the card.
+        expect(
+          contrast(c.primaryInteractive, c.cardBackground),
+          greaterThanOrEqualTo(_aaLarge),
+          reason: '$name: the emphasised streak number',
         );
       });
     });
