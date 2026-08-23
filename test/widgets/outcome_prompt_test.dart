@@ -139,7 +139,7 @@ void main() {
     await tester.pumpWidget(harness(now: DateTime(2026, 8, 23, 18)));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Dismiss'));
+    await tester.tap(find.byTooltip(RegExp('^Dismiss')));
     await tester.pumpAndSettle();
 
     // A dismissal is not an outcome — recording one either way would be a lie
@@ -199,7 +199,7 @@ void main() {
     }
 
     expect(
-      tester.getSize(find.byTooltip('Dismiss')).height,
+      tester.getSize(find.byTooltip(RegExp('^Dismiss'))).height,
       greaterThanOrEqualTo(48.0),
     );
   });

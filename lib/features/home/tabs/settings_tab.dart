@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -70,7 +71,7 @@ class SettingsTab extends ConsumerWidget {
                           'Enable location',
                           style: OutAboutTypography.labelLarge(
                             colors,
-                          ).copyWith(color: colors.primary),
+                          ).copyWith(color: colors.primaryInteractive),
                         ),
                       ),
                     )
@@ -208,6 +209,8 @@ class _SettingsRow extends StatelessWidget {
     required this.label,
     this.trailing,
     this.onTap,
+    this.semanticValue,
+    this.semanticHint,
     required this.colors,
   });
 
@@ -215,11 +218,21 @@ class _SettingsRow extends StatelessWidget {
   final String label;
   final Widget? trailing;
   final VoidCallback? onTap;
+
+  /// The row's current setting, spoken as a value rather than merged in as
+  /// stray trailing text.
+  final String? semanticValue;
+
+  /// What tapping the row will do. Rows that cycle a setting look identical
+  /// to rows that open something, and the difference matters before you
+  /// commit to a tap.
+  final String? semanticHint;
+
   final WeatherThemeColors colors;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    final row = InkWell(
       onTap: onTap,
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 48),
@@ -231,7 +244,9 @@ class _SettingsRow extends StatelessWidget {
           child: Row(
             children: [
               if (icon != null) ...[
-                Icon(icon, size: 22, color: colors.textSecondary),
+                ExcludeSemantics(
+                  child: Icon(icon, size: 22, color: colors.textSecondary),
+                ),
                 const SizedBox(width: OutAboutSpacing.sm),
               ],
               Expanded(
@@ -240,12 +255,19 @@ class _SettingsRow extends StatelessWidget {
                   style: OutAboutTypography.bodyMedium(colors),
                 ),
               ),
-              ?trailing,
+              // When the row states a semantic value, the trailing widget
+              // is that value drawn — announcing both says it twice.
+              if (trailing case final t?)
+                semanticValue == null ? t : ExcludeSemantics(child: t),
             ],
           ),
         ),
       ),
     );
+
+    if (semanticValue == null && semanticHint == null) return row;
+
+    return Semantics(value: semanticValue, hint: semanticHint, child: row);
   }
 }
 
@@ -279,7 +301,7 @@ class _ProfileRow extends StatelessWidget {
                 initial,
                 style: OutAboutTypography.headingMedium(
                   colors,
-                ).copyWith(color: colors.primary),
+                ).copyWith(color: colors.primaryInteractive),
               ),
             ),
           ),
@@ -319,49 +341,58 @@ class _ThemeOverrideSelector extends ConsumerWidget {
       children: options.map((option) {
         final isActive = option.theme == currentOverride;
 
-        return GestureDetector(
-          onTap: () {
-            ref
-                .read(userThemeOverrideProvider.notifier)
-                .setOverride(option.theme);
-            OutAboutHaptics.onConditionToggle();
-            final themeName = option.theme?.name ?? 'adaptive';
-            ref
-                .read(behavioralEventServiceProvider)
-                .log('theme_override_set', extra: {'theme': themeName});
-            ref
-                .read(behavioralEventServiceProvider)
-                .log(
-                  'settings_changed',
-                  extra: {'setting': 'theme_override', 'new_value': themeName},
-                );
-          },
-          child: Semantics(
-            label:
-                'Theme: ${option.label}'
-                '${isActive ? ', selected' : ''}',
-            button: true,
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: OutAboutSpacing.sm,
-                vertical: OutAboutSpacing.xs,
-              ),
-              decoration: BoxDecoration(
-                color: isActive ? colors.primary : colors.surface,
-                borderRadius: BorderRadius.circular(OutAboutRadius.full),
-                border: isActive ? null : Border.all(color: colors.divider),
-              ),
-              child: Text(
-                option.label,
-                style: OutAboutTypography.labelSmall(colors).copyWith(
-                  color: isActive
-                      ? (WeatherThemeColors.forTheme(
-                                  ref.watch(weatherThemeProvider),
-                                ).background ==
-                                colors.background
-                            ? colors.cardBackground
-                            : Colors.white)
-                      : colors.text,
+        void choose() {
+          ref
+              .read(userThemeOverrideProvider.notifier)
+              .setOverride(option.theme);
+          OutAboutHaptics.onConditionToggle();
+          final themeName = option.theme?.name ?? 'adaptive';
+          ref
+              .read(behavioralEventServiceProvider)
+              .log('theme_override_set', extra: {'theme': themeName});
+          ref
+              .read(behavioralEventServiceProvider)
+              .log(
+                'settings_changed',
+                extra: {'setting': 'theme_override', 'new_value': themeName},
+              );
+        }
+
+        return Semantics(
+          button: true,
+          selected: isActive,
+          label: 'Theme: ${option.label}',
+          // The pill's own Text merges in otherwise, and VoiceOver says the
+          // theme name twice.
+          excludeSemantics: true,
+          // Declared here because the GestureDetector below is excluded from
+          // semantics; without it the node is a button announcing no action.
+          onTap: choose,
+          child: GestureDetector(
+            excludeFromSemantics: true,
+            onTap: choose,
+            // The pill itself is an 11pt label with 4pt of vertical padding —
+            // 24pt tall as measured. The tap target is declared around it.
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 48),
+              child: Center(
+                widthFactor: 1,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: OutAboutSpacing.md,
+                    vertical: OutAboutSpacing.sm,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isActive ? colors.primary : colors.surface,
+                    borderRadius: BorderRadius.circular(OutAboutRadius.full),
+                    border: isActive ? null : Border.all(color: colors.divider),
+                  ),
+                  child: Text(
+                    option.label,
+                    style: OutAboutTypography.labelSmall(colors).copyWith(
+                      color: isActive ? colors.onPrimary : colors.text,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -389,6 +420,12 @@ class _TemperatureUnitRow extends ConsumerWidget {
     return _SettingsRow(
       icon: Icons.thermostat_outlined,
       label: 'Temperature unit',
+      // The row is an InkWell, so it already reads as a button; what it does
+      // not say is what tapping it changes to.
+      semanticValue: currentUnit == 'F' ? 'Fahrenheit' : 'Celsius',
+      semanticHint: currentUnit == 'F'
+          ? 'Switches to Celsius'
+          : 'Switches to Fahrenheit',
       trailing: Text(
         '\u00B0$currentUnit',
         style: OutAboutTypography.bodyMedium(
@@ -440,6 +477,10 @@ class _ScheduleLayoutRow extends ConsumerWidget {
     return _SettingsRow(
       icon: Icons.view_agenda_outlined,
       label: 'Schedule layout',
+      semanticValue: label,
+      semanticHint: layout == ScheduleLayout.dayFirst
+          ? 'Switches to activity-first'
+          : 'Switches to day-first',
       trailing: Text(
         label,
         style: OutAboutTypography.bodyMedium(
@@ -639,9 +680,30 @@ class _DeleteAccountDialogState extends ConsumerState<_DeleteAccountDialog> {
   bool _isDeleting = false;
   String? _errorMessage;
 
+  /// Tracks the last announced state so the arming announcement fires on the
+  /// transition rather than on every keystroke.
+  bool _announcedArmed = false;
+
   /// Exact match — not trimmed, not case-insensitive. This is deliberate
   /// friction on an irreversible action.
   bool get _canConfirm => _controller.text == _confirmationWord;
+
+  /// Says out loud that the confirm button has just become usable.
+  ///
+  /// Enabling a control is a silent event: VoiceOver re-reads a node only when
+  /// focus moves to it, and focus is in the text field. Without this the user
+  /// types the word and nothing at all happens.
+  void _announceArmedState() {
+    if (_canConfirm == _announcedArmed) return;
+    _announcedArmed = _canConfirm;
+    SemanticsService.sendAnnouncement(
+      View.of(context),
+      _canConfirm
+          ? 'Delete Account button is now enabled.'
+          : 'Delete Account button is disabled.',
+      Directionality.of(context),
+    );
+  }
 
   @override
   void dispose() {
@@ -686,6 +748,10 @@ class _DeleteAccountDialogState extends ConsumerState<_DeleteAccountDialog> {
 
     return AlertDialog(
       backgroundColor: colors.cardBackground,
+      // A long warning, a field and two buttons: without this the dialog
+      // overflows at the accessibility text sizes and the confirm control
+      // goes off-screen.
+      scrollable: true,
       title: Text(
         'Delete account?',
         style: OutAboutTypography.headingMedium(colors),
@@ -708,6 +774,7 @@ class _DeleteAccountDialogState extends ConsumerState<_DeleteAccountDialog> {
           const SizedBox(height: OutAboutSpacing.sm),
           Semantics(
             label: 'Type $_confirmationWord to enable deletion',
+            textField: true,
             child: TextField(
               controller: _controller,
               enabled: !_isDeleting,
@@ -718,21 +785,27 @@ class _DeleteAccountDialogState extends ConsumerState<_DeleteAccountDialog> {
               decoration: InputDecoration(
                 hintText: _confirmationWord,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(
-                    OutAboutRadius.buttons,
-                  ),
+                  borderRadius: BorderRadius.circular(OutAboutRadius.buttons),
                 ),
               ),
-              onChanged: (_) => setState(() {}),
+              onChanged: (_) {
+                setState(() {});
+                _announceArmedState();
+              },
             ),
           ),
           if (_errorMessage != null) ...[
             const SizedBox(height: OutAboutSpacing.sm),
-            Text(
-              _errorMessage!,
-              style: OutAboutTypography.bodySmall(
-                colors,
-              ).copyWith(color: OutAboutColors.errorColor),
+            // A live region: the failure appears while focus is still on the
+            // confirm button, so nothing would re-read the dialog otherwise.
+            Semantics(
+              liveRegion: true,
+              child: Text(
+                _errorMessage!,
+                style: OutAboutTypography.bodySmall(
+                  colors,
+                ).copyWith(color: OutAboutColors.errorColor),
+              ),
             ),
           ],
         ],
@@ -740,9 +813,7 @@ class _DeleteAccountDialogState extends ConsumerState<_DeleteAccountDialog> {
       actions: [
         TextButton(
           onPressed: _isDeleting ? null : () => Navigator.of(context).pop(),
-          style: TextButton.styleFrom(
-            minimumSize: const Size(64, 48),
-          ),
+          style: TextButton.styleFrom(minimumSize: const Size(64, 48)),
           child: Text(
             'Cancel',
             style: OutAboutTypography.labelLarge(
@@ -752,9 +823,7 @@ class _DeleteAccountDialogState extends ConsumerState<_DeleteAccountDialog> {
         ),
         TextButton(
           onPressed: _canConfirm && !_isDeleting ? _handleDelete : null,
-          style: TextButton.styleFrom(
-            minimumSize: const Size(64, 48),
-          ),
+          style: TextButton.styleFrom(minimumSize: const Size(64, 48)),
           child: _isDeleting
               ? SizedBox(
                   width: 20,
@@ -764,12 +833,24 @@ class _DeleteAccountDialogState extends ConsumerState<_DeleteAccountDialog> {
                     color: OutAboutColors.errorColor,
                   ),
                 )
-              : Text(
-                  'Delete Account',
-                  style: OutAboutTypography.labelLarge(colors).copyWith(
-                    color: _canConfirm
-                        ? OutAboutColors.errorColor
-                        : colors.textSecondary,
+              // The hint goes *inside* the button so it merges into the
+              // button's own node. Wrapped around the outside it has no
+              // container of its own, floats up to the AlertDialog, and the
+              // dialog announces "Dimmed. Type DELETE..." on entry while the
+              // button itself says nothing about why it is dimmed.
+              : Semantics(
+                  hint: _canConfirm
+                      ? 'Permanently deletes your account and all of your '
+                            'data. This cannot be undone'
+                      : 'Dimmed. Type $_confirmationWord in the field above '
+                            'to enable',
+                  child: Text(
+                    'Delete Account',
+                    style: OutAboutTypography.labelLarge(colors).copyWith(
+                      color: _canConfirm
+                          ? OutAboutColors.errorColor
+                          : colors.textSecondary,
+                    ),
                   ),
                 ),
         ),
@@ -823,6 +904,11 @@ class _LegalLinkRow extends ConsumerWidget {
       button: true,
       link: true,
       label: '$label, opens in browser',
+      // The row repeats the label inside; excluding it keeps the
+      // announcement to one reading. The tap is declared here because the
+      // excluded subtree can no longer contribute the action.
+      excludeSemantics: true,
+      onTap: () => _open(context, ref),
       child: _SettingsRow(
         icon: icon,
         label: label,

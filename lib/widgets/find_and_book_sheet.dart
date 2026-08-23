@@ -27,6 +27,13 @@ Future<void> showFindAndBookSheet(
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: colors.cardBackground,
+    // The drag handle is the sheet's only dismiss affordance, and it carries
+    // its own "Dismiss" semantics — without it a screen-reader user has no
+    // announced way out but the escape gesture.
+    showDragHandle: true,
+    // Otherwise the sheet is capped at half the screen and the provider list
+    // is unreachable at the accessibility text sizes.
+    isScrollControlled: true,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(
         top: Radius.circular(OutAboutRadius.bottomSheet),
@@ -73,7 +80,9 @@ class _FindAndBookSheet extends ConsumerWidget {
     // Logged before launching, and not awaited on the launch result: the
     // intent is the signal. Whether the handset had a browser to hand is not
     // a fact about the user's behaviour.
-    await ref.read(behavioralEventServiceProvider).log(
+    await ref
+        .read(behavioralEventServiceProvider)
+        .log(
           'affiliate_link_clicked',
           extra: {
             'provider': provider.name,
@@ -113,8 +122,8 @@ class _FindAndBookSheet extends ConsumerWidget {
     );
 
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: OutAboutSpacing.md),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.only(bottom: OutAboutSpacing.md),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -123,9 +132,12 @@ class _FindAndBookSheet extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(
                 horizontal: OutAboutSpacing.md,
               ),
-              child: Text(
-                'Find & book',
-                style: OutAboutTypography.headingMedium(colors),
+              child: Semantics(
+                header: true,
+                child: Text(
+                  'Find & book',
+                  style: OutAboutTypography.headingMedium(colors),
+                ),
               ),
             ),
             const SizedBox(height: OutAboutSpacing.xs),
@@ -168,7 +180,12 @@ class _ProviderRow extends StatelessWidget {
     return Semantics(
       button: true,
       link: true,
-      label: '${provider.label}, opens in browser',
+      // The row's own two Texts would merge into this node and repeat the
+      // provider name; excluding them and naming both parts here keeps the
+      // announcement in the order the row reads.
+      label: '${provider.label}. ${provider.subtitle}. Opens in browser',
+      excludeSemantics: true,
+      onTap: onTap,
       child: InkWell(
         onTap: onTap,
         child: Container(

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shimmer/shimmer.dart';
 
+import '../../../core/motion.dart';
 import '../../../core/router.dart';
 import '../../../core/theme.dart';
 import '../../../core/weather_theme_provider.dart';
@@ -28,6 +28,17 @@ import '../home_providers.dart';
 /// deviation from the background. Measured on all five palettes; see the
 /// branch notes.
 const double _scheduleSurfaceOpacity = 0.90;
+
+/// The surface every piece of schedule content sits on.
+///
+/// Nothing in this tab may draw text straight onto the scene. Measured against
+/// the worst-case scene stack under the lightest part of the veil, bare
+/// `textSecondary` reaches 1.45:1 on night and 1.95:1 on overcast; the same
+/// text on this surface clears 4.98:1 in every palette.
+BoxDecoration _sceneSurface(WeatherThemeColors colors) => BoxDecoration(
+  color: colors.surface.withValues(alpha: _scheduleSurfaceOpacity),
+  borderRadius: BorderRadius.circular(OutAboutRadius.cards),
+);
 
 // -------------------------------------------------------------------
 // Unit conversion helpers
@@ -224,8 +235,8 @@ class _ScheduleTabState extends ConsumerState<ScheduleTab> {
             backgroundColor: colors.primary,
             onPressed: () => context.push(AppRoutes.addActivity),
             tooltip: 'Add activity',
-            child: Icon(Icons.add, color: isDark ? Colors.black : Colors.white),
-          ).animate().scale(
+            child: Icon(Icons.add, color: colors.onPrimary),
+          ).animateSafely(context).scale(
             begin: const Offset(0.8, 0.8),
             end: const Offset(1.0, 1.0),
             duration: OutAboutAnimations.standardDuration,
@@ -238,7 +249,7 @@ class _ScheduleTabState extends ConsumerState<ScheduleTab> {
           // user switches tabs.
           const Positioned.fill(child: WeatherSceneBackground()),
           RefreshIndicator(
-            color: colors.primary,
+            color: colors.primaryInteractive,
             backgroundColor: colors.surface,
             onRefresh: _onRefresh,
             child: scheduleAsync.when(
@@ -379,7 +390,7 @@ class _DaySection extends StatelessWidget {
             ],
           ),
         )
-        .animate()
+        .animateSafely(context)
         .fadeIn(
           delay: Duration(milliseconds: sectionIndex * 80),
           duration: OutAboutAnimations.standardDuration,
@@ -429,13 +440,15 @@ class _DayHeader extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.all(OutAboutSpacing.md),
-      decoration: BoxDecoration(
-        color: colors.surface.withValues(alpha: _scheduleSurfaceOpacity),
-        borderRadius: BorderRadius.circular(OutAboutRadius.cards),
-      ),
+      decoration: _sceneSurface(colors),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(iconData.icon, size: 32, color: iconData.tint),
+          // The condition name is spelled out beside it, so the icon is
+          // supplemental and its tint need not carry the meaning alone.
+          ExcludeSemantics(
+            child: Icon(iconData.icon, size: 32, color: iconData.tint),
+          ),
           const SizedBox(width: OutAboutSpacing.sm),
           Expanded(
             child: Column(
@@ -444,43 +457,52 @@ class _DayHeader extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        _dayLabel(forecast.date, dayIndex),
-                        style: OutAboutTypography.headingSmall(colors),
+                      child: Semantics(
+                        header: true,
+                        child: Text(
+                          _dayLabel(forecast.date, dayIndex),
+                          style: OutAboutTypography.headingSmall(colors),
+                        ),
                       ),
                     ),
-                    Text(
-                      iconData.name,
-                      style: OutAboutTypography.bodySmall(colors),
+                    const SizedBox(width: OutAboutSpacing.sm),
+                    Flexible(
+                      child: Text(
+                        iconData.name,
+                        style: OutAboutTypography.bodySmall(colors),
+                        textAlign: TextAlign.end,
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: OutAboutSpacing.xs),
-                Row(
+                // A Wrap, not a Row: at the accessibility text sizes the
+                // temperature range alone is wider than the card, and a Row
+                // would overflow rather than reflow.
+                Wrap(
+                  spacing: OutAboutSpacing.sm,
+                  runSpacing: OutAboutSpacing.xs,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Expanded(
-                      child: Text(
-                        'H: $highTemp$tempSuffix'
-                        ' / L: $lowTemp$tempSuffix',
-                        style: OutAboutTypography.bodyMedium(colors),
-                      ),
-                    ),
-                    Icon(
-                      Icons.water_drop_outlined,
-                      size: 14,
-                      color: colors.textSecondary,
-                    ),
-                    const SizedBox(width: OutAboutSpacing.xs),
                     Text(
-                      '${forecast.precipitationProbability.round()}%',
-                      style: OutAboutTypography.labelSmall(colors),
+                      'H: $highTemp$tempSuffix'
+                      ' / L: $lowTemp$tempSuffix',
+                      style: OutAboutTypography.bodyMedium(colors),
                     ),
-                    const SizedBox(width: OutAboutSpacing.sm),
-                    Icon(Icons.air, size: 14, color: colors.textSecondary),
-                    const SizedBox(width: OutAboutSpacing.xs),
-                    Text(
-                      windDisplay,
-                      style: OutAboutTypography.labelSmall(colors),
+                    _DayHeaderStat(
+                      icon: Icons.water_drop_outlined,
+                      label: '${forecast.precipitationProbability.round()}%',
+                      semanticLabel:
+                          'Chance of precipitation '
+                          '${forecast.precipitationProbability.round()} '
+                          'percent',
+                      colors: colors,
+                    ),
+                    _DayHeaderStat(
+                      icon: Icons.air,
+                      label: windDisplay,
+                      semanticLabel: 'Wind up to $windDisplay',
+                      colors: colors,
                     ),
                   ],
                 ),
@@ -488,6 +510,42 @@ class _DayHeader extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// One icon-plus-value pair in the day header.
+///
+/// The icon tints (`OutAboutColors.rainy`, `.cloudy`) sit at 1.7-2.8:1 on a
+/// light card, so each pair carries a spoken label rather than leaving the
+/// glyph to say what the number means.
+class _DayHeaderStat extends StatelessWidget {
+  const _DayHeaderStat({
+    required this.icon,
+    required this.label,
+    required this.semanticLabel,
+    required this.colors,
+  });
+
+  final IconData icon;
+  final String label;
+  final String semanticLabel;
+  final WeatherThemeColors colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: semanticLabel,
+      child: ExcludeSemantics(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: colors.textSecondary),
+            const SizedBox(width: OutAboutSpacing.xs),
+            Text(label, style: OutAboutTypography.labelSmall(colors)),
+          ],
+        ),
       ),
     );
   }
@@ -526,20 +584,37 @@ class _ScheduleActivityCard extends ConsumerWidget {
         .map((c) => c.name)
         .toList();
 
+    void openDetail() {
+      if (activity.id != null) {
+        context.push('/activity/${activity.id}');
+      }
+    }
+
+    // `explicitChildNodes` is what keeps this card from collapsing into one
+    // node. The subtree holds three further controls — Find & book, and the
+    // outcome prompt's Yes / Not today / Dismiss — and without it they merge
+    // into the card's own button and stop being reachable.
+    //
+    // The tap action is declared on this node rather than inherited from the
+    // GestureDetector below, which is excluded from semantics for the same
+    // reason: two overlapping tap nodes read as two buttons.
     return Semantics(
-          label: 'Activity: ${activity.name}',
+          container: true,
+          explicitChildNodes: true,
           button: true,
+          label:
+              'Activity: ${activity.name}, '
+              'conditions match ${_dayLabel(forecast.date, sectionIndex)}',
+          onTap: openDetail,
           child: GestureDetector(
-            onTap: () {
-              if (activity.id != null) {
-                context.push('/activity/${activity.id}');
-              }
-            },
+            excludeFromSemantics: true,
+            onTap: openDetail,
             child: Container(
               constraints: const BoxConstraints(minHeight: 48),
               decoration: BoxDecoration(
-                color: colors.cardBackground
-                    .withValues(alpha: _scheduleSurfaceOpacity),
+                color: colors.cardBackground.withValues(
+                  alpha: _scheduleSurfaceOpacity,
+                ),
                 borderRadius: BorderRadius.circular(OutAboutRadius.cards),
                 boxShadow: isDark
                     ? OutAboutShadows.cardDark
@@ -564,15 +639,16 @@ class _ScheduleActivityCard extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Padding(
-                            padding:
-                                const EdgeInsets.all(OutAboutSpacing.md),
+                            padding: const EdgeInsets.all(OutAboutSpacing.md),
                             child: Row(
                               children: [
                                 Expanded(
-                                  child: Text(
-                                    activity.name,
-                                    style: OutAboutTypography.bodyMedium(
-                                      colors,
+                                  child: ExcludeSemantics(
+                                    child: Text(
+                                      activity.name,
+                                      style: OutAboutTypography.bodyMedium(
+                                        colors,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -583,7 +659,7 @@ class _ScheduleActivityCard extends ConsumerWidget {
                                     icon: Icon(
                                       Icons.travel_explore,
                                       size: 20,
-                                      color: colors.primary,
+                                      color: colors.primaryInteractive,
                                     ),
                                     tooltip: 'Find & book',
                                     onPressed: () => showFindAndBookSheet(
@@ -596,9 +672,11 @@ class _ScheduleActivityCard extends ConsumerWidget {
                                     ),
                                   ),
                                 ),
-                                Icon(
-                                  Icons.chevron_right,
-                                  color: colors.textSecondary,
+                                ExcludeSemantics(
+                                  child: Icon(
+                                    Icons.chevron_right,
+                                    color: colors.textSecondary,
+                                  ),
                                 ),
                               ],
                             ),
@@ -621,7 +699,7 @@ class _ScheduleActivityCard extends ConsumerWidget {
             ),
           ),
         )
-        .animate()
+        .animateSafely(context)
         .fadeIn(
           delay: Duration(milliseconds: sectionIndex * 80 + cardIndex * 60),
           duration: OutAboutAnimations.standardDuration,
@@ -748,7 +826,7 @@ class _ActivitySection extends StatelessWidget {
             ],
           ),
         )
-        .animate()
+        .animateSafely(context)
         .fadeIn(
           delay: Duration(milliseconds: sectionIndex * 80),
           duration: OutAboutAnimations.standardDuration,
@@ -775,11 +853,15 @@ class _ActivityHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(OutAboutSpacing.md),
-      child: Text(
-        activity.name,
-        style: OutAboutTypography.headingSmall(colors),
+    return Semantics(
+      header: true,
+      child: Container(
+        padding: const EdgeInsets.all(OutAboutSpacing.md),
+        decoration: _sceneSurface(colors),
+        child: Text(
+          activity.name,
+          style: OutAboutTypography.headingSmall(colors),
+        ),
       ),
     );
   }
@@ -828,36 +910,53 @@ class _MatchingDayBadge extends StatelessWidget {
         : forecast.temperatureMin.round();
     final tempSuffix = temperatureUnit == 'F' ? '\u00B0' : '\u00B0';
 
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: OutAboutSpacing.sm,
-        vertical: OutAboutSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: colors.surface.withValues(alpha: _scheduleSurfaceOpacity),
-        borderRadius: BorderRadius.circular(OutAboutRadius.sm),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(iconData.icon, size: 16, color: iconData.tint),
-          const SizedBox(width: OutAboutSpacing.xs),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    // The weather icon is the only thing naming the condition here — unlike
+    // _DayHeader, no text sits beside it — so the label has to carry it.
+    return Semantics(
+      label:
+          '${_shortDayLabel(forecast.date, dayIndex)}, ${iconData.name}, '
+          'high $highTemp$tempSuffix, low $lowTemp$tempSuffix',
+      child: ExcludeSemantics(
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: OutAboutSpacing.sm,
+            vertical: OutAboutSpacing.xs,
+          ),
+          decoration: BoxDecoration(
+            color: colors.surface.withValues(alpha: _scheduleSurfaceOpacity),
+            borderRadius: BorderRadius.circular(OutAboutRadius.sm),
+          ),
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                _shortDayLabel(forecast.date, dayIndex),
-                style: OutAboutTypography.labelMedium(colors),
-              ),
-              Text(
-                '$highTemp$tempSuffix'
-                ' / $lowTemp$tempSuffix',
-                style: OutAboutTypography.labelSmall(colors),
+              Icon(iconData.icon, size: 16, color: iconData.tint),
+              const SizedBox(width: OutAboutSpacing.xs),
+              // Flexible, because the badge sits in a Wrap cell that is free
+              // to be narrower than the text wants at accessibility sizes.
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _shortDayLabel(forecast.date, dayIndex),
+                      style: OutAboutTypography.labelMedium(colors),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      '$highTemp$tempSuffix'
+                      ' / $lowTemp$tempSuffix',
+                      style: OutAboutTypography.labelSmall(colors),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -897,8 +996,10 @@ class _EmptyText extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = ref.watch(weatherThemeColorsProvider);
-    return Padding(
+    return Container(
+      margin: const EdgeInsets.only(top: OutAboutSpacing.sm),
       padding: const EdgeInsets.all(OutAboutSpacing.md),
+      decoration: _sceneSurface(colors),
       child: Text(text, style: OutAboutTypography.bodySmall(colors)),
     );
   }
@@ -920,8 +1021,10 @@ class _ScheduleEmptyState extends ConsumerWidget {
         SliverFillRemaining(
           hasScrollBody: false,
           child: Center(
-            child: Padding(
+            child: Container(
+              margin: const EdgeInsets.all(OutAboutSpacing.md),
               padding: const EdgeInsets.all(OutAboutSpacing.xl),
+              decoration: _sceneSurface(colors),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -956,7 +1059,7 @@ class _ScheduleEmptyState extends ConsumerWidget {
                 ],
               ),
             ),
-          ).animate().fadeIn(duration: OutAboutAnimations.standardDuration),
+          ).animateSafely(context).fadeIn(duration: OutAboutAnimations.standardDuration),
         ),
       ],
     );
@@ -981,7 +1084,7 @@ class _ScheduleShimmer extends StatelessWidget {
           sliver: SliverList(
             delegate: SliverChildListDelegate([
               for (int i = 0; i < 5; i++) ...[
-                Shimmer.fromColors(
+                MotionSafeShimmer(
                   baseColor: colors.surface,
                   highlightColor: colors.divider,
                   child: Container(

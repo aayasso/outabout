@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/motion.dart';
 import '../../../core/theme.dart';
 import '../../../core/weather_theme_provider.dart';
 import '../../../services/behavioral_event_service.dart';
@@ -84,7 +85,7 @@ class _BookingIntegrationsPageState
                     child: Text(
                       'Skip for Now',
                       style: OutAboutTypography.labelLarge(colors).copyWith(
-                        color: colors.primary,
+                        color: colors.primaryInteractive,
                       ),
                     ),
                   ),
@@ -101,7 +102,7 @@ class _BookingIntegrationsPageState
         ),
       ),
     )
-        .animate()
+        .animateSafely(context)
         .fadeIn(duration: OutAboutAnimations.standardDuration)
         .slideY(
           begin: 0.05,
@@ -138,7 +139,7 @@ class _PartnerCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(icon, color: colors.primary, size: 32),
+          Icon(icon, color: colors.primaryInteractive, size: 32),
           const SizedBox(width: OutAboutSpacing.md),
           Expanded(
             child: Text(name, style: OutAboutTypography.headingMedium(colors)),
@@ -148,7 +149,7 @@ class _PartnerCard extends StatelessWidget {
             child: Text(
               actionLabel,
               style: OutAboutTypography.labelLarge(colors).copyWith(
-                color: colors.primary,
+                color: colors.primaryInteractive,
               ),
             ),
           ),

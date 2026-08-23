@@ -1,120 +1,90 @@
 # Requirements -- Accessibility Audit
 # Created: 2026-05-19
-# Status: draft
+# Reconciled and executed: 2026-08-23
+# Status: complete
 
 ## Summary
 
-Audit and fix accessibility across the entire app to meet WCAG 2.1 AA
-standards. This covers tap targets, semantic labels, color contrast
-across all five weather themes, text scaling support, form field labels,
-and logical screen reader navigation order.
+Audit and fix accessibility across the app to WCAG 2.1 AA, plus the
+platform-specific expectations iOS adds: VoiceOver semantics, Dynamic Type
+at the accessibility sizes, and Reduce Motion.
 
-## User Stories
+## Reconciliation note (2026-08-23)
 
-### Primary flow
-- As a user with a screen reader, I want every interactive element to
-  have a meaningful label so that I can navigate the app independently.
-- As a user with low vision, I want sufficient color contrast on all
-  text and interactive elements across all weather themes.
+The 2026-05-19 draft was written before the schedule view, the animated
+weather scene, the Find & book sheet, the outcome prompt, account deletion
+and the shared condition form existed, and none of its fixes were ever
+applied. What survived reconciliation and what did not:
 
-### Secondary flows
-- As a user with motor impairments, I want all tappable elements to be
-  at least 48x48dp so that I can reliably tap them.
-- As a user who increases system text size, I want layouts to remain
-  functional at 1.5x text scale factor.
-- As a user with a screen reader, I want form fields to announce their
-  labels and hints so that I know what to enter.
+**Still open and now fixed.** Every contrast figure in the original
+`design.md` reproduced exactly against `lib/core/theme.dart` on 2026-08-23:
+sunny `primary` 1.92:1, overcast `primary` 2.46:1, snowy `primary` 1.66:1,
+overcast `textSecondary` 3.87:1, snowy `textSecondary` 4.14:1. The
+`primaryInteractive` token the draft designed did not exist in the code.
 
-### Edge cases
-- What happens when a theme has low contrast between textSecondary and
-  background? Adjust the specific color or add a contrast-safe fallback
-  for that text usage.
-- What happens when text scaling causes overflow? Adjust layouts to
-  accommodate -- use Flexible/Expanded, allow text wrapping, or cap
-  maxLines with ellipsis.
+**Stale, dropped.** The draft audits `today_tab.dart` and its
+`_WeatherSummaryCard`; the Today tab was replaced by `schedule_tab.dart` in
+commit `6f51462`. It also names two tap-target fixes on the morning time
+picker and the days-before stepper, both removed in commit `3d3e4f2`. All
+its line references predate commit `9cf60a1` and no longer resolve.
 
-## Acceptance Criteria
+**Never covered.** Everything listed under Scope below apart from the
+original five contrast findings.
 
-### Tap targets
-- [ ] Every IconButton, GestureDetector, InkWell, and tappable widget
-      has a minimum touch area of 48x48dp.
-- [ ] Audit all screens: TodayTab, ActivitiesTab, SettingsTab,
-      AddActivityScreen, ActivityDetailScreen, OnboardingScreen.
+## Scope
 
-### Semantics labels
-- [ ] Every icon-only button has a `tooltip` property.
-- [ ] Every interactive card (GestureDetector wrapping a card) has a
-      `Semantics` widget with a descriptive `label`.
-- [ ] The theme override selector chips have Semantics labels including
-      selected state. (Already exists -- verify.)
-- [ ] Activity cards include activity name and match status in
-      Semantics label. (Partially exists -- verify completeness.)
-- [ ] Condition section toggles have Semantics labels describing the
-      condition name and current state.
+Every current screen and interactive surface:
 
-### Color contrast (WCAG AA)
-- [ ] Normal text (under 18pt): 4.5:1 minimum contrast ratio against
-      its background, on all five themes.
-- [ ] Large text (18pt+ or 14pt bold): 3:1 minimum contrast ratio.
-- [ ] Interactive elements: 3:1 against adjacent colors.
-- [ ] Audit high-risk combinations:
-  - Sunny: `textSecondary` (#6B5B3E) on `background` (#FFF8EE)
-  - Snowy: `primary` (#90CAF9) on `background` (#F7F9FC)
-  - Any theme: disabled/muted text on card backgrounds
-- [ ] Document any color adjustments made.
+- Schedule tab, both layouts (`schedule_tab.dart`)
+- The animated weather scene behind it (`weather_scene/`)
+- Activities tab, category filter chips (`activities_tab.dart`)
+- Settings: theme override, temperature unit, schedule layout, legal links,
+  sign out, delete account and its type-DELETE dialog (`settings_tab.dart`)
+- Activity detail and Add activity
+- The shared condition form, including the two-option precipitation picker
+  (`features/shared/condition_profile_form.dart`)
+- Find & book sheet (`widgets/find_and_book_sheet.dart`)
+- "Did you go?" outcome prompt (`widgets/outcome_prompt.dart`)
+- Category chip picker and create-category dialog
+- Onboarding, all six pages, plus `ProgressDots`
 
-### Text scaling
-- [ ] App remains functional at `textScaleFactor` 1.5x on all screens.
-- [ ] No text overflow or layout breakage at 1.5x.
-- [ ] Sliders and compact UI elements gracefully handle enlarged text.
+## Acceptance criteria
 
-### Form fields
-- [ ] All TextField widgets have proper `labelText` or `hintText`.
-- [ ] TextFields use `InputDecoration` with `semanticCounterText` where
-      applicable (character counters).
+### Colour contrast
+- [x] Normal text (under 18px, or under 14px bold) at 4.5:1 in all five
+      palettes, against the **rendered** background — for the Schedule tab
+      that is `surface` at 0.90 over the graded veil over the scene, not the
+      flat token.
+- [x] Large text and non-text UI at 3:1.
+- [x] Ink on a `primary` fill at 4.5:1 (FAB, ElevatedButton, selected
+      segment, outcome chip, active theme chip, switch thumb).
+- [x] No text anywhere in the Schedule tab painted directly on the scene.
 
-### Screen reader navigation order
-- [ ] Tab order follows visual layout top-to-bottom, left-to-right on
-      all screens.
-- [ ] No orphaned focusable elements or focus traps.
-- [ ] Bottom navigation bar items are reachable and labeled.
+### VoiceOver
+- [x] Every interactive element has a label, and roles and states come from
+      the node rather than being spelled into the label text.
+- [x] No control announces a role it cannot perform: a node flagged
+      `isButton` carries a tap action.
+- [x] Nothing is announced twice — a container label and the text inside it
+      do not both reach the user.
+- [x] The weather scene contributes no semantics.
+- [x] Modals are escapable and carry a named dismiss control.
+- [x] The type-DELETE dialog: the destructive action states what it does and
+      why it is dimmed; arming it is announced; failures are a live region.
 
-## Screens Involved
+### Touch targets
+- [x] Every tappable control at least 44pt (project standard 48).
 
-- All screens in the app (comprehensive audit).
-- Primary focus on: TodayTab, ActivitiesTab, SettingsTab,
-  AddActivityScreen, ActivityDetailScreen.
+### Dynamic Type
+- [x] No overflow at `textScaler` 1.0, 1.5, 2.0 and 3.0 (AX5).
 
-## Data Requirements
+### Reduce Motion
+- [x] Every animation in the app honours the platform flag, not just the
+      weather scene: shimmer, entrance animations, route transitions, the
+      theme cross-fade, the condition cross-fade and the progress dots.
 
-- Supabase tables: none
-- New columns needed: none
-- Tomorrow.io fields needed: none
-- SharedPreferences keys: none
+## Out of scope
 
-## Weather Theme Considerations
-
-- Does this feature behave differently across themes? Yes -- contrast
-  ratios must be verified per theme. Dark themes (rainy, night) and
-  light themes (sunny, overcast, snowy) have different risk areas.
-
-## Dependencies
-
-- Should ship after Features 1-4 so the audit covers the category
-  picker chips, filter chips, empty states, and form validation UI.
-  Can technically run in parallel on the existing codebase, but a
-  second pass would be needed for new widgets.
-
-## Out of Scope
-
-- Full VoiceOver/TalkBack end-to-end testing (manual QA)
-- RTL language support
-- Dynamic type support beyond 1.5x
-- Custom accessibility themes or high-contrast mode
-
-## Open Questions
-
-- If Snowy theme's `primary` (#90CAF9) on `background` (#F7F9FC) fails
-  contrast for interactive elements, should we darken the primary for
-  snowy or add a border/underline? Recommendation: add a subtle border
-  for interactive elements on snowy theme.
+RTL layout; custom high-contrast themes; Switch Control and Voice Control
+beyond what the semantics tree already provides; audio transcription of
+VoiceOver speech (see `design.md`, Verification).

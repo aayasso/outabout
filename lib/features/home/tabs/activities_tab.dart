@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shimmer/shimmer.dart';
 
+import '../../../core/motion.dart';
 import '../../../core/router.dart';
 import '../../../core/theme.dart';
 import '../../../core/weather_theme_provider.dart';
@@ -60,10 +60,10 @@ class _ActivitiesTabState
         tooltip: 'Add activity',
         child: Icon(
           Icons.add,
-          color: isDark ? Colors.black : Colors.white,
+          color: colors.onPrimary,
         ),
       )
-          .animate()
+          .animateSafely(context)
           .scale(
             begin: const Offset(0.8, 0.8),
             end: const Offset(1.0, 1.0),
@@ -262,13 +262,7 @@ class _CategoryFilterChipRow extends ConsumerWidget {
                 label: 'All',
                 isSelected: isAllSelected,
                 selectedColor: colors.primary,
-                selectedTextColor:
-                    ThemeData.estimateBrightnessForColor(
-                              colors.primary,
-                            ) ==
-                            Brightness.dark
-                        ? Colors.white
-                        : Colors.black,
+                selectedTextColor: colors.onPrimary,
                 colors: colors,
                 onTap: () {
                   OutAboutHaptics
@@ -292,9 +286,9 @@ class _CategoryFilterChipRow extends ConsumerWidget {
                     selectedColor: colors.primary
                         .withValues(alpha: 0.15),
                     selectedBorderColor:
-                        colors.primary,
+                        colors.primaryInteractive,
                     selectedTextColor:
-                        colors.primary,
+                        colors.primaryInteractive,
                     colors: colors,
                     onTap: () {
                       OutAboutHaptics
@@ -405,7 +399,7 @@ class _ChipRowShimmer extends StatelessWidget {
                   ? 0
                   : OutAboutSpacing.sm,
             ),
-            child: Shimmer.fromColors(
+            child: MotionSafeShimmer(
               baseColor: colors.surface,
               highlightColor: colors.divider,
               child: Container(
@@ -477,7 +471,7 @@ class _FilteredEmptyState extends StatelessWidget {
                     OutAboutTypography.labelLarge(
                   colors,
                 ).copyWith(
-                  color: colors.primary,
+                  color: colors.primaryInteractive,
                 ),
               ),
             ),
@@ -485,7 +479,7 @@ class _FilteredEmptyState extends StatelessWidget {
         ),
       ),
     )
-        .animate()
+        .animateSafely(context)
         .fadeIn(
           duration:
               OutAboutAnimations.standardDuration,
@@ -628,7 +622,7 @@ class _ActivityListCard extends StatelessWidget {
         ),
       ),
     )
-        .animate()
+        .animateSafely(context)
         .fadeIn(
           delay: Duration(
             milliseconds: index * 60,
@@ -816,7 +810,7 @@ class _ActivitiesEmptyState extends ConsumerWidget {
           ],
         ),
       ),
-    ).animate().fadeIn(
+    ).animateSafely(context).fadeIn(
           duration:
               OutAboutAnimations.standardDuration,
         );
@@ -843,7 +837,7 @@ class _ActivitiesShimmer extends StatelessWidget {
           sliver: SliverList(
             delegate: SliverChildListDelegate([
               for (int i = 0; i < 4; i++) ...[
-                Shimmer.fromColors(
+                MotionSafeShimmer(
                   baseColor: colors.surface,
                   highlightColor: colors.divider,
                   child: Container(
@@ -914,7 +908,7 @@ class _ActivitiesErrorState extends ConsumerWidget {
                 'Try again',
                 style: OutAboutTypography.labelLarge(
                   colors,
-                ).copyWith(color: colors.primary),
+                ).copyWith(color: colors.primaryInteractive),
               ),
             ),
           ],

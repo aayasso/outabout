@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:weather_animation/weather_animation.dart';
 
+import '../../core/motion.dart';
 import '../../core/theme.dart';
 import '../../core/weather_theme_provider.dart';
 import 'night_sky.dart';
@@ -50,27 +51,12 @@ class _WeatherSceneBackgroundState extends ConsumerState<WeatherSceneBackground>
   @override
   void didChangeAccessibilityFeatures() => setState(() {});
 
-  /// Whether the platform is asking for less motion.
-  ///
-  /// iOS reports Reduce Motion as its own `reduceMotion` feature;
-  /// `MediaQuery.disableAnimations` carries only Android's "Remove animations"
-  /// and stays false on iOS however the accessibility setting is set. Reading
-  /// just the MediaQuery flag — the obvious choice — silently does nothing on
-  /// the platform this app ships to first.
-  bool _prefersReducedMotion(BuildContext context) {
-    final features =
-        WidgetsBinding.instance.platformDispatcher.accessibilityFeatures;
-    return features.reduceMotion ||
-        features.disableAnimations ||
-        MediaQuery.disableAnimationsOf(context);
-  }
-
   @override
   Widget build(BuildContext context) {
     final colors = ref.watch(weatherThemeColorsProvider);
     final spec = ref.watch(weatherSceneProvider);
     final isForeground = ref.watch(appIsForegroundProvider);
-    final reduceMotion = _prefersReducedMotion(context);
+    final reduceMotion = prefersReducedMotion(context);
 
     return RepaintBoundary(
       child: TickerMode(

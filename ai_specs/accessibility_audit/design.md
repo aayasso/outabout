@@ -1,273 +1,227 @@
 # Design -- Accessibility Audit
 # Created: 2026-05-19
-# Requires: requirements.md approved
+# Reconciled and executed: 2026-08-23
+# Status: complete
 
-## Audit Methodology
+## 1. Token changes
 
-This is a code-level audit, not a runtime test. Each task reads the
-relevant screen files, checks against WCAG 2.1 AA criteria, and fixes
-violations. The audit covers widgets that exist after Features 1-4 ship
-(category chips, filter chips, form validation, empty states).
+Two fields added to `WeatherThemeColors`, one value changed in two palettes.
+`primary`, `accent`, `background`, `text`, `surface`, `cardBackground` and
+`divider` are unchanged everywhere.
 
-## Contrast Ratio Analysis
+### 1.1 `onPrimary` — ink on a primary fill
 
-The Sunny primary color (#F5A623) and Overcast primary (#4A9EFF) have
-been failing WCAG AA contrast as text foreground for the entire history
-of the app. This audit surfaces those pre-existing failures and fixes
-them via the new `primaryInteractive` token. No regression — these
-widgets were never compliant.
+White ink on `colors.primary` failed on all three light palettes. One root
+cause behind six widgets: the FAB icon, `ElevatedButton` labels, the selected
+`SegmentedButton` label, the outcome prompt's "Yes" chip, the active theme
+chip, and the `Switch` active thumb.
 
-Computed using the WCAG relative luminance formula:
-```
-L = 0.2126 * R_linear + 0.7152 * G_linear + 0.0722 * B_linear
-contrast = (L_lighter + 0.05) / (L_darker + 0.05)
-```
-where each sRGB channel is gamma-corrected per the sRGB spec.
+| Theme | primary | ink before | before | ink after | after |
+|---|---|---|---|---|---|
+| sunny | #F5A623 | white | 2.03:1 | #1A1A1A | 8.59:1 |
+| overcast | #4A9EFF | white | 2.75:1 | #0D1117 | 6.87:1 |
+| rainy | #4A9EFF | black | 7.63:1 | #000000 | 7.63:1 |
+| snowy | #90CAF9 | white | 1.75:1 | #263238 | 7.52:1 |
+| night | #4A9EFF | black | 7.63:1 | #000000 | 7.63:1 |
 
-### Full Contrast Table (computed, not estimated)
+Not derived from `Brightness`: the light palettes carry pale primaries, so
+`isDark ? black : white` is exactly the rule that produced the failures.
 
-| Theme | Pair | FG | BG | Ratio | AA Normal (4.5:1) | AA Large (3:1) |
-|---|---|---|---|---|---|---|
-| **sunny** | text on bg | #1A1A1A | #FFF8EE | 16.50:1 | PASS | PASS |
-| sunny | text on card | #1A1A1A | #FFFFFF | 17.40:1 | PASS | PASS |
-| sunny | textSecondary on bg | #6B5B3E | #FFF8EE | 6.24:1 | PASS | PASS |
-| sunny | textSecondary on card | #6B5B3E | #FFFFFF | 6.58:1 | PASS | PASS |
-| **sunny** | **primary on bg** | **#F5A623** | **#FFF8EE** | **1.92:1** | **FAIL** | **FAIL** |
-| **sunny** | **primary on card** | **#F5A623** | **#FFFFFF** | **2.03:1** | **FAIL** | **FAIL** |
-| **overcast** | text on bg | #2C3E50 | #F0F2F5 | 9.79:1 | PASS | PASS |
-| overcast | text on card | #2C3E50 | #FFFFFF | 10.98:1 | PASS | PASS |
-| **overcast** | **textSecondary on bg** | **#6B7B8D** | **#F0F2F5** | **3.87:1** | **FAIL** | PASS |
-| **overcast** | **textSecondary on card** | **#6B7B8D** | **#FFFFFF** | **4.34:1** | **FAIL** | PASS |
-| **overcast** | **primary on bg** | **#4A9EFF** | **#F0F2F5** | **2.46:1** | **FAIL** | **FAIL** |
-| **overcast** | **primary on card** | **#4A9EFF** | **#FFFFFF** | **2.75:1** | **FAIL** | **FAIL** |
-| **rainy** | text on bg | #E8EDF2 | #1A2332 | 13.40:1 | PASS | PASS |
-| rainy | text on card | #E8EDF2 | #243447 | 10.76:1 | PASS | PASS |
-| rainy | textSecondary on bg | #9EACBA | #1A2332 | 6.81:1 | PASS | PASS |
-| rainy | textSecondary on card | #9EACBA | #243447 | 5.47:1 | PASS | PASS |
-| rainy | primary on bg | #4A9EFF | #1A2332 | 5.73:1 | PASS | PASS |
-| rainy | primary on card | #4A9EFF | #243447 | 4.60:1 | PASS | PASS |
-| **snowy** | text on bg | #263238 | #F7F9FC | 12.48:1 | PASS | PASS |
-| snowy | text on card | #263238 | #FFFFFF | 13.16:1 | PASS | PASS |
-| **snowy** | **textSecondary on bg** | **#607D8B** | **#F7F9FC** | **4.14:1** | **FAIL** | PASS |
-| **snowy** | **textSecondary on card** | **#607D8B** | **#FFFFFF** | **4.37:1** | **FAIL** | PASS |
-| **snowy** | **primary on bg** | **#90CAF9** | **#F7F9FC** | **1.66:1** | **FAIL** | **FAIL** |
-| **snowy** | **primary on card** | **#90CAF9** | **#FFFFFF** | **1.75:1** | **FAIL** | **FAIL** |
-| **night** | text on bg | #E8EDF2 | #0D1117 | 16.07:1 | PASS | PASS |
-| night | text on card | #E8EDF2 | #161B22 | 14.68:1 | PASS | PASS |
-| night | textSecondary on bg | #8B949E | #0D1117 | 6.15:1 | PASS | PASS |
-| night | textSecondary on card | #8B949E | #161B22 | 5.62:1 | PASS | PASS |
-| night | primary on bg | #4A9EFF | #0D1117 | 6.87:1 | PASS | PASS |
-| night | primary on card | #4A9EFF | #161B22 | 6.28:1 | PASS | PASS |
+### 1.2 `primaryInteractive` — primary restated as a foreground
 
-### Summary of Failures
+For text, icons, focus rings, slider tracks and thumbs, and selected chip
+borders. Evaluated against three backgrounds: the flat background, the flat
+card, and the worst-case Schedule composite (`surface` 0.90 over the
+lightest veil over the worst scene stack).
 
-| Theme | Token | Issue | Severity |
-|---|---|---|---|
-| Sunny | primary (#F5A623) | 1.92-2.03:1 on light backgrounds | Critical — fails AA Large too |
-| Overcast | primary (#4A9EFF) | 2.46-2.75:1 on light backgrounds | Critical — fails AA Large too |
-| Overcast | textSecondary (#6B7B8D) | 3.87-4.34:1 on light backgrounds | Moderate — passes AA Large, fails Normal |
-| Snowy | primary (#90CAF9) | 1.66-1.75:1 on light backgrounds | Critical — fails AA Large too |
-| Snowy | textSecondary (#607D8B) | 4.14-4.37:1 on light backgrounds | Moderate — passes AA Large, fails Normal |
-
-## Color Fixes
-
-### Fix 1: New token `primaryInteractive`
-
-Add a new `primaryInteractive` field to `WeatherThemeColors` in
-`lib/core/theme.dart`. This token is used for all interactive text
-(TextButtons, links, "Enable location", "Clear filters", "Try again")
-that currently use `colors.primary` as foreground text color against
-light backgrounds. The `primary` color itself is NOT changed — it
-continues to be used for backgrounds (chip fills, button fills, FAB
-fill, slider active track, switch active track) where contrast against
-the foreground text is not the issue.
-
-| Theme | primary (unchanged) | primaryInteractive (new) | vs background | vs card |
+| Theme | value | vs background | vs card | vs schedule composite |
 |---|---|---|---|---|
-| Sunny | #F5A623 | #A05E00 | 4.86:1 PASS | 5.13:1 PASS |
-| Overcast | #4A9EFF | #1565C0 | 5.12:1 PASS | 5.75:1 PASS |
-| Rainy | #4A9EFF | #4A9EFF (same) | 5.73:1 PASS | 4.60:1 PASS |
-| Snowy | #90CAF9 | #1565C0 | 5.45:1 PASS | 5.75:1 PASS |
-| Night | #4A9EFF | #4A9EFF (same) | 6.87:1 PASS | 6.28:1 PASS |
+| sunny | #A05E00 | 4.86:1 | 5.13:1 | 4.80:1 |
+| overcast | #1565C0 | 5.12:1 | 5.75:1 | 5.36:1 |
+| rainy | #7DBBFF | 7.84:1 | 6.29:1 | 5.83:1 |
+| snowy | #1565C0 | 5.45:1 | 5.75:1 | 5.44:1 |
+| night | #4A9EFF | 6.87:1 | 6.28:1 | 5.66:1 |
 
-Widgets that must switch from `colors.primary` to
-`colors.primaryInteractive` for text color:
-- All `TextButton` child text using `.copyWith(color: colors.primary)`
-- "Enable location" in settings_tab.dart
-- "Clear filters" in activities_tab.dart `_FilteredEmptyState`
-- "Try again" / "Retry" links in error states
-- "Enable" in `_LocationPermissionBanner`
-- Filter chip selected text (if using primary as text — verify)
-- Any `OutAboutTypography.labelLarge(colors).copyWith(color: colors.primary)`
+Rainy is **not** "same as primary" as the 2026-05-19 draft proposed.
+`#4A9EFF` reaches only 4.26:1 on the Schedule card composite — a surface
+that did not exist when the draft was written.
 
-Widgets that keep `colors.primary` (no change needed):
-- FAB `backgroundColor`
-- ElevatedButton (uses primary as background, text is white/black)
-- Switch `activeTrackColor`
-- Slider `activeColor`
-- Chip selected background (alpha fill, not text)
-- NavigationBar `indicatorColor`
+### 1.3 `textSecondary` darkened on two palettes
 
-### Fix 2: Darken textSecondary on Overcast and Snowy
+| Theme | before | after | vs bg before | vs bg after | vs schedule composite |
+|---|---|---|---|---|---|
+| overcast | #6B7B8D | #5A6978 | 3.87:1 | 5.02:1 | 5.25:1 |
+| snowy | #607D8B | #506A78 | 4.14:1 | 5.42:1 | 5.41:1 |
 
-Modify existing `textSecondary` values in `WeatherThemeColors` for
-two themes. This is a color value adjustment within the existing token
-system, not a structural refactor.
+## 2. Contrast over the animated scene
 
-| Theme | textSecondary (before) | textSecondary (after) | vs background | vs card |
-|---|---|---|---|---|
-| Overcast | #6B7B8D | #5A6978 | 5.02:1 PASS | 5.64:1 PASS |
-| Snowy | #607D8B | #506A78 | 5.42:1 PASS | 5.72:1 PASS |
+The Schedule tab stacks, bottom to top: `colors.background`, the scene, the
+graded veil, then content. `_SceneVeil` grades the scrim — `alpha * 0.5` at
+the top, `alpha` at 0.42, `alpha + 0.22` at the foot — so the **top** of the
+list is the worst case, and that is where the "Today" section sits.
 
-These darkened values maintain the same blue-grey hue family as the
-originals, just shifted darker to clear the 4.5:1 threshold. The visual
-change is subtle — body captions and labels will be slightly darker on
-these two themes.
+Veil alphas (`SceneVeilAlpha`): sunny 0.26, overcast 0.24, rainy 0.34,
+snowy 0.24, night 0.20, fog 0.46.
 
-### Fix 3: Update ai_docs/design_system.md
+Worst-case scene = overlapping large-area elements (two or three stacked
+clouds; the sun's outer, mid and core glow; the moon disc and halo).
+Particles are excluded: a raindrop is 3pt wide and no glyph sits wholly on
+one.
 
-After modifying theme.dart, update the hex values in
-`ai_docs/design_system.md` to match the new overcast textSecondary
-(#5A6978) and snowy textSecondary (#506A78). Add `primaryInteractive`
-to the token documentation.
+### Text painted directly on the veil — the finding
 
-## Audit — Tap Targets
+`_EmptyText` (both day and activity empty states), `_ActivityHeader` and
+`_ScheduleEmptyState` had no surface behind them.
 
-### Current State
+| Theme | `text` 16px/600 | `textSecondary` 12px |
+|---|---|---|
+| sunny | 8.27 PASS | **3.13 FAIL** |
+| overcast | 4.94 PASS | **1.95 FAIL** |
+| rainy | 4.74 PASS | **2.41 FAIL** |
+| fog | **4.08 FAIL** | **2.07 FAIL** |
+| snowy | 7.16 PASS | **2.38 FAIL** |
+| night | **3.79 FAIL** | **1.45 FAIL** |
 
-| Widget | File:Line | Current Size | Status |
-|---|---|---|---|
-| Close IconButton (AddActivity) | add_activity_screen.dart:138 | 48dp (default) | OK |
-| Back IconButton (ActivityDetail) | activity_detail_screen.dart:284 | 48dp (default) | OK |
-| Activity list card GestureDetector | activities_tab.dart:179 | Full card width x ~80dp | OK |
-| Today matched card GestureDetector | today_tab.dart:601 | Full card width x ~60dp | OK |
-| Today unmatched card GestureDetector | today_tab.dart:725 | Full card width x ~60dp | OK |
-| Theme selector chips | settings_tab.dart:371 | Variable — **audit needed** |
-| Morning time picker GestureDetector | activity_detail_screen.dart:816 | Padding gives ~40dp height — **needs fix** |
-| Decrease/Increase days IconButtons | activity_detail_screen.dart:888-914 | 48x48 SizedBox wrapping | OK |
-| Settings row InkWell | settings_tab.dart:243 | ConstrainedBox minHeight 48 | OK |
-| Sign out InkWell | settings_tab.dart:485 | ConstrainedBox minHeight 48 | OK |
-| Category chips (Feature 1) | category_chip_picker.dart | Design spec says 48dp target | Verify |
-| Filter chips (Feature 2) | activities_tab.dart | Design spec says 48dp target | Verify |
-| FABs (Today + Activities) | Both tabs | 56dp (default FAB) | OK |
+**Fix:** `_sceneSurface()` in `schedule_tab.dart` — the same
+`surface @ _scheduleSurfaceOpacity` (0.90) container `_DayHeader` already
+used, now shared by the empty states, the activity-first header and the
+whole-tab empty state. On that surface every reading lands between 4.98:1
+and 13.4:1. No veil alphas were changed; the scene looks as the animations
+sprint tuned it.
 
-### Fixes Needed
-- Theme selector chips: verify each chip meets 48dp minimum. If under,
-  wrap in `SizedBox(height: 48)` or add vertical padding.
-- Morning time picker: add `constraints: BoxConstraints(minHeight: 48)`
-  to the Container, or increase vertical padding.
+## 3. VoiceOver
 
-## Audit — Semantics Labels
+### 3.1 The Schedule card collapsed the whole day section
 
-### Current State
+`Semantics(button: true, label: ...)` **without `container: true` creates no
+node** — it annotates whichever node the parent chain already provides. That
+was the sliver item covering the entire `_DaySection`, so one button
+announced nine merged lines:
 
-| Widget | File:Line | Has Semantics? | Status |
-|---|---|---|---|
-| Activity card (ActivitiesTab) | activities_tab.dart:176 | Yes: "Activity: {name}" | **Missing condition info** |
-| Matched card (TodayTab) | today_tab.dart:597 | Yes: "Activity: {name}, conditions met" | OK |
-| Unmatched card (TodayTab) | today_tab.dart:721 | Yes: "Activity: {name}, conditions not met" | OK |
-| Theme chips (Settings) | settings_tab.dart:380 | Yes: "Theme: {label}, selected" | OK |
-| Condition toggle (shared) | condition_profile_form.dart:60 | Yes: "{title} condition toggle" | **Missing state** |
-| Morning time picker | activity_detail_screen.dart:824 | Yes: "Notification time: {time}. Tap to change." | OK |
-| Days before stepper | activity_detail_screen.dart:888-914 | Yes: tooltip on both buttons | OK |
-| Onboarding category chips | first_activity_page.dart:167 | Yes: "{label} category, selected" | OK |
-| Onboarding buttons | onboarding_button.dart:27 | Yes: label + button | OK |
-| Navigation bar items | home_screen.dart:38-73 | Yes: tooltip on each | OK |
-| FABs (Today + Activities) | Both tabs | Yes: tooltip "Add activity" | OK |
-| Close button (AddActivity) | add_activity_screen.dart:139 | Yes: tooltip "Close" | OK |
-| Back button (ActivityDetail) | activity_detail_screen.dart:290 | Yes: tooltip "Go back" | OK |
-| Dismiss swipe (ActivitiesTab) | activities_tab.dart:148 | No explicit semantics | **Needs fix** |
-| Category chips (Feature 1) | category_chip_picker.dart | Not yet built | Verify |
-| Filter chips (Feature 2) | activities_tab.dart | Not yet built | Verify |
+```
+"Today / Cloudy / H: 78°F / L: 56°F / 20% / 6 mph /
+ Activity: Morning run / Morning run /
+ Did you go to Morning run today? / Did you go?"
+```
 
-### Fixes Needed
-- Activities tab card: add condition count to Semantics label.
-- Condition toggle: add enabled/disabled state to label.
-- Dismissible: add Semantics label for swipe action.
-- Category chips (Feature 1): verify name + selected state.
-- Filter chips (Feature 2): verify name + selected state.
+**Fix:** `container: true` plus `explicitChildNodes: true` on the card, the
+tap action declared on the node, and the `GestureDetector` beneath it set to
+`excludeFromSemantics` so the two do not both offer a tap. The day header
+became its own `header: true` node; the chevron and the duplicated activity
+name are excluded. Verified on device — see Verification.
 
-## Audit — Form Fields
+### 3.2 Buttons that announced no action
 
-### Current State
+`Semantics(button: true, excludeSemantics: true, child: InkWell(...))`
+drops the InkWell's tap along with the rest of the subtree, leaving a node
+flagged `isButton` with no action. Present in the outcome chips, the Find &
+book provider rows and the theme chips. **Fix:** `onTap:` declared on the
+Semantics wherever the subtree is excluded.
 
-| Field | File | Has label/hint? | Status |
-|---|---|---|---|
-| Name (AddActivity) | add_activity_screen.dart:299 | hintText only (pre-Feature 4) | Feature 4 adds labelText — verify |
-| Notes (AddActivity) | add_activity_screen.dart:324 | hintText only (pre-Feature 4) | Feature 4 adds labelText — verify |
-| Name (ActivityDetail) | activity_detail_screen.dart:338 | labelText "Activity Name" | OK |
-| Notes (ActivityDetail) | activity_detail_screen.dart:356 | labelText "Notes (optional)" | OK |
-| Email (AuthPage) | auth_page.dart:170 | Semantics label "Email address" | OK |
-| Password (AuthPage) | auth_page.dart:190 | Semantics label "Password" | OK |
-| Activity name (FirstActivity) | first_activity_page.dart:217 | Semantics label "Activity name" | OK |
+### 3.3 Labels announced twice
 
-### Fixes Needed
-- Verify Feature 4 added `labelText` to AddActivity fields.
-- Add `semanticCounterText` to notes fields with character counters.
+Theme chips read "Theme: Night / Night"; legal rows read "Privacy Policy,
+opens in browser / Privacy Policy"; settings rows read the trailing value
+twice. **Fix:** `excludeSemantics: true` on the wrapper, and the trailing
+widget excluded when the row states a `value:`.
 
-## Audit — Text Scaling
+### 3.4 The dialog hint floated onto the dialog
 
-Text scaling at 1.5x cannot be verified by Claude Code — it requires
-visual inspection in a simulator. The approach is split:
-- **Claude Code:** applies preemptive fixes to known risk areas
-- **User:** manually verifies in simulator at 1.5x
+`Semantics(hint:)` wrapped around the confirm button had no container, so
+the hint merged onto the `AlertDialog` node: VoiceOver announced "Dimmed.
+Type DELETE..." on entering the dialog while the button said nothing.
+**Fix:** the hint moved *inside* the button, wrapping its child, so it
+merges into the button's own node.
 
-Known risk areas for preemptive fixes:
-- Slider label rows (temperature min/max, wind value) — Row may overflow
-- Category/filter chip text — may clip in constrained chips
-- Settings rows — trailing widget may collide with label
-- Weather summary card — temperature display in Row
-- Condition chip Wrap — verify it wraps, not overflows
-- Days before stepper — count text + buttons in Row
+### 3.5 Sliders announced the wrong number entirely
 
-Fix patterns:
-- Replace `Row` with `Wrap` where horizontal overflow is possible
-- Add `Flexible` wrapping on text in tight Rows
-- Add `maxLines: 1` + `overflow: TextOverflow.ellipsis` on constrained
-  single-line labels
-- Chip rows already use `SingleChildScrollView` — verify text isn't
-  clipped within individual chips
+Neither slider had a `semanticFormatterCallback`. Flutter's default is
+percentage of range, so a 50 °F setting was announced as **"20%"**.
+**Fix:** formatters that render the unit on screen. Verified on device:
+"59 °F", increases to "61 °F".
 
-## Audit — Navigation Order
+### 3.6 Other
 
-Flutter's default focus traversal follows widget tree order, which
-matches visual order in all OutAbout screens. No custom
-`FocusTraversalGroup` or `FocusOrder` needed unless the audit discovers
-a specific problem.
+Condition rows merged into one node (`MergeSemantics`), the iOS Settings
+pattern: "Temperature, on, switch button". `PrecipitationSection` gained a
+group label. `_MatchingDayBadge` gained a spoken label because the weather
+icon is its only carrier of the condition. `ProgressDots` gained "Step N of
+6". The day header's precipitation and wind figures gained names, because
+`OutAboutColors.cold`/`.sunny`/`.rainy` sit at 1.73-2.75:1 on a light card.
+`WeatherSceneBackground` contributes no semantics.
 
-Navigation bar items are already labeled with tooltips and use Flutter's
-built-in NavigationBar accessibility support.
+## 4. Touch targets
 
-## Contrast Fixes Log
+| Control | Before | After |
+|---|---|---|
+| Theme override chip ("Adaptive") | 106.4 x **24.0** | 48pt target, 32pt pill |
+| Theme override chip ("Sunny") | 74.5 x **26.0** | 48pt target, 34pt pill |
+| Precipitation segment | 400 x 48.0 | unchanged, already compliant |
+| Settings rows | >= 48 | unchanged |
+| Outcome chips, dismiss | >= 48 | unchanged |
 
-Document every color adjustment during implementation:
+The draft's other two tap-target items targeted code deleted in `3d3e4f2`.
 
-| Location | Token | Before | After | Ratio Before | Ratio After | Reason |
-|---|---|---|---|---|---|---|
-| theme.dart: overcast | textSecondary | #6B7B8D | #5A6978 | 3.87:1 | 5.02:1 | AA Normal fail on bg |
-| theme.dart: snowy | textSecondary | #607D8B | #506A78 | 4.14:1 | 5.42:1 | AA Normal fail on bg |
-| theme.dart: all themes | primaryInteractive | (new) | see table above | N/A | all ≥4.86:1 | primary fails as text color on light themes |
-| design_system.md | overcast textSecondary | #6B7B8D | #5A6978 | — | — | Doc sync |
-| design_system.md | snowy textSecondary | #607D8B | #506A78 | — | — | Doc sync |
+## 5. Dynamic Type
 
-## Text Scaling Fixes Log
+Measured at `textScaler` 1.0 / 1.5 / 2.0 / 3.0 (AX5). Two real overflows,
+both only at 3.0:
 
-Document every layout fix for text scaling during implementation:
+| Surface | Overflow at AX5 | Fix |
+|---|---|---|
+| `_DayHeader` second row | **92px and 106px** | `Wrap` instead of `Row`; each stat its own widget |
+| `TemperatureSection` min/max row | **71px** | `Flexible` on both end labels |
+| `_DeleteAccountDialog` | content did not scroll | `scrollable: true` |
+| Find & book sheet | capped at half-screen | `isScrollControlled: true` |
 
-| Location | Widget | Fix Applied | Reason |
-|---|---|---|---|
-| (filled during implementation) | | | |
+## 6. Reduce Motion
 
-## Edge Cases
+Before this work, `weather_scene_background.dart` was the only consumer of
+the platform flag. Its three-way check (`reduceMotion || disableAnimations
+|| MediaQuery`) was correct and was lifted verbatim into `lib/core/motion.dart`
+rather than reinvented — iOS reports only the first of the three.
 
-| Scenario | Behavior |
+| Surface | How it honours the flag |
 |---|---|
-| Primary used as text on light theme | Use `primaryInteractive` instead |
-| Primary used as background fill | Keep `primary` — text on fill is white/black, not the issue |
-| textSecondary darkened on overcast/snowy | Subtle visual shift; same hue family |
-| Text scaling 1.5x causes overflow | Preemptive fixes applied; user manually verifies |
-| Screen reader on Dismissible | Add accessible label or confirmDismiss dialog |
+| 6 shimmer skeletons | `MotionSafeShimmer` renders the still block |
+| 16 entrance chains | `animateSafely()` -> `Animate(value: 1, autoPlay: false)` |
+| Route transitions | `_fadeTransitionPage` returns the child directly |
+| Theme cross-fade (500ms) | `motionDuration()` |
+| `ConditionSection` cross-fade | `motionDuration()` |
+| `ProgressDots` | `motionDuration()` |
 
-## Haptic Moments
+`animateSafely` pins the chain at completion rather than stopping it: a
+stopped `fadeIn` is an invisible widget.
 
-- No new haptic events.
+## 7. Deliberately not changed
+
+- **Veil alphas.** The scene is as the animations sprint tuned it; the fix
+  was a surface under the text, not a heavier scrim.
+- **`primary` fills.** A filled button is identified by its label, and the
+  label now clears 6.8:1 everywhere.
+- **`ColorScheme.onSecondary`.** `secondary` is declared but never painted
+  in OutAbout — `accent` is used only for scene painting and icon tints. The
+  latent value (white on sunny `#FF6B35` = 3.10:1) is recorded here rather
+  than fixed, because there is no rendered surface to fix.
+- **Weather icon tints in `_DayHeader`.** The condition name is spelled out
+  beside the glyph, so the tint is supplemental. In `_MatchingDayBadge`,
+  where the icon stands alone, a spoken label was added instead.
+
+## 8. Verification
+
+`flutter analyze` clean, `flutter test` green at 546 tests (480 before).
+
+New suites under `test/accessibility/`: `contrast_test.dart` (the tables
+above, including the composite), `semantics_test.dart`, `tap_target_test.dart`,
+`dynamic_type_test.dart`, `reduce_motion_test.dart`.
+
+Each regression test was confirmed to fail against the pre-fix code before
+being kept; the overflow harness was checked against a deliberate overflow
+first.
+
+Device pass on iPhone 16e (iOS 26.3), semantics enabled, with the live tree
+dumped at each step: Schedule, Settings, delete dialog (armed, then
+cancelled), Find & book sheet, Add Activity. **Limit:** the tree is what iOS
+turns into VoiceOver elements; the announcements are transcribed from it,
+not captured as audio. Onboarding was covered by the semantics suite rather
+than on device, because the simulator session is signed in.

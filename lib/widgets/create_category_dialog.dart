@@ -93,7 +93,7 @@ class _CreateCategoryDialogState
                     OutAboutRadius.buttons,
                   ),
                   borderSide: BorderSide(
-                    color: colors.primary,
+                    color: colors.primaryInteractive,
                     width: 2,
                   ),
                 ),
@@ -156,7 +156,7 @@ class _CreateCategoryDialogState
                               .trim()
                               .isEmpty
                           ? colors.textSecondary
-                          : colors.cardBackground,
+                          : colors.onPrimary,
                     ),
                   ),
                 ),

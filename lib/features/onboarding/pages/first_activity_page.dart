@@ -5,6 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/motion.dart';
 import '../../../core/providers.dart';
 import '../../../core/theme.dart';
 import '../../../core/weather_theme_provider.dart';
@@ -217,7 +218,7 @@ class _FirstActivityPageState extends ConsumerState<FirstActivityPage> {
                                 category.icon,
                                 size: 32,
                                 color: isSelected
-                                    ? Colors.white
+                                    ? colors.onPrimary
                                     : colors.text,
                               ),
                               const SizedBox(height: OutAboutSpacing.sm),
@@ -226,7 +227,7 @@ class _FirstActivityPageState extends ConsumerState<FirstActivityPage> {
                                 style: OutAboutTypography.labelLarge(colors)
                                     .copyWith(
                                   color: isSelected
-                                      ? Colors.white
+                                      ? colors.onPrimary
                                       : colors.text,
                                 ),
                               ),
@@ -274,7 +275,7 @@ class _FirstActivityPageState extends ConsumerState<FirstActivityPage> {
         ),
       ),
     )
-        .animate()
+        .animateSafely(context)
         .fadeIn(duration: OutAboutAnimations.standardDuration)
         .slideY(
           begin: 0.05,

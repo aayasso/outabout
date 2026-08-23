@@ -112,7 +112,7 @@ void main() {
     );
 
     testWidgets(
-      'selected chips have primary-colored border',
+      'selected chips have a foreground-grade border',
       (tester) async {
         await tester.pumpWidget(
           buildTestWidget(selectedIds: {'cat-1'}),
@@ -138,7 +138,10 @@ void main() {
           if (decoration is BoxDecoration &&
               decoration.border is Border) {
             final border = decoration.border! as Border;
-            if (border.top.color == colors.primary) {
+            // primaryInteractive, not primary: the border is a UI
+            // indicator, and primary reaches only 1.66-2.46:1 as ink on
+            // the light palettes.
+            if (border.top.color == colors.primaryInteractive) {
               foundSelectedBorder = true;
               break;
             }

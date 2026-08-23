@@ -40,7 +40,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             selectedIcon: Icon(
               Icons.calendar_today_outlined,
-              color: colors.primary,
+              color: colors.primaryInteractive,
             ),
             label: 'Schedule',
             tooltip: 'Schedule',
@@ -52,14 +52,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             selectedIcon: Icon(
               Icons.directions_run_outlined,
-              color: colors.primary,
+              color: colors.primaryInteractive,
             ),
             label: 'Activities',
             tooltip: 'Activities',
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined, color: colors.textSecondary),
-            selectedIcon: Icon(Icons.settings_outlined, color: colors.primary),
+            selectedIcon: Icon(
+              Icons.settings_outlined,
+              color: colors.primaryInteractive,
+            ),
             label: 'Settings',
             tooltip: 'Settings',
           ),

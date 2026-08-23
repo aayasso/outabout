@@ -2,8 +2,8 @@ import 'dart:developer';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shimmer/shimmer.dart';
 
+import '../core/motion.dart';
 import '../core/providers.dart';
 import '../core/theme.dart';
 import '../core/weather_theme_provider.dart';
@@ -226,7 +226,7 @@ class _CategoryChip extends StatelessWidget {
               ),
               border: Border.all(
                 color: isSelected
-                    ? colors.primary
+                    ? colors.primaryInteractive
                     : colors.divider,
               ),
             ),
@@ -382,7 +382,7 @@ class _ShimmerPlaceholder extends StatelessWidget {
             padding: const EdgeInsets.only(
               right: OutAboutSpacing.sm,
             ),
-            child: Shimmer.fromColors(
+            child: MotionSafeShimmer(
               baseColor: colors.surface,
               highlightColor: colors.divider,
               child: Container(
@@ -431,7 +431,7 @@ class _ErrorRow extends StatelessWidget {
             'Retry',
             style: OutAboutTypography.labelMedium(
               colors,
-            ).copyWith(color: colors.primary),
+            ).copyWith(color: colors.primaryInteractive),
           ),
         ),
       ],

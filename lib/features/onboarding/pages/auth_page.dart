@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/motion.dart';
 import '../../../core/providers.dart';
 import '../../../core/theme.dart';
 import '../../../core/weather_theme_provider.dart';
@@ -274,7 +275,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                     child: Text(
                       'Use Magic Link Instead',
                       style: OutAboutTypography.labelLarge(colors).copyWith(
-                        color: colors.primary,
+                        color: colors.primaryInteractive,
                       ),
                     ),
                   ),
@@ -289,7 +290,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                     child: Text(
                       'Use Password Instead',
                       style: OutAboutTypography.labelLarge(colors).copyWith(
-                        color: colors.primary,
+                        color: colors.primaryInteractive,
                       ),
                     ),
                   ),
@@ -313,7 +314,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
           ),
         ),
       ),
-    ).animate()
+    ).animateSafely(context)
         .fadeIn(duration: OutAboutAnimations.standardDuration)
         .slideY(
           begin: 0.05,
@@ -357,7 +358,7 @@ class _ToggleChip extends StatelessWidget {
         child: Text(
           label,
           style: OutAboutTypography.labelLarge(colors).copyWith(
-            color: isSelected ? Colors.white : colors.text,
+            color: isSelected ? colors.onPrimary : colors.text,
           ),
         ),
       ),

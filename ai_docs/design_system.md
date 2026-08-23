@@ -20,14 +20,26 @@ final colors = ref.watch(weatherThemeColorsProvider);
 
 ## WeatherThemeColors — Five Palettes
 
-Each palette exposes: `background`, `primary`, `accent`, `text`,
-`textSecondary`, `surface`, `cardBackground`, `divider`
+Each palette exposes: `background`, `primary`, `onPrimary`,
+`primaryInteractive`, `accent`, `text`, `textSecondary`, `surface`,
+`cardBackground`, `divider`
+
+`primary` is a **fill**. Used as ink on the light palettes it reaches only
+1.66-2.46:1, so:
+
+- text or an icon drawn *on* a primary fill takes `onPrimary`
+- text, icons, focus rings, slider tracks and selected borders drawn *on the
+  page* take `primaryInteractive`
+
+`primary` itself is unchanged in every palette and remains the fill colour.
 
 ### Sunny (light)
 | Role | Token | Hex |
 |---|---|---|
 | background | `colors.background` | #FFF8EE |
 | primary | `colors.primary` | #F5A623 |
+| onPrimary | `colors.onPrimary` | #1A1A1A |
+| primaryInteractive | `colors.primaryInteractive` | #A05E00 |
 | accent | `colors.accent` | #FF6B35 |
 | text | `colors.text` | #1A1A1A |
 | textSecondary | `colors.textSecondary` | #6B5B3E |
@@ -40,9 +52,11 @@ Each palette exposes: `background`, `primary`, `accent`, `text`,
 |---|---|---|
 | background | `colors.background` | #F0F2F5 |
 | primary | `colors.primary` | #4A9EFF |
+| onPrimary | `colors.onPrimary` | #0D1117 |
+| primaryInteractive | `colors.primaryInteractive` | #1565C0 |
 | accent | `colors.accent` | #7B8FA1 |
 | text | `colors.text` | #2C3E50 |
-| textSecondary | `colors.textSecondary` | #6B7B8D |
+| textSecondary | `colors.textSecondary` | #5A6978 |
 | surface | `colors.surface` | #FFFFFF |
 | cardBackground | `colors.cardBackground` | #FFFFFF |
 | divider | `colors.divider` | #D8DCE2 |
@@ -52,6 +66,8 @@ Each palette exposes: `background`, `primary`, `accent`, `text`,
 |---|---|---|
 | background | `colors.background` | #1A2332 |
 | primary | `colors.primary` | #4A9EFF |
+| onPrimary | `colors.onPrimary` | #000000 |
+| primaryInteractive | `colors.primaryInteractive` | #7DBBFF |
 | accent | `colors.accent` | #64B5F6 |
 | text | `colors.text` | #E8EDF2 |
 | textSecondary | `colors.textSecondary` | #9EACBA |
@@ -64,9 +80,11 @@ Each palette exposes: `background`, `primary`, `accent`, `text`,
 |---|---|---|
 | background | `colors.background` | #F7F9FC |
 | primary | `colors.primary` | #90CAF9 |
+| onPrimary | `colors.onPrimary` | #263238 |
+| primaryInteractive | `colors.primaryInteractive` | #1565C0 |
 | accent | `colors.accent` | #546E7A |
 | text | `colors.text` | #263238 |
-| textSecondary | `colors.textSecondary` | #607D8B |
+| textSecondary | `colors.textSecondary` | #506A78 |
 | surface | `colors.surface` | #FFFFFF |
 | cardBackground | `colors.cardBackground` | #FFFFFF |
 | divider | `colors.divider` | #E0E8EE |
@@ -76,6 +94,8 @@ Each palette exposes: `background`, `primary`, `accent`, `text`,
 |---|---|---|
 | background | `colors.background` | #0D1117 |
 | primary | `colors.primary` | #4A9EFF |
+| onPrimary | `colors.onPrimary` | #000000 |
+| primaryInteractive | `colors.primaryInteractive` | #4A9EFF |
 | accent | `colors.accent` | #F5A623 |
 | text | `colors.text` | #E8EDF2 |
 | textSecondary | `colors.textSecondary` | #8B949E |

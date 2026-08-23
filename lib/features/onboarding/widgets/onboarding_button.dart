@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shimmer/shimmer.dart';
 
+import '../../../core/motion.dart';
 import '../../../core/theme.dart';
 import '../../../core/weather_theme_provider.dart';
 
@@ -20,9 +20,7 @@ class OnboardingButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = ref.watch(weatherThemeColorsProvider);
-    final weatherTheme = ref.watch(weatherThemeProvider);
-    final isDark = weatherTheme.brightness == Brightness.dark;
-    final foregroundColor = isDark ? Colors.black : Colors.white;
+    final foregroundColor = colors.onPrimary;
 
     return Semantics(
       label: label,
@@ -53,7 +51,7 @@ class OnboardingButton extends ConsumerWidget {
             ),
           ),
           child: isLoading
-              ? Shimmer.fromColors(
+              ? MotionSafeShimmer(
                   baseColor: foregroundColor.withValues(alpha: 0.3),
                   highlightColor: foregroundColor.withValues(alpha: 0.6),
                   child: Container(

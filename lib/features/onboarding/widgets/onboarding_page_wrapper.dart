@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/motion.dart';
 import '../../../core/theme.dart';
 import '../../../core/weather_theme_provider.dart';
 import 'onboarding_button.dart';
@@ -46,7 +47,7 @@ class OnboardingPageWrapper extends ConsumerWidget {
               Icon(
                 icon,
                 size: 64,
-                color: colors.primary,
+                color: colors.primaryInteractive,
               ),
               const SizedBox(height: OutAboutSpacing.xl),
               Text(
@@ -68,7 +69,7 @@ class OnboardingPageWrapper extends ConsumerWidget {
                   child: Text(
                     skipLabel!,
                     style: OutAboutTypography.labelLarge(colors).copyWith(
-                      color: colors.primary,
+                      color: colors.primaryInteractive,
                     ),
                   ),
                 ),
@@ -84,7 +85,7 @@ class OnboardingPageWrapper extends ConsumerWidget {
         ),
       ),
     )
-        .animate()
+        .animateSafely(context)
         .fadeIn(duration: OutAboutAnimations.standardDuration)
         .slideY(
           begin: 0.05,

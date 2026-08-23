@@ -14,6 +14,7 @@ import '../features/home/home_providers.dart';
 import '../features/home/tabs/schedule_tab.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import 'providers.dart';
+import 'motion.dart';
 import 'theme.dart';
 import 'weather_theme_provider.dart';
 
@@ -93,6 +94,9 @@ CustomTransitionPage<void> _fadeTransitionPage({
     key: state.pageKey,
     child: child,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      // A route change is a layout change, so the destination has to arrive
+      // either way. Under Reduce Motion it arrives at once rather than fading.
+      if (prefersReducedMotion(context)) return child;
       return FadeTransition(
         opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
         child: child,
@@ -156,10 +160,8 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(
         path: AppRoutes.onboarding,
-        pageBuilder: (context, state) => _fadeTransitionPage(
-          child: const OnboardingScreen(),
-          state: state,
-        ),
+        pageBuilder: (context, state) =>
+            _fadeTransitionPage(child: const OnboardingScreen(), state: state),
       ),
       GoRoute(
         path: AppRoutes.activity,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/motion.dart';
 import '../core/theme.dart';
 import '../core/weather_theme_provider.dart';
 import '../data/models/daily_forecast.dart';
@@ -48,7 +49,9 @@ class OutcomePrompt extends ConsumerWidget {
 
     if (eventType.isEmpty) return; // Dismissal: settled, but not an outcome.
 
-    await ref.read(behavioralEventServiceProvider).log(
+    await ref
+        .read(behavioralEventServiceProvider)
+        .log(
           eventType,
           extra: {'activity_id': activityId},
           conditions: ref.read(conditionsSnapshotProvider)(
@@ -71,59 +74,79 @@ class OutcomePrompt extends ConsumerWidget {
     );
     if (!visible) return const SizedBox.shrink();
 
+    // `explicitChildNodes`, because the three controls below must stay
+    // individually focusable — a plain label wrapper merges them into one
+    // node and the answer becomes unreachable.
     return Semantics(
-      label: 'Did you go to $activityName today?',
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: OutAboutSpacing.md,
-          vertical: OutAboutSpacing.sm,
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Did you go?',
-                style: OutAboutTypography.labelMedium(colors),
-              ),
+          container: true,
+          explicitChildNodes: true,
+          label: 'Did you go to $activityName today?',
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: OutAboutSpacing.md,
+              vertical: OutAboutSpacing.sm,
             ),
-            _OutcomeChip(
-              label: 'Yes',
-              colors: colors,
-              emphasised: true,
-              onTap: () => _answer(ref, 'activity_confirmed'),
+            child: Row(
+              children: [
+                Expanded(
+                  child: ExcludeSemantics(
+                    child: Text(
+                      'Did you go?',
+                      style: OutAboutTypography.labelMedium(colors),
+                    ),
+                  ),
+                ),
+                _OutcomeChip(
+                  label: 'Yes',
+                  semanticLabel: 'Yes, I went to $activityName',
+                  colors: colors,
+                  emphasised: true,
+                  onTap: () => _answer(ref, 'activity_confirmed'),
+                ),
+                const SizedBox(width: OutAboutSpacing.sm),
+                _OutcomeChip(
+                  label: 'Not today',
+                  semanticLabel: 'No, I did not go to $activityName',
+                  colors: colors,
+                  emphasised: false,
+                  onTap: () => _answer(ref, 'condition_match_ignored'),
+                ),
+                SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: IconButton(
+                    icon: Icon(
+                      Icons.close,
+                      size: 18,
+                      color: colors.textSecondary,
+                    ),
+                    tooltip: 'Dismiss the question about $activityName',
+                    onPressed: () => _answer(ref, ''),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: OutAboutSpacing.sm),
-            _OutcomeChip(
-              label: 'Not today',
-              colors: colors,
-              emphasised: false,
-              onTap: () => _answer(ref, 'condition_match_ignored'),
-            ),
-            SizedBox(
-              width: 48,
-              height: 48,
-              child: IconButton(
-                icon: Icon(Icons.close, size: 18, color: colors.textSecondary),
-                tooltip: 'Dismiss',
-                onPressed: () => _answer(ref, ''),
-              ),
-            ),
-          ],
-        ),
-      ),
-    ).animate().fadeIn(duration: OutAboutAnimations.standardDuration);
+          ),
+        )
+        .animateSafely(context)
+        .fadeIn(duration: OutAboutAnimations.standardDuration);
   }
 }
 
 class _OutcomeChip extends StatelessWidget {
   const _OutcomeChip({
     required this.label,
+    required this.semanticLabel,
     required this.colors,
     required this.emphasised,
     required this.onTap,
   });
 
   final String label;
+
+  /// What the screen reader says. The visible label is a bare "Yes"; on its
+  /// own node that gives no clue what is being answered.
+  final String semanticLabel;
   final WeatherThemeColors colors;
   final bool emphasised;
   final VoidCallback onTap;
@@ -132,7 +155,12 @@ class _OutcomeChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: label,
+      label: semanticLabel,
+      // The chip's own Text is excluded so the announcement is the sentence
+      // above and not "Yes, I went to X. Yes." The tap has to be declared
+      // alongside it: excluding the subtree drops the InkWell's action.
+      excludeSemantics: true,
+      onTap: onTap,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(OutAboutRadius.full),
@@ -150,9 +178,9 @@ class _OutcomeChip extends StatelessWidget {
           ),
           child: Text(
             label,
-            style: OutAboutTypography.labelLarge(colors).copyWith(
-              color: emphasised ? colors.background : colors.text,
-            ),
+            style: OutAboutTypography.labelLarge(
+              colors,
+            ).copyWith(color: emphasised ? colors.onPrimary : colors.text),
           ),
         ),
       ),

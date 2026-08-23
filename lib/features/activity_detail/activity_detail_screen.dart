@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shimmer/shimmer.dart';
+import '../../core/motion.dart';
 import '../../core/router.dart';
 import '../../core/theme.dart';
 import '../../core/weather_theme_provider.dart';
@@ -372,7 +372,7 @@ class _ActivityDetailScreenState
               ),
               focusedBorder: UnderlineInputBorder(
                 borderSide:
-                    BorderSide(color: colors.primary),
+                    BorderSide(color: colors.primaryInteractive),
               ),
             ),
           ),
@@ -397,7 +397,7 @@ class _ActivityDetailScreenState
                   ),
                   focusedBorder: UnderlineInputBorder(
                     borderSide:
-                        BorderSide(color: colors.primary),
+                        BorderSide(color: colors.primaryInteractive),
                   ),
                 ),
               ),
@@ -581,7 +581,7 @@ class _ActivityDetailScreenState
         ],
       ),
     )
-        .animate()
+        .animateSafely(context)
         .fadeIn(duration: OutAboutAnimations.standardDuration)
         .slideY(
           begin: 0.05,
@@ -622,15 +622,19 @@ class _FindAndBookButton extends ConsumerWidget {
     return SizedBox(
       width: double.infinity,
       child: OutlinedButton.icon(
-        icon: Icon(Icons.travel_explore, size: 20, color: colors.primary),
+        icon: Icon(
+          Icons.travel_explore,
+          size: 20,
+          color: colors.primaryInteractive,
+        ),
         label: Text(
           'Find & book',
           style: OutAboutTypography.labelLarge(colors)
-              .copyWith(color: colors.primary),
+              .copyWith(color: colors.primaryInteractive),
         ),
         style: OutlinedButton.styleFrom(
           minimumSize: const Size.fromHeight(48),
-          side: BorderSide(color: colors.primary),
+          side: BorderSide(color: colors.primaryInteractive),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(OutAboutRadius.buttons),
           ),
@@ -660,7 +664,7 @@ class _ActivityDetailShimmer extends StatelessWidget {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(OutAboutSpacing.md),
-      child: Shimmer.fromColors(
+      child: MotionSafeShimmer(
         baseColor: colors.surface,
         highlightColor: colors.divider,
         child: Column(

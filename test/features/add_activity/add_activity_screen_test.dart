@@ -86,7 +86,31 @@ void main() {
         await tester.pumpWidget(buildTestWidget());
         await tester.pumpAndSettle();
 
-        expect(find.byType(RangeSlider), findsNothing);
+        // The shared ConditionSection collapses with an AnimatedCrossFade,
+        // which keeps the hidden body in the tree but wraps it in
+        // ExcludeSemantics and ExcludeFocus. So "hidden" is a question about
+        // the semantics tree, not the widget tree.
+        final handle = tester.ensureSemantics();
+        Finder rangeSliderSemantics() => find.descendant(
+              of: find.byType(RangeSlider),
+              matching: find.byType(Semantics),
+            );
+
+        expect(find.byType(RangeSlider), findsOneWidget);
+        expect(
+          tester
+              .widget<ExcludeSemantics>(
+                find
+                    .ancestor(
+                      of: find.byType(RangeSlider),
+                      matching: find.byType(ExcludeSemantics),
+                    )
+                    .first,
+              )
+              .excluding,
+          isTrue,
+          reason: 'a collapsed condition must not be reachable',
+        );
 
         final switches = find.byType(Switch);
         expect(switches, findsNWidgets(3));
@@ -95,9 +119,22 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(
-          find.byType(RangeSlider),
-          findsOneWidget,
+          tester
+              .widget<ExcludeSemantics>(
+                find
+                    .ancestor(
+                      of: find.byType(RangeSlider),
+                      matching: find.byType(ExcludeSemantics),
+                    )
+                    .first,
+              )
+              .excluding,
+          isFalse,
+          reason: 'an expanded condition must be reachable',
         );
+        expect(rangeSliderSemantics(), findsWidgets);
+
+        handle.dispose();
       },
     );
 

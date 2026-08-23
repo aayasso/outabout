@@ -8,6 +8,7 @@ import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'core/motion.dart';
 import 'core/router.dart';
 import 'core/theme.dart';
 import 'core/weather_theme_provider.dart';
@@ -109,7 +110,13 @@ class _OutAboutAppState extends ConsumerState<OutAboutApp> {
 
     return AnimatedTheme(
       data: themeData,
-      duration: OutAboutAnimations.themeTransitionDuration,
+      // The whole screen re-colours when the weather turns. That is the one
+      // animation most likely to trigger discomfort, and it carries no
+      // information the end state does not.
+      duration: motionDuration(
+        context,
+        OutAboutAnimations.themeTransitionDuration,
+      ),
       curve: OutAboutAnimations.standardCurve,
       child: MaterialApp.router(
         title: 'OutAbout',
