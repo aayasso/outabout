@@ -43,7 +43,7 @@ class _ActivityDetailScreenState
   double _tempMin = 15.0;
   double _tempMax = 30.0;
   bool _precipEnabled = false;
-  String _precipLevel = 'none';
+  String _precipLevel = PrecipLevel.avoidRain;
   bool _windEnabled = false;
   double _windMax = 25.0;
 
@@ -73,7 +73,7 @@ class _ActivityDetailScreenState
       _tempMin = profile.tempMin ?? 15.0;
       _tempMax = profile.tempMax ?? 30.0;
       _precipEnabled = profile.precipEnabled;
-      _precipLevel = profile.precipLevel ?? 'none';
+      _precipLevel = PrecipLevel.normalize(profile.precipLevel);
       _windEnabled = profile.windEnabled;
       _windMax = profile.windMax ?? 25.0;
     }

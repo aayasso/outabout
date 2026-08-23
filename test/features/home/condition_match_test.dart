@@ -65,69 +65,77 @@ void main() {
       expect(evaluateDayMatch(profile, day), false);
     });
 
-    test('precip none passes when probability <= 20', () {
-      const profile = ConditionProfile(
-        id: 'cp-1',
-        activityId: 'act-1',
-        precipEnabled: true,
-        precipLevel: 'none',
-      );
-      // precipitationProbability is 10 => passes
-      expect(evaluateDayMatch(profile, day), true);
+    DailyForecast dayWithPrecip(double probability) => DailyForecast(
+          date: DateTime(2026, 6, 27),
+          temperatureMax: 28.0,
+          temperatureMin: 18.0,
+          precipitationProbability: probability,
+          windSpeedMax: 15.0,
+          weatherCode: 4001,
+        );
+
+    const avoidRain = ConditionProfile(
+      id: 'cp-1',
+      activityId: 'act-1',
+      precipEnabled: true,
+      precipLevel: PrecipLevel.avoidRain,
+    );
+
+    const rainOnly = ConditionProfile(
+      id: 'cp-1',
+      activityId: 'act-1',
+      precipEnabled: true,
+      precipLevel: PrecipLevel.rainOnly,
+    );
+
+    test('avoid_rain passes on a dry day', () {
+      // The shared `day` fixture sits at 10%.
+      expect(evaluateDayMatch(avoidRain, day), true);
     });
 
-    test('precip none fails when probability > 20', () {
-      final rainyDay = DailyForecast(
-        date: DateTime(2026, 6, 27),
-        temperatureMax: 28.0,
-        temperatureMin: 18.0,
-        precipitationProbability: 25.0,
-        windSpeedMax: 15.0,
-        weatherCode: 4001,
-      );
-      const profile = ConditionProfile(
-        id: 'cp-1',
-        activityId: 'act-1',
-        precipEnabled: true,
-        precipLevel: 'none',
-      );
-      expect(evaluateDayMatch(profile, rainyDay), false);
+    test('avoid_rain fails once rain is likely', () {
+      expect(evaluateDayMatch(avoidRain, dayWithPrecip(25)), false);
     });
 
-    test('precip light_ok passes when probability <= 60', () {
-      final day55 = DailyForecast(
-        date: DateTime(2026, 6, 27),
-        temperatureMax: 28.0,
-        temperatureMin: 18.0,
-        precipitationProbability: 55.0,
-        windSpeedMax: 15.0,
-        weatherCode: 4001,
-      );
-      const profile = ConditionProfile(
-        id: 'cp-1',
-        activityId: 'act-1',
-        precipEnabled: true,
-        precipLevel: 'light_ok',
-      );
-      expect(evaluateDayMatch(profile, day55), true);
+    test('rain_only fails on a dry day', () {
+      expect(evaluateDayMatch(rainOnly, day), false);
     });
 
-    test('precip light_ok fails when probability > 60', () {
-      final day65 = DailyForecast(
-        date: DateTime(2026, 6, 27),
-        temperatureMax: 28.0,
-        temperatureMin: 18.0,
-        precipitationProbability: 65.0,
-        windSpeedMax: 15.0,
-        weatherCode: 4001,
-      );
-      const profile = ConditionProfile(
+    test('rain_only passes when rain is likely', () {
+      expect(evaluateDayMatch(rainOnly, dayWithPrecip(80)), true);
+    });
+
+    test('the two levels are exactly complementary at the boundary', () {
+      // 20% is the threshold itself: avoid_rain still passes, rain_only does
+      // not. No gap and no overlap.
+      final atThreshold = dayWithPrecip(PrecipLevel.dryThreshold.toDouble());
+      expect(evaluateDayMatch(avoidRain, atThreshold), true);
+      expect(evaluateDayMatch(rainOnly, atThreshold), false);
+
+      final justOver = dayWithPrecip(20.1);
+      expect(evaluateDayMatch(avoidRain, justOver), false);
+      expect(evaluateDayMatch(rainOnly, justOver), true);
+    });
+
+    test('a legacy level reads as avoid_rain rather than no filter at all', () {
+      // Rows written before the migration hold 'none' / 'light' / 'any'.
+      // 'light' used to match every day, which was the bug.
+      const legacy = ConditionProfile(
         id: 'cp-1',
         activityId: 'act-1',
         precipEnabled: true,
-        precipLevel: 'light_ok',
+        precipLevel: 'light',
       );
-      expect(evaluateDayMatch(profile, day65), false);
+      expect(evaluateDayMatch(legacy, dayWithPrecip(80)), false);
+    });
+
+    test('a disabled precipitation condition ignores the level', () {
+      const disabled = ConditionProfile(
+        id: 'cp-1',
+        activityId: 'act-1',
+        precipLevel: PrecipLevel.rainOnly,
+      );
+      expect(evaluateDayMatch(disabled, day), true);
     });
 
     test('wind within limit passes', () {
@@ -167,7 +175,7 @@ void main() {
         tempMin: 15.0,
         tempMax: 30.0,
         precipEnabled: true,
-        precipLevel: 'none',
+        precipLevel: PrecipLevel.avoidRain,
         windEnabled: true,
         windMax: 20.0,
       );

@@ -10,7 +10,7 @@ void main() {
       'temp_min': 10.0,
       'temp_max': 25.5,
       'precip_enabled': true,
-      'precip_level': 'none',
+      'precip_level': 'avoid_rain',
       'wind_enabled': true,
       'wind_max': 20.0,
       'created_at': '2026-05-01T10:00:00.000Z',
@@ -26,7 +26,7 @@ void main() {
       expect(profile.tempMin, 10.0);
       expect(profile.tempMax, 25.5);
       expect(profile.precipEnabled, true);
-      expect(profile.precipLevel, 'none');
+      expect(profile.precipLevel, PrecipLevel.avoidRain);
       expect(profile.windEnabled, true);
       expect(profile.windMax, 20.0);
       expect(profile.createdAt, isNotNull);
@@ -43,7 +43,7 @@ void main() {
       expect(output['temp_min'], 10.0);
       expect(output['temp_max'], 25.5);
       expect(output['precip_enabled'], true);
-      expect(output['precip_level'], 'none');
+      expect(output['precip_level'], PrecipLevel.avoidRain);
       expect(output['wind_enabled'], true);
       expect(output['wind_max'], 20.0);
     });
@@ -63,6 +63,36 @@ void main() {
       expect(profile.windMax, isNull);
       expect(profile.createdAt, isNull);
       expect(profile.updatedAt, isNull);
+    });
+  });
+
+  group('PrecipLevel.normalize', () {
+    test('keeps rain_only', () {
+      expect(PrecipLevel.normalize('rain_only'), PrecipLevel.rainOnly);
+    });
+
+    test('maps every legacy value to avoid_rain', () {
+      // The pickers used to write 'none' | 'light' | 'any'; the matchers read
+      // 'none' | 'light_ok'. All of them are avoid-leaning or meaningless now.
+      for (final legacy in ['none', 'light', 'any', 'light_ok']) {
+        expect(
+          PrecipLevel.normalize(legacy),
+          PrecipLevel.avoidRain,
+          reason: 'legacy value \'$legacy\'',
+        );
+      }
+    });
+
+    test('maps null and unknown values to avoid_rain', () {
+      // Without this the SegmentedButton would render with nothing selected
+      // and round-trip the stale value straight back to the database.
+      expect(PrecipLevel.normalize(null), PrecipLevel.avoidRain);
+      expect(PrecipLevel.normalize(''), PrecipLevel.avoidRain);
+      expect(PrecipLevel.normalize('nonsense'), PrecipLevel.avoidRain);
+    });
+
+    test('the dry threshold matches the documented boundary', () {
+      expect(PrecipLevel.dryThreshold, 20);
     });
   });
 }

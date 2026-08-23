@@ -690,9 +690,10 @@ class _ActivityListCard extends StatelessWidget {
     }
 
     if (profile.precipEnabled) {
-      final label = profile.precipLevel == 'none'
-          ? 'No rain'
-          : 'Rain OK';
+      final label =
+          profile.precipLevel == PrecipLevel.rainOnly
+              ? 'Only when raining'
+              : 'Avoid rain';
       chips.add(
         _ConditionChip(
           label: label,

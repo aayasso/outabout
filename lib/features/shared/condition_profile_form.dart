@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme.dart';
 import '../../core/weather_theme_provider.dart';
+import '../../data/models/condition_profile.dart';
 
 // ---------------------------------------------------------------------------
 // Unit conversion helpers
@@ -160,7 +161,7 @@ class TemperatureSection extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// PrecipitationSection — SegmentedButton (none / light / any)
+// PrecipitationSection — SegmentedButton (avoid_rain / rain_only)
 // ---------------------------------------------------------------------------
 
 class PrecipitationSection extends StatelessWidget {
@@ -181,12 +182,14 @@ class PrecipitationSection extends StatelessWidget {
       width: double.infinity,
       child: SegmentedButton<String>(
         segments: const [
-          ButtonSegment(value: 'none', label: Text('None')),
           ButtonSegment(
-            value: 'light',
-            label: Text('Light'),
+            value: PrecipLevel.avoidRain,
+            label: Text('Avoid rain'),
           ),
-          ButtonSegment(value: 'any', label: Text('Any')),
+          ButtonSegment(
+            value: PrecipLevel.rainOnly,
+            label: Text('Only when raining'),
+          ),
         ],
         selected: {level},
         onSelectionChanged: (values) =>

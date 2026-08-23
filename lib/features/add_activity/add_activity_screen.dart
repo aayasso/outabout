@@ -43,7 +43,7 @@ class _AddActivityScreenState
   bool _windEnabled = false;
   // Condition values
   RangeValues _tempRange = const RangeValues(15, 30);
-  String _precipLevel = 'none';
+  String _precipLevel = PrecipLevel.avoidRain;
   double _windMax = 25;
 
   @override
@@ -575,16 +575,12 @@ class _PrecipitationSection extends StatelessWidget {
       child: SegmentedButton<String>(
         segments: const [
           ButtonSegment(
-            value: 'none',
-            label: Text('No rain'),
+            value: PrecipLevel.avoidRain,
+            label: Text('Avoid rain'),
           ),
           ButtonSegment(
-            value: 'light',
-            label: Text('Light OK'),
-          ),
-          ButtonSegment(
-            value: 'any',
-            label: Text('Any'),
+            value: PrecipLevel.rainOnly,
+            label: Text('Only when raining'),
           ),
         ],
         selected: {level},

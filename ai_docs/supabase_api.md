@@ -84,7 +84,7 @@ final activityRepositoryProvider = Provider<ActivityRepository>((ref) {
 | `temp_min` | numeric | YES | — | |
 | `temp_max` | numeric | YES | — | |
 | `precip_enabled` | boolean | YES | `false` | |
-| `precip_level` | text | YES | — | e.g. 'none', 'light', 'any' |
+| `precip_level` | text | YES | — | `'avoid_rain'` or `'rain_only'` (CHECK constrained) |
 | `wind_enabled` | boolean | YES | `false` | |
 | `wind_max` | numeric | YES | — | max wind speed |
 | `uv_enabled` | boolean | YES | `false` | |

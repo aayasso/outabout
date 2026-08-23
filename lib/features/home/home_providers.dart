@@ -268,11 +268,13 @@ bool evaluateDayMatch(ConditionProfile? profile, DailyForecast day) {
   }
 
   if (profile.precipEnabled) {
-    final precip = day.precipitationProbability;
-    if (profile.precipLevel == 'none' && precip > 20) {
-      return false;
-    }
-    if (profile.precipLevel == 'light_ok' && precip > 60) {
+    final isDry = day.precipitationProbability <= PrecipLevel.dryThreshold;
+    final wantsRain = profile.precipLevel == PrecipLevel.rainOnly;
+    // Wanting rain on a dry day fails, and avoiding rain on a wet day fails.
+    // Exhaustive by construction: anything that is not rain_only reads as
+    // avoid_rain. The old code had a silent third path, which is how 'light'
+    // came to mean "no filtering at all".
+    if (wantsRain == isDry) {
       return false;
     }
   }

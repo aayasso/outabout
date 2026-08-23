@@ -61,3 +61,31 @@ class ConditionProfile {
           'updated_at': updatedAt!.toIso8601String(),
       };
 }
+
+/// The two precipitation preferences, stored as text in `precip_level`.
+///
+/// These live here rather than as bare string literals at each call site
+/// because free-form strings are what broke this feature before: the pickers
+/// wrote 'none' | 'light' | 'any' while both matchers only recognised
+/// 'none' | 'light_ok', so "Light OK" silently applied no filtering at all.
+abstract class PrecipLevel {
+  /// The day fails when precipitation probability is above [dryThreshold].
+  static const String avoidRain = 'avoid_rain';
+
+  /// The day fails when precipitation probability is at or below
+  /// [dryThreshold].
+  static const String rainOnly = 'rain_only';
+
+  /// Probability (%) at or below which a day counts as dry.
+  static const int dryThreshold = 20;
+
+  /// Coerces a stored value to a level the UI can render.
+  ///
+  /// Rows written before the bidirectional migration hold 'none', 'light' or
+  /// 'any'. A SegmentedButton whose selected value matches no segment renders
+  /// with nothing selected rather than throwing, so an un-normalised legacy row
+  /// would show an empty toggle and quietly round-trip the stale value back on
+  /// save. Anything that is not [rainOnly] reads as [avoidRain].
+  static String normalize(String? stored) =>
+      stored == rainOnly ? rainOnly : avoidRain;
+}

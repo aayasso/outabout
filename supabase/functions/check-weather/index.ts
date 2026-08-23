@@ -13,6 +13,12 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 // store wind_max in km/h (the slider is 0-80 km/h). Convert before comparing.
 const METERS_PER_SECOND_TO_KMH = 3.6;
 
+// Precipitation is bidirectional: a profile either avoids rain or wants it.
+// Probability (%) at or below which a day counts as dry. Mirrors
+// PrecipLevel.dryThreshold in lib/data/models/condition_profile.dart.
+const PRECIP_DRY_THRESHOLD = 20;
+const PRECIP_RAIN_ONLY = "rain_only";
+
 function windKmh(day: any): number {
   return (day.windSpeedMax ?? 0) * METERS_PER_SECOND_TO_KMH;
 }
@@ -37,8 +43,12 @@ function conditionsMatch(forecast: any, profile: any): boolean {
   if (profile.precip_enabled) {
     const precip = day.precipitationProbabilityMax ??
       day.precipitationProbability;
-    if (profile.precip_level === "none" && precip > 20) return false;
-    if (profile.precip_level === "light_ok" && precip > 60) return false;
+    const isDry = precip <= PRECIP_DRY_THRESHOLD;
+    const wantsRain = profile.precip_level === PRECIP_RAIN_ONLY;
+    // Wanting rain on a dry day fails, and avoiding rain on a wet day fails.
+    // Exhaustive by construction: anything that is not rain_only reads as
+    // avoid_rain. Must stay identical to evaluateDayMatch in the Flutter app.
+    if (wantsRain === isDry) return false;
   }
 
   if (profile.wind_enabled) {

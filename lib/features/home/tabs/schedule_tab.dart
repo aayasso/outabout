@@ -548,12 +548,6 @@ class _ScheduleActivityCard extends StatelessWidget {
                         padding: const EdgeInsets.all(OutAboutSpacing.md),
                         child: Row(
                           children: [
-                            Icon(
-                              Icons.directions_run_outlined,
-                              size: 20,
-                              color: colors.textSecondary,
-                            ),
-                            const SizedBox(width: OutAboutSpacing.sm),
                             Expanded(
                               child: Text(
                                 activity.name,
@@ -730,21 +724,9 @@ class _ActivityHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(OutAboutSpacing.md),
-      child: Row(
-        children: [
-          Icon(
-            Icons.directions_run_outlined,
-            size: 20,
-            color: colors.textSecondary,
-          ),
-          const SizedBox(width: OutAboutSpacing.sm),
-          Expanded(
-            child: Text(
-              activity.name,
-              style: OutAboutTypography.headingSmall(colors),
-            ),
-          ),
-        ],
+      child: Text(
+        activity.name,
+        style: OutAboutTypography.headingSmall(colors),
       ),
     );
   }
