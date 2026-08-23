@@ -319,7 +319,8 @@ void main() {
               outcome: DayOutcome.done,
             );
 
-        expect(crossed, OutcomeMilestone.first);
+        expect(crossed.milestone, OutcomeMilestone.first);
+        expect(crossed.stats!.totalCompleted, 1);
         final captured = verify(
           () => events.log(
             captureAny(),
@@ -346,7 +347,8 @@ void main() {
             outcome: DayOutcome.skipped,
           );
 
-      expect(crossed, isNull);
+      expect(crossed.milestone, isNull);
+      expect(crossed.stats, isNotNull);
       verifyNever(
         () => events.log(
           any(),

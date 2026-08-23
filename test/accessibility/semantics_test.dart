@@ -58,33 +58,30 @@ _MockEventService _silentEvents() {
 final _day = DateTime(2026, 8, 23, 21);
 
 DailyForecast _forecast() => DailyForecast(
-      date: DateTime(2026, 8, 23),
-      temperatureMax: 24,
-      temperatureMin: 12,
-      precipitationProbability: 20,
-      windSpeedMax: 10,
-      weatherCode: 1000,
-    );
+  date: DateTime(2026, 8, 23),
+  temperatureMax: 24,
+  temperatureMin: 12,
+  precipitationProbability: 20,
+  windSpeedMax: 10,
+  weatherCode: 1000,
+);
 
-Activity _activity() => const Activity(
-      id: 'a1',
-      userId: 'u1',
-      name: 'Morning run',
-    );
+Activity _activity() =>
+    const Activity(id: 'a1', userId: 'u1', name: 'Morning run');
 
 /// The same activity, but with a condition that actually constrains a day.
 Activity _constrainedActivity() => const Activity(
-      id: 'a1',
-      userId: 'u1',
-      name: 'Morning run',
-      conditionProfile: ConditionProfile(
-        id: 'p1',
-        activityId: 'a1',
-        tempEnabled: true,
-        tempMin: 5,
-        tempMax: 30,
-      ),
-    );
+  id: 'a1',
+  userId: 'u1',
+  name: 'Morning run',
+  conditionProfile: ConditionProfile(
+    id: 'p1',
+    activityId: 'a1',
+    tempEnabled: true,
+    tempMin: 5,
+    tempMax: 30,
+  ),
+);
 
 void main() {
   late SharedPreferences prefs;
@@ -95,40 +92,37 @@ void main() {
   });
 
   List<Override> baseOverrides() => [
-        sharedPreferencesProvider.overrideWithValue(prefs),
-        weatherThemeProvider.overrideWith(
-          (ref) => WeatherThemeNotifier(WeatherTheme.sunny),
-        ),
-        weatherThemeColorsProvider.overrideWithValue(WeatherThemeColors.sunny),
-        behavioralEventServiceProvider.overrideWithValue(_silentEvents()),
-        categoriesProvider.overrideWith((ref) async => []),
-        profileProvider.overrideWith((ref) async => null),
-        nowProvider.overrideWithValue(() => _day),
-      ];
+    sharedPreferencesProvider.overrideWithValue(prefs),
+    weatherThemeProvider.overrideWith(
+      (ref) => WeatherThemeNotifier(WeatherTheme.sunny),
+    ),
+    weatherThemeColorsProvider.overrideWithValue(WeatherThemeColors.sunny),
+    behavioralEventServiceProvider.overrideWithValue(_silentEvents()),
+    categoriesProvider.overrideWith((ref) async => []),
+    profileProvider.overrideWith((ref) async => null),
+    nowProvider.overrideWithValue(() => _day),
+  ];
 
   Widget scheduleHost({bool constrained = true}) {
     final activity = constrained ? _constrainedActivity() : _activity();
     return ProviderScope(
-        overrides: [
-          ...baseOverrides(),
-          activitiesProvider.overrideWith((ref) async => [activity]),
-          scheduleMatchProvider.overrideWith(
-            (ref) => AsyncValue.data([
-              ScheduleDay(
-                forecast: _forecast(),
-                matchedActivities: [activity],
-              ),
-            ]),
-          ),
-        ],
-        child: const MaterialApp(
-          home: MediaQuery(
-            // Stills the weather scene so pumpAndSettle can return.
-            data: MediaQueryData(disableAnimations: true),
-            child: ScheduleTab(),
-          ),
+      overrides: [
+        ...baseOverrides(),
+        activitiesProvider.overrideWith((ref) async => [activity]),
+        scheduleMatchProvider.overrideWith(
+          (ref) => AsyncValue.data([
+            ScheduleDay(forecast: _forecast(), matchedActivities: [activity]),
+          ]),
         ),
-      );
+      ],
+      child: const MaterialApp(
+        home: MediaQuery(
+          // Stills the weather scene so pumpAndSettle can return.
+          data: MediaQueryData(disableAnimations: true),
+          child: ScheduleTab(),
+        ),
+      ),
+    );
   }
 
   group('schedule activity card', () {
@@ -147,82 +141,77 @@ void main() {
           ),
           findsOneWidget,
         );
-        expect(
-          find.bySemanticsLabel(RegExp('conditions match')),
-          findsNothing,
-        );
+        expect(find.bySemanticsLabel(RegExp('conditions match')), findsNothing);
 
         handle.dispose();
       },
     );
 
-    testWidgets(
-      'names the activity and the day its conditions match',
-      (tester) async {
-        await tester.pumpWidget(scheduleHost());
-        await tester.pumpAndSettle();
-        final handle = tester.ensureSemantics();
+    testWidgets('names the activity and the day its conditions match', (
+      tester,
+    ) async {
+      await tester.pumpWidget(scheduleHost());
+      await tester.pumpAndSettle();
+      final handle = tester.ensureSemantics();
 
-        expect(
-          find.bySemanticsLabel(
-            RegExp('Activity: Morning run, conditions match Today'),
-          ),
-          findsOneWidget,
-        );
+      expect(
+        find.bySemanticsLabel(
+          RegExp('Activity: Morning run, conditions match Today'),
+        ),
+        findsOneWidget,
+      );
 
-        handle.dispose();
-      },
-    );
+      handle.dispose();
+    });
 
-    testWidgets(
-      'the card is its own node, not the whole day section',
-      (tester) async {
-        await tester.pumpWidget(scheduleHost());
-        await tester.pumpAndSettle();
-        final handle = tester.ensureSemantics();
+    testWidgets('the card is its own node, not the whole day section', (
+      tester,
+    ) async {
+      await tester.pumpWidget(scheduleHost());
+      await tester.pumpAndSettle();
+      final handle = tester.ensureSemantics();
 
-        // The regression this guards. `Semantics(button: true)` without
-        // `container: true` does not create a node — it annotates whichever
-        // node the parent chain already provides. That was the sliver item
-        // covering the entire day section, so VoiceOver announced one button
-        // labelled with the day, the forecast, the activity name twice and
-        // the outcome question twice: nine lines, one swipe stop.
-        final cards = _allSemantics(tester)
-            .where((d) => d.label.startsWith('Activity: Morning run'))
-            .toList();
-        expect(cards, hasLength(1));
+      // The regression this guards. `Semantics(button: true)` without
+      // `container: true` does not create a node — it annotates whichever
+      // node the parent chain already provides. That was the sliver item
+      // covering the entire day section, so VoiceOver announced one button
+      // labelled with the day, the forecast, the activity name twice and
+      // the outcome question twice: nine lines, one swipe stop.
+      final cards = _allSemantics(
+        tester,
+      ).where((d) => d.label.startsWith('Activity: Morning run')).toList();
+      expect(cards, hasLength(1));
 
-        final label = cards.single.label;
-        expect(
-          label,
-          isNot(contains('H:')),
-          reason: 'the day forecast belongs to the header, not to the card',
-        );
-        expect(
-          label,
-          isNot(contains('Did you go')),
-          reason: 'the outcome prompt is a separate control',
-        );
-        expect(
-          'x${label}x'.split('Morning run').length - 1,
-          1,
-          reason: 'the activity name must be announced once',
-        );
+      final label = cards.single.label;
+      expect(
+        label,
+        isNot(contains('H:')),
+        reason: 'the day forecast belongs to the header, not to the card',
+      );
+      expect(
+        label,
+        isNot(contains('Did you go')),
+        reason: 'the outcome prompt is a separate control',
+      );
+      expect(
+        'x${label}x'.split('Morning run').length - 1,
+        1,
+        reason: 'the activity name must be announced once',
+      );
 
-        // Every control inside the card keeps a node of its own. A tooltip
-        // lands in SemanticsData.tooltip, not in the label; iOS composes the
-        // two when it speaks the element.
-        expect(find.byTooltip('Find & book'), findsOneWidget);
-        expect(
-          _allSemantics(tester).where(
-            (d) => '${d.label} ${d.tooltip}'.contains('Find & book'),
-          ),
-          isNotEmpty,
-        );
+      // Every control inside the card keeps a node of its own. A tooltip
+      // lands in SemanticsData.tooltip, not in the label; iOS composes the
+      // two when it speaks the element.
+      expect(find.byTooltip('Find & book'), findsOneWidget);
+      expect(
+        _allSemantics(
+          tester,
+        ).where((d) => '${d.label} ${d.tooltip}'.contains('Find & book')),
+        isNotEmpty,
+      );
 
-        handle.dispose();
-      },
-    );
+      handle.dispose();
+    });
 
     testWidgets(
       'the day header is a node of its own, and reads before the card',
@@ -232,10 +221,10 @@ void main() {
         final handle = tester.ensureSemantics();
 
         final all = _allSemantics(tester);
-        final headerIndex =
-            all.indexWhere((d) => d.flagsCollection.isHeader);
-        final cardIndex = all
-            .indexWhere((d) => d.label.startsWith('Activity: Morning run'));
+        final headerIndex = all.indexWhere((d) => d.flagsCollection.isHeader);
+        final cardIndex = all.indexWhere(
+          (d) => d.label.startsWith('Activity: Morning run'),
+        );
 
         expect(headerIndex, isNonNegative, reason: 'the day needs a header');
         expect(
@@ -246,40 +235,38 @@ void main() {
         expect(all[headerIndex].label, contains('Today'));
         // The icon tints sit at 1.7-2.8:1, so the numbers carry their own
         // names rather than leaning on the glyph beside them.
-        expect(
-          all[headerIndex].label,
-          contains('Chance of precipitation'),
-        );
+        expect(all[headerIndex].label, contains('Chance of precipitation'));
         expect(all[headerIndex].label, contains('Wind up to'));
 
         handle.dispose();
       },
     );
-
   });
 
   group('outcome prompt', () {
     Widget promptHost() => ProviderScope(
-          overrides: [
-            ...baseOverrides(),
-            outcomePromptProvider.overrideWith(
-              (ref) => OutcomePromptNotifier(prefs, () => _day),
-            ),
-          ],
-          child: MaterialApp(
-            home: Scaffold(
-              body: OutcomePrompt(
-                activityId: 'a1',
-                activityName: 'Morning run',
-                matchedDay: DateTime(2026, 8, 23),
-                forecastDay: _forecast(),
-              ),
-            ),
+      overrides: [
+        ...baseOverrides(),
+        outcomePromptProvider.overrideWith(
+          (ref) => OutcomePromptNotifier(prefs, () => _day),
+        ),
+      ],
+      child: MaterialApp(
+        home: Scaffold(
+          body: OutcomePrompt(
+            activityId: 'a1',
+            activityName: 'Morning run',
+            matchedDay: DateTime(2026, 8, 23),
+            matchIsConstrained: true,
+            forecastDay: _forecast(),
           ),
-        );
+        ),
+      ),
+    );
 
-    testWidgets('each answer names the activity it answers for',
-        (tester) async {
+    testWidgets('each answer names the activity it answers for', (
+      tester,
+    ) async {
       await tester.pumpWidget(promptHost());
       await tester.pumpAndSettle();
       final handle = tester.ensureSemantics();
@@ -320,8 +307,9 @@ void main() {
   });
 
   group('condition form', () {
-    testWidgets('the switch carries its state as a flag, not as text',
-        (tester) async {
+    testWidgets('the switch carries its state as a flag, not as text', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         ProviderScope(
           overrides: baseOverrides(),
@@ -341,8 +329,9 @@ void main() {
       await tester.pumpAndSettle();
       final handle = tester.ensureSemantics();
 
-      final toggles = _allSemantics(tester)
-          .where((d) => d.flagsCollection.isToggled != Tristate.none);
+      final toggles = _allSemantics(
+        tester,
+      ).where((d) => d.flagsCollection.isToggled != Tristate.none);
       expect(toggles, isNotEmpty, reason: 'the switch must expose its state');
       final labelled = toggles
           .where((d) => d.label.contains('Temperature'))
@@ -386,9 +375,9 @@ void main() {
       await tester.pumpAndSettle();
       final handle = tester.ensureSemantics();
 
-      final sliders = _allSemantics(tester)
-          .where((d) => d.flagsCollection.isSlider)
-          .toList();
+      final sliders = _allSemantics(
+        tester,
+      ).where((d) => d.flagsCollection.isSlider).toList();
       expect(sliders, hasLength(2), reason: 'a range slider has two thumbs');
 
       // 10 °C is 50 °F and 30 °C is 86 °F. Announcing the stored "10" and
@@ -416,10 +405,7 @@ void main() {
       await tester.pumpAndSettle();
       final handle = tester.ensureSemantics();
 
-      expect(
-        find.bySemanticsLabel('Precipitation preference'),
-        findsOneWidget,
-      );
+      expect(find.bySemanticsLabel('Precipitation preference'), findsOneWidget);
       // Both options must stay individually selectable inside the group.
       expect(find.text('Avoid rain'), findsOneWidget);
       expect(find.text('Only when raining'), findsOneWidget);
@@ -432,22 +418,21 @@ void main() {
   // assert the same semantics tree iOS turns into VoiceOver elements.
   group('onboarding', () {
     Widget onboardingHost(Widget child) => ProviderScope(
-          overrides: baseOverrides(),
-          child: MaterialApp(home: Scaffold(body: child)),
-        );
+      overrides: baseOverrides(),
+      child: MaterialApp(home: Scaffold(body: child)),
+    );
 
     testWidgets('progress dots say where you are', (tester) async {
-      await tester.pumpWidget(onboardingHost(const ProgressDots(currentPage: 0)));
+      await tester.pumpWidget(
+        onboardingHost(const ProgressDots(currentPage: 0)),
+      );
       await tester.pumpAndSettle();
       final handle = tester.ensureSemantics();
 
       expect(find.bySemanticsLabel('Step 1 of 6'), findsOneWidget);
       // The dots themselves are decoration; six unlabelled stops would be
       // six swipes that say nothing.
-      expect(
-        _allSemantics(tester).where((d) => d.label == ''),
-        isNotEmpty,
-      );
+      expect(_allSemantics(tester).where((d) => d.label == ''), isNotEmpty);
 
       handle.dispose();
     });
@@ -461,9 +446,9 @@ void main() {
       await tester.pumpAndSettle();
       final handle = tester.ensureSemantics();
 
-      final cta = _allSemantics(tester)
-          .where((d) => d.label.contains('Get Started'))
-          .toList();
+      final cta = _allSemantics(
+        tester,
+      ).where((d) => d.label.contains('Get Started')).toList();
       expect(cta, isNotEmpty);
       expect(
         cta.any((d) => d.flagsCollection.isEnabled == Tristate.isFalse),

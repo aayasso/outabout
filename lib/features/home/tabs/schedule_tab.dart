@@ -788,6 +788,12 @@ class _ScheduleActivityCard extends ConsumerWidget {
                               activityId: id,
                               activityName: activity.name,
                               matchedDay: forecast.date,
+                              // The same predicate the status rail and the
+                              // semantics label above use. Without it the card
+                              // reads "no weather conditions set" and then asks
+                              // whether the user went — about a day the app
+                              // never claimed suited anything.
+                              matchIsConstrained: isConstrained,
                               forecastDay: forecast,
                             ),
                         ],

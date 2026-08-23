@@ -74,12 +74,14 @@ class OutcomeAnswerController {
   OutcomeAnswerController(this._ref);
   final Ref _ref;
 
-  /// Writes [outcome] for [matchedDay] and returns the milestone it crossed.
+  /// Writes [outcome] for [matchedDay] and reports what it changed.
   ///
-  /// The milestone is computed from the completion count either side of the
-  /// write rather than from the new total, so a refetch that recomputes the
-  /// same number celebrates nothing.
-  Future<OutcomeMilestone?> submit({
+  /// Returns the refreshed stats alongside the milestone, so the caller can
+  /// show the new streak without a second round trip. The milestone is derived
+  /// from the completion count either side of the write rather than from the
+  /// new total, so a refetch that recomputes the same number celebrates
+  /// nothing.
+  Future<({OutcomeMilestone? milestone, OutcomeStats? stats})> submit({
     required String activityId,
     required DateTime matchedDay,
     required String outcome,
@@ -87,14 +89,18 @@ class OutcomeAnswerController {
   }) async {
     final client = _ref.read(supabaseClientProvider);
     final userId = client.auth.currentUser?.id;
-    if (userId == null) return null;
+    if (userId == null) return (milestone: null, stats: null);
 
-    final before =
-        _ref
-            .read(activityOutcomeStatsProvider(activityId))
-            .valueOrNull
-            ?.totalCompleted ??
-        0;
+    // Fetched, not read from cache. On the schedule tab nothing has ever read
+    // this activity's stats, so a cached read returns null — and defaulting
+    // that to zero would make the first answer of every session look like a
+    // crossing of the "first completion" threshold, re-announcing a milestone
+    // the user passed months ago.
+    final now = _ref.read(nowProvider);
+    final beforeRows = await _ref.read(
+      activityOutcomesProvider(activityId).future,
+    );
+    final before = computeOutcomeStats(beforeRows, now: now()).totalCompleted;
 
     await _ref
         .read(activityDayOutcomeRepositoryProvider)
@@ -103,20 +109,17 @@ class OutcomeAnswerController {
           activityId: activityId,
           localDate: localDateKeyOf(matchedDay),
           outcome: outcome,
-          answeredAt: _ref.read(nowProvider)(),
+          answeredAt: now(),
           reason: reason,
         );
 
     _ref.invalidate(activityOutcomesProvider(activityId));
     final rows = await _ref.read(activityOutcomesProvider(activityId).future);
-    final after = computeOutcomeStats(
-      rows,
-      now: _ref.read(nowProvider)(),
-    ).totalCompleted;
+    final stats = computeOutcomeStats(rows, now: now());
 
     final crossed = milestoneCrossed(
       previousCompleted: before,
-      currentCompleted: after,
+      currentCompleted: stats.totalCompleted,
     );
     if (crossed != null) {
       await _ref
@@ -129,7 +132,7 @@ class OutcomeAnswerController {
             },
           );
     }
-    return crossed;
+    return (milestone: crossed, stats: stats);
   }
 }
 

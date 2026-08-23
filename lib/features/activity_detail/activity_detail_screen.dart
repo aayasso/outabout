@@ -495,6 +495,12 @@ class _ActivityDetailScreenState extends ConsumerState<ActivityDetailScreen> {
                   activityId: activity.id!,
                   activityName: activity.name,
                   matchedDay: todaysForecast.date,
+                  // An activity that constrains nothing appears on every
+                  // forecast day. Asking whether the user went is only
+                  // meaningful when the app actually claimed the weather
+                  // suited it — the same rule the schedule card applies.
+                  matchIsConstrained:
+                      activity.conditionProfile?.isConstraining ?? false,
                   forecastDay: todaysForecast,
                 ),
               const SizedBox(height: OutAboutSpacing.md),
