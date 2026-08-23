@@ -68,13 +68,36 @@ void main() {
       expect(c.text, const Color(0xFFE8EDF2));
     });
 
-    test('forTheme returns correct palette for each theme', () {
-      for (final theme in WeatherTheme.values) {
-        final colors = WeatherThemeColors.forTheme(theme);
-        expect(colors, isNotNull);
-        expect(colors.background, isNotNull);
-        expect(colors.primary, isNotNull);
-      }
+    test('forTheme returns the palette that belongs to each theme', () {
+      // Every field here is non-nullable, so the old isNotNull assertions
+      // could not fail. Map each theme to its own palette instead.
+      expect(
+        WeatherThemeColors.forTheme(WeatherTheme.sunny).background,
+        WeatherThemeColors.sunny.background,
+      );
+      expect(
+        WeatherThemeColors.forTheme(WeatherTheme.overcast).background,
+        WeatherThemeColors.overcast.background,
+      );
+      expect(
+        WeatherThemeColors.forTheme(WeatherTheme.rainy).background,
+        WeatherThemeColors.rainy.background,
+      );
+      expect(
+        WeatherThemeColors.forTheme(WeatherTheme.snowy).background,
+        WeatherThemeColors.snowy.background,
+      );
+      expect(
+        WeatherThemeColors.forTheme(WeatherTheme.night).background,
+        WeatherThemeColors.night.background,
+      );
+
+      // And no two themes share a background, so the mapping is not a
+      // constant function.
+      final backgrounds = WeatherTheme.values
+          .map((t) => WeatherThemeColors.forTheme(t).background)
+          .toSet();
+      expect(backgrounds, hasLength(WeatherTheme.values.length));
     });
   });
 
@@ -82,8 +105,26 @@ void main() {
     test('produces valid ThemeData for every WeatherTheme', () {
       for (final theme in WeatherTheme.values) {
         final themeData = outAboutTheme(theme);
-        expect(themeData, isA<ThemeData>());
-        expect(themeData.useMaterial3, true);
+        final colors = WeatherThemeColors.forTheme(theme);
+        // `isA<ThemeData>()` on a ThemeData-returning function is a tautology.
+        // Assert what the builder is actually responsible for.
+        expect(themeData.useMaterial3, true, reason: '$theme');
+        expect(themeData.brightness, theme.brightness, reason: '$theme');
+        expect(
+          themeData.colorScheme.primary,
+          colors.primary,
+          reason: '$theme',
+        );
+        expect(
+          themeData.colorScheme.onPrimary,
+          colors.onPrimary,
+          reason: '$theme',
+        );
+        expect(
+          themeData.scaffoldBackgroundColor,
+          colors.background,
+          reason: '$theme',
+        );
       }
     });
 
@@ -120,6 +161,9 @@ void main() {
       final themeData = outAboutTheme(WeatherTheme.sunny);
       final cardShape = themeData.cardTheme.shape as RoundedRectangleBorder;
       final radius = (cardShape.borderRadius as BorderRadius).topLeft;
+      // The literal, not the token — reading OutAboutRadius.cards on both
+      // sides passed for any value the token happened to hold.
+      expect(radius.x, 16.0);
       expect(radius.x, OutAboutRadius.cards);
     });
 
@@ -128,6 +172,7 @@ void main() {
       final buttonStyle = themeData.elevatedButtonTheme.style!;
       final shape = buttonStyle.shape!.resolve({}) as RoundedRectangleBorder;
       final radius = (shape.borderRadius as BorderRadius).topLeft;
+      expect(radius.x, 12.0);
       expect(radius.x, OutAboutRadius.buttons);
     });
   });

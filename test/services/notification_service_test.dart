@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:permission_handler_platform_interface/permission_handler_platform_interface.dart';
@@ -26,7 +27,8 @@ class FakePermissionHandler extends Fake
 
   @override
   Future<Map<Permission, PermissionStatus>> requestPermissions(
-      List<Permission> permissions) async {
+    List<Permission> permissions,
+  ) async {
     return {for (final p in permissions) p: statusToReturn};
   }
 
@@ -35,7 +37,8 @@ class FakePermissionHandler extends Fake
 
   @override
   Future<bool> shouldShowRequestPermissionRationale(
-      Permission permission) async => false;
+    Permission permission,
+  ) async => false;
 
   @override
   Future<ServiceStatus> checkServiceStatus(Permission permission) async =>
@@ -57,21 +60,67 @@ void _useFake(FakePermissionHandler fake) {
 // ---------------------------------------------------------------------------
 
 void main() {
-  group('NotificationService — structural', () {
-    test('can be instantiated', () {
-      final service = NotificationService();
-      expect(service, isNotNull);
+  // The notification payload is the app's only untyped input from a server.
+  // These used to be `isA<Function>` assertions on tear-offs, which cannot
+  // fail; the parsing they were standing in for was never exercised at all.
+  group('NotificationService.parseActivityId', () {
+    test('reads a plain string id', () {
+      expect(
+        NotificationService.parseActivityId({'activity_id': 'abc-123'}),
+        'abc-123',
+      );
     });
 
-    test('exposes requestPermission() method', () {
-      final service = NotificationService();
-      // Verify the method exists and returns a Future<bool>.
-      expect(service.requestPermission, isA<Function>());
+    test('accepts a numeric id instead of throwing', () {
+      // The regression: `data['activity_id'] as String?` threw a TypeError
+      // inside the OneSignal click listener, so the tap did nothing at all.
+      expect(NotificationService.parseActivityId({'activity_id': 42}), '42');
     });
 
-    test('exposes isGranted() method', () {
-      final service = NotificationService();
-      expect(service.isGranted, isA<Function>());
+    test('null payload yields null', () {
+      expect(NotificationService.parseActivityId(null), isNull);
+    });
+
+    test('missing key yields null', () {
+      expect(NotificationService.parseActivityId({'other': 'x'}), isNull);
+    });
+
+    test('explicit null id yields null', () {
+      expect(
+        NotificationService.parseActivityId({'activity_id': null}),
+        isNull,
+      );
+    });
+
+    test('empty and whitespace-only ids yield null, not a bad route', () {
+      // '' would otherwise navigate to /activity/ and render "not found".
+      expect(NotificationService.parseActivityId({'activity_id': ''}), isNull);
+      expect(
+        NotificationService.parseActivityId({'activity_id': '   '}),
+        isNull,
+      );
+    });
+
+    test('surrounding whitespace is trimmed', () {
+      expect(
+        NotificationService.parseActivityId({'activity_id': ' abc '}),
+        'abc',
+      );
+    });
+
+    test('a structured value yields null rather than "{...}"', () {
+      expect(
+        NotificationService.parseActivityId({
+          'activity_id': {'nested': true},
+        }),
+        isNull,
+      );
+      expect(
+        NotificationService.parseActivityId({
+          'activity_id': ['a'],
+        }),
+        isNull,
+      );
     });
   });
 
@@ -115,7 +164,8 @@ void main() {
     setUp(() {
       _useFake(
         FakePermissionHandler(
-            statusToReturn: PermissionStatus.permanentlyDenied),
+          statusToReturn: PermissionStatus.permanentlyDenied,
+        ),
       );
     });
 
@@ -133,38 +183,14 @@ void main() {
   });
 
   group('notificationServiceProvider', () {
-    test('provider constant exists', () {
-      expect(notificationServiceProvider, isNotNull);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // OneSignal methods — structural tests only.
-  //
-  // OneSignal relies on native platform channels, so full integration tests
-  // require a running app on a real device or emulator. These tests verify
-  // the methods exist and have the correct signatures.
-  // ---------------------------------------------------------------------------
-
-  group('NotificationService — OneSignal methods (structural)', () {
-    test('exposes initializeOneSignal() method', () {
-      final service = NotificationService();
-      expect(service.initializeOneSignal, isA<Function>());
-    });
-
-    test('exposes setUserTag() method', () {
-      final service = NotificationService();
-      expect(service.setUserTag, isA<Function>());
-    });
-
-    test('exposes clearUserTag() method', () {
-      final service = NotificationService();
-      expect(service.clearUserTag, isA<Function>());
-    });
-
-    test('exposes setupClickHandler() method', () {
-      final service = NotificationService();
-      expect(service.setupClickHandler, isA<Function>());
+    test('resolves to a NotificationService', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      // `isNotNull` on a const provider could not fail. Reading it can.
+      expect(
+        container.read(notificationServiceProvider),
+        isA<NotificationService>(),
+      );
     });
   });
 }

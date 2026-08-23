@@ -17,11 +17,20 @@ class _MockSupabaseClient extends Mock implements SupabaseClient {}
 
 class _RecordingEventService extends BehavioralEventService {
   _RecordingEventService()
-      : super(
-          supabase: _MockSupabaseClient(),
-          activeThemeName: 'sunny',
-          appVersion: 'test',
-        );
+    : super(
+        supabase: _MockSupabaseClient(),
+        activeThemeName: () => 'sunny',
+        geographicContext: () => const GeographicContext(
+          metro: '',
+          city: '',
+          state: '',
+          country: '',
+          latBucketed: 0.0,
+          lngBucketed: 0.0,
+          timezone: '',
+        ),
+        appVersion: 'test',
+      );
 
   final List<({String type, ConditionsAtEvent? conditions})> logged = [];
 
@@ -62,9 +71,7 @@ void main() {
         weatherThemeProvider.overrideWith(
           (ref) => WeatherThemeNotifier(WeatherTheme.sunny),
         ),
-        weatherThemeColorsProvider.overrideWithValue(
-          WeatherThemeColors.sunny,
-        ),
+        weatherThemeColorsProvider.overrideWithValue(WeatherThemeColors.sunny),
         nowProvider.overrideWithValue(() => now),
         behavioralEventServiceProvider.overrideWithValue(events),
       ],
@@ -104,8 +111,9 @@ void main() {
     expect(find.text('Not today'), findsOneWidget);
   });
 
-  testWidgets('Yes logs activity_confirmed with the day\'s weather',
-      (tester) async {
+  testWidgets('Yes logs activity_confirmed with the day\'s weather', (
+    tester,
+  ) async {
     await tester.pumpWidget(harness(now: DateTime(2026, 8, 23, 18)));
     await tester.pumpAndSettle();
 
@@ -134,8 +142,9 @@ void main() {
     expect(events.logged.single.type, 'condition_match_ignored');
   });
 
-  testWidgets('dismissing settles the prompt without logging an outcome',
-      (tester) async {
+  testWidgets('dismissing settles the prompt without logging an outcome', (
+    tester,
+  ) async {
     await tester.pumpWidget(harness(now: DateTime(2026, 8, 23, 18)));
     await tester.pumpAndSettle();
 
@@ -148,8 +157,9 @@ void main() {
     expect(find.text('Did you go?'), findsNothing);
   });
 
-  testWidgets('disappears once answered and does not come back',
-      (tester) async {
+  testWidgets('disappears once answered and does not come back', (
+    tester,
+  ) async {
     await tester.pumpWidget(harness(now: DateTime(2026, 8, 23, 18)));
     await tester.pumpAndSettle();
 
@@ -166,8 +176,7 @@ void main() {
     expect(events.logged, hasLength(1));
   });
 
-  testWidgets('the answer survives a fresh provider container',
-      (tester) async {
+  testWidgets('the answer survives a fresh provider container', (tester) async {
     await tester.pumpWidget(harness(now: DateTime(2026, 8, 23, 18)));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Yes'));
@@ -182,17 +191,17 @@ void main() {
     expect(find.text('Did you go?'), findsNothing);
   });
 
-  testWidgets('chips and the dismiss control meet the 48dp tap target',
-      (tester) async {
+  testWidgets('chips and the dismiss control meet the 48dp tap target', (
+    tester,
+  ) async {
     await tester.pumpWidget(harness(now: DateTime(2026, 8, 23, 18)));
     await tester.pumpAndSettle();
 
     for (final label in ['Yes', 'Not today']) {
       final size = tester.getSize(
-        find.ancestor(
-          of: find.text(label),
-          matching: find.byType(Container),
-        ).first,
+        find
+            .ancestor(of: find.text(label), matching: find.byType(Container))
+            .first,
       );
       expect(size.height, greaterThanOrEqualTo(48.0), reason: label);
       expect(size.width, greaterThanOrEqualTo(48.0), reason: label);

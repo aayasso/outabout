@@ -4,14 +4,13 @@ import 'dart:ui';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:outabout/core/theme.dart';
+import 'package:outabout/features/weather_scene/weather_scene_spec.dart';
 
 /// WCAG 2.1 relative luminance.
 double _luminance(Color c) {
   double channel(double v) =>
       v <= 0.03928 ? v / 12.92 : math.pow((v + 0.055) / 1.055, 2.4).toDouble();
-  return 0.2126 * channel(c.r) +
-      0.7152 * channel(c.g) +
-      0.0722 * channel(c.b);
+  return 0.2126 * channel(c.r) + 0.7152 * channel(c.g) + 0.0722 * channel(c.b);
 }
 
 /// WCAG 2.1 contrast ratio, 1.0 to 21.0.
@@ -23,11 +22,11 @@ double contrast(Color a, Color b) {
 
 /// [fg] painted at [alpha] over an opaque [bg].
 Color over(Color fg, double alpha, Color bg) => Color.from(
-      alpha: 1,
-      red: alpha * fg.r + (1 - alpha) * bg.r,
-      green: alpha * fg.g + (1 - alpha) * bg.g,
-      blue: alpha * fg.b + (1 - alpha) * bg.b,
-    );
+  alpha: 1,
+  red: alpha * fg.r + (1 - alpha) * bg.r,
+  green: alpha * fg.g + (1 - alpha) * bg.g,
+  blue: alpha * fg.b + (1 - alpha) * bg.b,
+);
 
 const _aaNormal = 4.5;
 const _aaLarge = 3.0;
@@ -37,13 +36,18 @@ const _aaLarge = 3.0;
 /// `_SceneVeil` grades the scrim: `alpha * 0.5` at the top, `alpha` at 0.42,
 /// `alpha + 0.22` at the foot. The top is the worst case for legibility, and
 /// it is where the "Today" section sits.
-const _lightestVeil = <String, double>{
-  'sunny': 0.26 * 0.5,
-  'overcast': 0.24 * 0.5,
-  'rainy': 0.34 * 0.5,
-  'snowy': 0.24 * 0.5,
-  'night': 0.20 * 0.5,
-  'fog': 0.46 * 0.5,
+///
+/// Read from [SceneVeilAlpha] rather than copied. Hardcoding the numbers here
+/// meant this suite would keep certifying AA for a veil the app no longer
+/// used — a contrast test that cannot notice the contrast changing.
+const _veilTopFactor = 0.5;
+final _lightestVeil = <String, double>{
+  'sunny': SceneVeilAlpha.sunny * _veilTopFactor,
+  'overcast': SceneVeilAlpha.overcast * _veilTopFactor,
+  'rainy': SceneVeilAlpha.rainy * _veilTopFactor,
+  'snowy': SceneVeilAlpha.snowy * _veilTopFactor,
+  'night': SceneVeilAlpha.night * _veilTopFactor,
+  'fog': SceneVeilAlpha.fog * _veilTopFactor,
 };
 
 /// The worst-case large-area scene element per palette, as (token, alpha)
@@ -53,18 +57,18 @@ List<(Color, double)> _sceneStack(WeatherThemeColors c, String theme) =>
     switch (theme) {
       // Sun core, mid and outer glow, then the cloud bank over it.
       'sunny' => [
-          (c.primary, 0.22),
-          (c.accent, 0.26),
-          (c.primary, 0.38),
-          (c.textSecondary, 0.28),
-        ],
+        (c.primary, 0.22),
+        (c.accent, 0.26),
+        (c.primary, 0.38),
+        (c.textSecondary, 0.28),
+      ],
       'overcast' => [(c.textSecondary, 0.40), (c.textSecondary, 0.40)],
       'rainy' => [(c.textSecondary, 0.38), (c.textSecondary, 0.38)],
       'fog' => [
-          (c.textSecondary, 0.38),
-          (c.textSecondary, 0.38),
-          (c.textSecondary, 0.38),
-        ],
+        (c.textSecondary, 0.38),
+        (c.textSecondary, 0.38),
+        (c.textSecondary, 0.38),
+      ],
       'snowy' => [(c.textSecondary, 0.30), (c.textSecondary, 0.30)],
       // Moon halo, then the moon disc.
       'night' => [(c.primary, 0.16), (c.textSecondary, 0.85)],
@@ -95,12 +99,16 @@ void main() {
     palettes.forEach((name, c) {
       test('$name clears AA on background and card', () {
         for (final bg in [c.background, c.cardBackground]) {
-          expect(contrast(c.text, bg), greaterThanOrEqualTo(_aaNormal),
-              reason: '$name text');
+          expect(
+            contrast(c.text, bg),
+            greaterThanOrEqualTo(_aaNormal),
+            reason: '$name text',
+          );
           expect(
             contrast(c.textSecondary, bg),
             greaterThanOrEqualTo(_aaNormal),
-            reason: '$name textSecondary — 12pt body copy is normal text, '
+            reason:
+                '$name textSecondary — 12pt body copy is normal text, '
                 'so AA Large is not enough',
           );
           expect(
@@ -119,7 +127,8 @@ void main() {
         expect(
           contrast(c.onPrimary, c.primary),
           greaterThanOrEqualTo(_aaNormal),
-          reason: '$name: FAB icon, ElevatedButton label, selected segment, '
+          reason:
+              '$name: FAB icon, ElevatedButton label, selected segment, '
               'the outcome "Yes" chip and the active theme chip all sit on '
               'this fill',
         );
@@ -136,20 +145,30 @@ void main() {
 
       test('$scene: card text clears AA over the worst-case scene', () {
         final behind = scheduleCardBehind(c, scene);
-        expect(contrast(c.text, behind), greaterThanOrEqualTo(_aaNormal),
-            reason: '$scene card text');
+        expect(
+          contrast(c.text, behind),
+          greaterThanOrEqualTo(_aaNormal),
+          reason: '$scene card text',
+        );
         expect(
           contrast(c.textSecondary, behind),
           greaterThanOrEqualTo(_aaNormal),
-          reason: '$scene card secondary text — the day header renders '
+          reason:
+              '$scene card secondary text — the day header renders '
               '11pt and 12pt labels on this surface',
         );
       });
 
-      test('$scene: nothing in the tab may rely on the bare scene', () {
-        // Before the fix, _EmptyText and _ActivityHeader painted straight
-        // onto the veil. Recorded here as the reason the surface exists:
-        // bare secondary text bottoms out at 1.45:1 on night.
+      test('$scene: bare scene text would fail, which is why the '
+          'surface exists', () {
+        // Reads SceneVeilAlpha from lib rather than a copy, so a structural
+        // change — dropping the veil, retuning the top stop, changing
+        // _scheduleSurfaceOpacity — flows into these numbers.
+        //
+        // Honest about its own margins: the 0.90 card dominates the
+        // composite and the top stop is capped at half the veil alpha, so
+        // these thresholds are not close. That is the point — the surface is
+        // what carries the text, not the veil.
         var raw = c.background;
         for (final (color, alpha) in _sceneStack(c, scene)) {
           raw = over(color, alpha, raw);
@@ -158,9 +177,17 @@ void main() {
         final surfaced = scheduleCardBehind(c, scene);
 
         expect(
+          contrast(c.textSecondary, bare),
+          lessThan(_aaNormal),
+          reason:
+              '$scene: if the veil now carries 12pt secondary text on its '
+              'own, _sceneSurface is no longer load-bearing and this '
+              'expectation should be revisited',
+        );
+        expect(
           contrast(c.textSecondary, surfaced),
-          greaterThan(contrast(c.textSecondary, bare)),
-          reason: 'the surface is what makes this text legible',
+          greaterThanOrEqualTo(_aaNormal),
+          reason: '$scene: the surface is what makes this text legible',
         );
       });
     }
@@ -180,14 +207,6 @@ void main() {
           contrast(c.primaryInteractive, c.cardBackground),
           greaterThanOrEqualTo(_aaLarge),
           reason: '$name UI indicator on a card',
-        );
-      });
-
-      test('$name switch thumb is visible on its active track', () {
-        expect(
-          contrast(c.onPrimary, c.primary),
-          greaterThanOrEqualTo(_aaLarge),
-          reason: '$name: the thumb is what makes the switch state readable',
         );
       });
     });

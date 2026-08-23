@@ -5,17 +5,16 @@ import 'package:outabout/data/models/booking_provider.dart';
 void main() {
   group('providersFor', () {
     test('falls back to Google Maps when nothing matches', () {
-      expect(
-        providersFor(activityName: 'Sitting quietly'),
-        [BookingProvider.googleMaps],
-      );
+      expect(providersFor(activityName: 'Sitting quietly'), [
+        BookingProvider.googleMaps,
+      ]);
     });
 
     test('matches on the activity name alone', () {
-      expect(
-        providersFor(activityName: 'Sunday tennis'),
-        [BookingProvider.playtomic, BookingProvider.googleMaps],
-      );
+      expect(providersFor(activityName: 'Sunday tennis'), [
+        BookingProvider.playtomic,
+        BookingProvider.googleMaps,
+      ]);
     });
 
     test('matches on a category name when the activity name is neutral', () {
@@ -49,10 +48,10 @@ void main() {
     test('rule order decides when two keywords both appear', () {
       // 'golf' precedes the fitness rule, so a golf-branded yoga session
       // resolves to golf rather than to Mindbody.
-      expect(
-        providersFor(activityName: 'Golf yoga retreat'),
-        [BookingProvider.googleMaps, BookingProvider.yelp],
-      );
+      expect(providersFor(activityName: 'Golf yoga retreat'), [
+        BookingProvider.googleMaps,
+        BookingProvider.yelp,
+      ]);
     });
 
     test('substring keywords match inflections', () {
@@ -75,11 +74,10 @@ void main() {
         'Camping weekend',
         'Mountain biking',
       ]) {
-        expect(
-          providersFor(activityName: name, city: 'Denver, CO'),
-          [BookingProvider.allTrails, BookingProvider.googleMaps],
-          reason: name,
-        );
+        expect(providersFor(activityName: name, city: 'Denver, CO'), [
+          BookingProvider.allTrails,
+          BookingProvider.googleMaps,
+        ], reason: name);
       }
     });
 
@@ -106,16 +104,38 @@ void main() {
     });
 
     test('GolfNow stays out — golf resolves to Google Maps and Yelp', () {
-      expect(
-        providersFor(activityName: 'Golf at dawn', city: 'Denver, CO'),
-        [BookingProvider.googleMaps, BookingProvider.yelp],
-      );
+      expect(providersFor(activityName: 'Golf at dawn', city: 'Denver, CO'), [
+        BookingProvider.googleMaps,
+        BookingProvider.yelp,
+      ]);
     });
 
     test('every rule resolves to at least one provider', () {
-      for (final provider in BookingProvider.values) {
-        expect(provider.label, isNotEmpty);
-        expect(provider.subtitle, isNotEmpty);
+      // The body used to loop BookingProvider.values asserting labels were
+      // non-empty — it never called providersFor at all, which is what the
+      // name claims. A user must never open the sheet to an empty list.
+      const activities = [
+        'Golf at dawn',
+        'Morning run',
+        'Hiking the ridge',
+        'Dinner out',
+        'Kayaking',
+        'Something with no rule at all',
+      ];
+      for (final name in activities) {
+        expect(
+          providersFor(activityName: name, city: 'Denver, CO'),
+          isNotEmpty,
+          reason: name,
+        );
+      }
+      // And with no city, where the city-scoped providers drop out.
+      for (final name in activities) {
+        expect(
+          providersFor(activityName: name, city: ''),
+          isNotEmpty,
+          reason: '$name (no city)',
+        );
       }
     });
   });
@@ -129,8 +149,10 @@ void main() {
     });
 
     test('accepts a full state name as well as the abbreviation', () {
-      expect(parseUsCityPath('Asheville, North Carolina')?.stateSlug,
-          'north-carolina');
+      expect(
+        parseUsCityPath('Asheville, North Carolina')?.stateSlug,
+        'north-carolina',
+      );
       expect(parseUsCityPath('Asheville, NC')?.stateSlug, 'north-carolina');
     });
 
@@ -141,13 +163,14 @@ void main() {
 
     test('handles multi-word states and DC', () {
       expect(parseUsCityPath('Newark, NJ')?.stateSlug, 'new-jersey');
-      expect(parseUsCityPath('Washington, DC')?.stateSlug,
-          'district-of-columbia');
+      expect(
+        parseUsCityPath('Washington, DC')?.stateSlug,
+        'district-of-columbia',
+      );
     });
 
     test('slugs multi-word city names', () {
-      expect(parseUsCityPath('Salt Lake City, UT')?.citySlug,
-          'salt-lake-city');
+      expect(parseUsCityPath('Salt Lake City, UT')?.citySlug, 'salt-lake-city');
       expect(parseUsCityPath("Coeur d'Alene, ID")?.citySlug, 'coeur-d-alene');
     });
 
@@ -275,8 +298,11 @@ void main() {
         expect(url.scheme, 'https', reason: provider.name);
         expect(url.toString(), isNot(contains('null')), reason: provider.name);
         // No provider should be asked to search an empty location.
-        expect(url.queryParameters.values.any((v) => v.isEmpty), isFalse,
-            reason: provider.name);
+        expect(
+          url.queryParameters.values.any((v) => v.isEmpty),
+          isFalse,
+          reason: provider.name,
+        );
       }
     });
 

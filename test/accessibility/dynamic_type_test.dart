@@ -33,22 +33,21 @@ void main() {
       child: MaterialApp(
         home: MediaQuery(
           data: MediaQueryData(textScaler: TextScaler.linear(scale)),
-          child: Scaffold(
-            body: SingleChildScrollView(child: child),
-          ),
+          child: Scaffold(body: SingleChildScrollView(child: child)),
         ),
       ),
     );
   }
 
   /// Fails if any render box reported an overflow while painting.
+  ///
+  /// Paired with a positive assertion at every call site: on its own,
+  /// "nothing threw" also passes for a widget that rendered
+  /// `SizedBox.shrink()` or took an early-return empty branch, which is the
+  /// failure mode this suite most needs to notice.
   void expectNoOverflow(WidgetTester tester, double scale) {
     final errors = tester.takeException();
-    expect(
-      errors,
-      isNull,
-      reason: 'overflowed at textScaler ${scale}x',
-    );
+    expect(errors, isNull, reason: 'overflowed at textScaler ${scale}x');
   }
 
   _scheduleTests();
@@ -73,6 +72,9 @@ void main() {
         );
         await tester.pumpAndSettle();
         expectNoOverflow(tester, scale);
+        // The section actually rendered its slider and both end labels.
+        expect(find.byType(RangeSlider), findsOneWidget);
+        expect(find.textContaining('°F'), findsWidgets);
       });
 
       testWidgets('precipitation picker at ${scale}x', (tester) async {
@@ -91,6 +93,8 @@ void main() {
         );
         await tester.pumpAndSettle();
         expectNoOverflow(tester, scale);
+        expect(find.text('Avoid rain'), findsOneWidget);
+        expect(find.text('Only when raining'), findsOneWidget);
       });
 
       testWidgets('wind section at ${scale}x', (tester) async {
@@ -110,6 +114,8 @@ void main() {
         );
         await tester.pumpAndSettle();
         expectNoOverflow(tester, scale);
+        expect(find.byType(Slider), findsOneWidget);
+        expect(find.textContaining('mph'), findsOneWidget);
       });
     }
   });
@@ -134,21 +140,17 @@ _MockEventService _silentEvents() {
 }
 
 DailyForecast _forecast(DateTime day) => DailyForecast(
-      date: day,
-      temperatureMax: 31.5,
-      temperatureMin: -12.5,
-      precipitationProbability: 100,
-      // 88 km/h, so both the mph and km/h renderings are two digits wide.
-      windSpeedMax: 88,
-      weatherCode: 4201,
-    );
+  date: day,
+  temperatureMax: 31.5,
+  temperatureMin: -12.5,
+  precipitationProbability: 100,
+  // 88 km/h, so both the mph and km/h renderings are two digits wide.
+  windSpeedMax: 88,
+  weatherCode: 4201,
+);
 
-Activity _activity(String name) => Activity(
-      id: 'a1',
-      userId: 'u1',
-      name: name,
-      conditionProfile: null,
-    );
+Activity _activity(String name) =>
+    Activity(id: 'a1', userId: 'u1', name: name, conditionProfile: null);
 
 void _scheduleTests() {
   late SharedPreferences prefs;
@@ -167,9 +169,7 @@ void _scheduleTests() {
           (ref) => WeatherThemeNotifier(WeatherTheme.sunny),
         ),
         weatherThemeColorsProvider.overrideWithValue(WeatherThemeColors.sunny),
-        behavioralEventServiceProvider.overrideWithValue(
-          _silentEvents(),
-        ),
+        behavioralEventServiceProvider.overrideWithValue(_silentEvents()),
         categoriesProvider.overrideWith((ref) async => []),
         profileProvider.overrideWith((ref) async => null),
         nowProvider.overrideWithValue(() => day),
@@ -216,6 +216,11 @@ void _scheduleTests() {
           isNull,
           reason: 'day header overflowed at textScaler ${scale}x',
         );
+        // And the header is genuinely on screen — an empty schedule would
+        // never overflow either.
+        expect(find.text('Today'), findsOneWidget);
+        expect(find.textContaining('H:'), findsOneWidget);
+        expect(find.text('Cycle the long river loop'), findsWidgets);
       });
     }
   });

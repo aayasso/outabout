@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -435,15 +437,39 @@ class _TemperatureUnitRow extends ConsumerWidget {
       onTap: () async {
         final profile = profileAsync.valueOrNull;
         if (profile == null) return;
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        final colors = ref.read(weatherThemeColorsProvider);
         final newUnit = currentUnit == 'F' ? 'C' : 'F';
         final client = ref.read(supabaseClientProvider);
-        await client
-            .from('profiles')
-            .update({
-              'temperature_unit': newUnit,
-              'updated_at': DateTime.now().toIso8601String(),
-            })
-            .eq('id', profile.id);
+        try {
+          await client
+              .from('profiles')
+              .update({
+                'temperature_unit': newUnit,
+                'updated_at': DateTime.now().toIso8601String(),
+              })
+              .eq('id', profile.id);
+        } catch (e, st) {
+          // This had no try/catch. A failed update threw into the zone and
+          // the row simply did not change — no message, no haptic, no event.
+          // The setting looked ignored.
+          log(
+            'Temperature unit update failed',
+            error: e,
+            stackTrace: st,
+            name: 'SettingsTab',
+          );
+          messenger?.showSnackBar(
+            SnackBar(
+              backgroundColor: colors.cardBackground,
+              content: Text(
+                'Could not change the temperature unit.',
+                style: OutAboutTypography.bodyMedium(colors),
+              ),
+            ),
+          );
+          return;
+        }
         ref.invalidate(profileProvider);
         OutAboutHaptics.onConditionToggle();
         ref
@@ -550,6 +576,7 @@ class _SignOutButton extends ConsumerWidget {
     // Captured before the dialog await — this widget is stateless, so there
     // is no `mounted` to check on the far side of the gap.
     final router = GoRouter.of(context);
+    final messenger = ScaffoldMessenger.maybeOf(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -588,10 +615,31 @@ class _SignOutButton extends ConsumerWidget {
 
     if (confirmed != true) return;
 
-    ref.read(notificationServiceProvider).clearUserTag();
-
     final client = ref.read(supabaseClientProvider);
-    await client.auth.signOut();
+
+    try {
+      await client.auth.signOut();
+    } catch (e, st) {
+      // There was no try/catch here at all. An offline or 5xx sign-out threw
+      // into the zone: no navigation, no message, and the user was left on a
+      // Settings tab that looked like nothing had happened — while the push
+      // tag had already been detached by the line that used to run first.
+      log('Sign out failed', error: e, stackTrace: st, name: 'SettingsTab');
+      messenger?.showSnackBar(
+        SnackBar(
+          backgroundColor: colors.cardBackground,
+          content: Text(
+            'Could not sign out. Check your connection and try again.',
+            style: OutAboutTypography.bodyMedium(colors),
+          ),
+        ),
+      );
+      return;
+    }
+
+    // Only after the session is actually gone. Clearing the tag first meant a
+    // failed sign-out still stopped the user's notifications.
+    ref.read(notificationServiceProvider).clearUserTag();
 
     // Navigate explicitly. The redirect would also fire via the router's
     // auth refreshListenable, but relying on it alone left the user sitting

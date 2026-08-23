@@ -19,11 +19,20 @@ class _MockSupabaseClient extends Mock implements SupabaseClient {}
 /// Records what would have been logged, without touching Supabase.
 class _RecordingEventService extends BehavioralEventService {
   _RecordingEventService()
-      : super(
-          supabase: _MockSupabaseClient(),
-          activeThemeName: 'sunny',
-          appVersion: 'test',
-        );
+    : super(
+        supabase: _MockSupabaseClient(),
+        activeThemeName: () => 'sunny',
+        geographicContext: () => const GeographicContext(
+          metro: '',
+          city: '',
+          state: '',
+          country: '',
+          latBucketed: 0.0,
+          lngBucketed: 0.0,
+          timezone: '',
+        ),
+        appVersion: 'test',
+      );
 
   final List<({String type, Map<String, dynamic>? extra})> logged = [];
 
@@ -63,9 +72,7 @@ void main() {
         weatherThemeProvider.overrideWith(
           (ref) => WeatherThemeNotifier(WeatherTheme.sunny),
         ),
-        weatherThemeColorsProvider.overrideWithValue(
-          WeatherThemeColors.sunny,
-        ),
+        weatherThemeColorsProvider.overrideWithValue(WeatherThemeColors.sunny),
         categoriesProvider.overrideWith((ref) async => _categories),
         userLocationProvider.overrideWith(
           (ref) async => UserLocation(
@@ -107,8 +114,9 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('offers the mapped providers for a dining activity',
-      (tester) async {
+  testWidgets('offers the mapped providers for a dining activity', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       harness(activityName: 'Dinner out', categoryNames: ['Dining']),
     );
@@ -119,8 +127,9 @@ void main() {
     expect(find.text('Google Maps'), findsOneWidget);
   });
 
-  testWidgets('falls back to Google Maps alone when nothing matches',
-      (tester) async {
+  testWidgets('falls back to Google Maps alone when nothing matches', (
+    tester,
+  ) async {
     await tester.pumpWidget(harness(activityName: 'Stargazing'));
     await openSheet(tester);
 
@@ -129,8 +138,9 @@ void main() {
     expect(find.text('OpenTable'), findsNothing);
   });
 
-  testWidgets('leads with AllTrails for hiking, Google Maps second',
-      (tester) async {
+  testWidgets('leads with AllTrails for hiking, Google Maps second', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       harness(activityName: 'Trail hike', categoryNames: ['Hiking']),
     );
@@ -146,8 +156,7 @@ void main() {
     expect(allTrailsY, lessThan(mapsY));
   });
 
-  testWidgets('hides AllTrails when the city is not a US city',
-      (tester) async {
+  testWidgets('hides AllTrails when the city is not a US city', (tester) async {
     await tester.pumpWidget(
       harness(
         activityName: 'Trail hike',
@@ -194,8 +203,9 @@ void main() {
     expect(events.logged.single.extra?['provider'], 'allTrails');
   });
 
-  testWidgets('tapping a provider launches the constructed URL',
-      (tester) async {
+  testWidgets('tapping a provider launches the constructed URL', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       harness(activityName: 'Dinner out', categoryNames: ['Dining']),
     );
@@ -244,8 +254,9 @@ void main() {
     expect(find.text('Find & book'), findsNothing);
   });
 
-  testWidgets('reports a failed launch instead of closing silently',
-      (tester) async {
+  testWidgets('reports a failed launch instead of closing silently', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       harness(activityName: 'Stargazing', launchSucceeds: false),
     );
@@ -257,8 +268,9 @@ void main() {
     expect(find.text('Could not open Google Maps.'), findsOneWidget);
   });
 
-  testWidgets('omits the city from the subtitle when location is unknown',
-      (tester) async {
+  testWidgets('omits the city from the subtitle when location is unknown', (
+    tester,
+  ) async {
     await tester.pumpWidget(harness(activityName: 'Stargazing', city: ''));
     await openSheet(tester);
 
@@ -277,10 +289,9 @@ void main() {
 
     for (final label in ['OpenTable', 'Yelp', 'Google Maps']) {
       final size = tester.getSize(
-        find.ancestor(
-          of: find.text(label),
-          matching: find.byType(Container),
-        ).first,
+        find
+            .ancestor(of: find.text(label), matching: find.byType(Container))
+            .first,
       );
       expect(size.height, greaterThanOrEqualTo(48.0), reason: label);
     }

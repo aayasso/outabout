@@ -81,7 +81,10 @@ void main() {
           find.byType(NavigationDestination),
           findsNWidgets(3),
         );
-        expect(find.text('Today'), findsWidgets);
+        // Was find.text('Today') — which matched only the stub route this
+        // test declares, not anything HomeScreen renders. The real label is
+        // 'Schedule'.
+        expect(find.text('Schedule'), findsOneWidget);
         expect(find.text('Activities'), findsOneWidget);
         expect(find.text('Settings'), findsOneWidget);
       },

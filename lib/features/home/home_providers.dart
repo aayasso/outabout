@@ -5,6 +5,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'outcome_prompt_provider.dart';
 import '../../core/providers.dart';
 import '../../core/weather_theme_provider.dart';
 import '../../data/models/behavioral_event.dart';
@@ -116,12 +117,9 @@ void _logWeatherFailure(String provider, Object error) {
   } else if (error is NoLocationException) {
     debugPrint('$provider: no location available — skipping fetch.');
   } else {
-    debugPrint(
-      '$provider: ${error.runtimeType} — ${redactApiKey(error)}',
-    );
+    debugPrint('$provider: ${error.runtimeType} — ${redactApiKey(error)}');
   }
 }
-
 
 final weatherDataProvider = FutureProvider<WeatherData>((ref) async {
   final location = await ref.watch(userLocationProvider.future);
@@ -139,7 +137,10 @@ final weatherDataProvider = FutureProvider<WeatherData>((ref) async {
 
     // Cache the result
     await prefs.setString(cachedWeatherDataKey, jsonEncode(data.toJson()));
-    await prefs.setString(cachedWeatherFetchedAtKey, DateTime.now().toIso8601String());
+    await prefs.setString(
+      cachedWeatherFetchedAtKey,
+      DateTime.now().toIso8601String(),
+    );
   } catch (e) {
     // On failure, try to load from cache
     final cachedJson = prefs.getString(cachedWeatherDataKey);
@@ -202,10 +203,11 @@ final weatherThemeSyncProvider = Provider<void>((ref) {
 // ---------------------------------------------------------------------------
 
 /// Builds a snapshot for the day being acted on, using live conditions.
-typedef ConditionsSnapshotBuilder = ConditionsAtEvent Function({
-  DailyForecast? forecastDay,
-  int forecastWindowHours,
-});
+typedef ConditionsSnapshotBuilder =
+    ConditionsAtEvent Function({
+      DailyForecast? forecastDay,
+      int forecastWindowHours,
+    });
 
 /// Supplies [buildConditionsSnapshot] with the live weather and active theme.
 ///
@@ -242,8 +244,7 @@ final activitiesProvider = FutureProvider<List<Activity>>((ref) async {
 // Daily forecast provider
 // ---------------------------------------------------------------------------
 
-
-final dailyForecastProvider = FutureProvider<List<DailyForecast>>((ref) async {
+final dailyForecastProvider = FutureProvider<ForecastSnapshot>((ref) async {
   final location = await ref.watch(userLocationProvider.future);
   if (location == null) {
     _logWeatherFailure('dailyForecastProvider', NoLocationException());
@@ -253,9 +254,11 @@ final dailyForecastProvider = FutureProvider<List<DailyForecast>>((ref) async {
   final prefs = ref.watch(sharedPreferencesProvider);
   final repo = ref.watch(weatherRepositoryProvider);
 
-  List<DailyForecast> forecasts;
   try {
-    forecasts = await repo.fetchForecast(location.latitude, location.longitude);
+    final forecasts = await repo.fetchForecast(
+      location.latitude,
+      location.longitude,
+    );
 
     await prefs.setString(
       cachedForecastDataKey,
@@ -265,20 +268,40 @@ final dailyForecastProvider = FutureProvider<List<DailyForecast>>((ref) async {
       cachedForecastFetchedAtKey,
       DateTime.now().toIso8601String(),
     );
+    return ForecastSnapshot(days: forecasts);
   } catch (e) {
     final cachedJson = prefs.getString(cachedForecastDataKey);
-    if (cachedJson != null) {
-      final list = jsonDecode(cachedJson) as List<dynamic>;
-      forecasts = list
-          .map((e) => DailyForecast.fromJson(e as Map<String, dynamic>))
-          .toList();
-    } else {
+    if (cachedJson == null) {
       _logWeatherFailure('dailyForecastProvider', e);
       rethrow;
     }
-  }
 
-  return forecasts;
+    // The cache is worth serving offline, but the caller has to be told how
+    // old it is. cachedForecastFetchedAtKey was written on every successful
+    // fetch and never read, so a forecast from any number of days ago was
+    // presented as the current one.
+    final rawFetchedAt = prefs.getString(cachedForecastFetchedAtKey);
+    DateTime? fetchedAt;
+    if (rawFetchedAt != null) {
+      // A corrupt timestamp must not take the cache down with it.
+      fetchedAt = DateTime.tryParse(rawFetchedAt);
+    }
+    if (fetchedAt == null) {
+      // Undatable cache is indistinguishable from a stale one, so the error
+      // is the honest answer rather than silently vouching for it.
+      _logWeatherFailure('dailyForecastProvider', e);
+      rethrow;
+    }
+
+    _logWeatherFailure('dailyForecastProvider (serving cache)', e);
+    final list = jsonDecode(cachedJson) as List<dynamic>;
+    return ForecastSnapshot(
+      days: list
+          .map((e) => DailyForecast.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      servedFromCacheAt: fetchedAt,
+    );
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -329,11 +352,11 @@ final scheduleMatchProvider = Provider<AsyncValue<List<ScheduleDay>>>((ref) {
   return forecastAsync.when(
     loading: () => const AsyncLoading(),
     error: (e, st) => AsyncError(e, st),
-    data: (days) => activitiesAsync.when(
+    data: (snapshot) => activitiesAsync.when(
       loading: () => const AsyncLoading(),
       error: (e, st) => AsyncError(e, st),
       data: (activities) => AsyncData(
-        days.map((day) {
+        snapshot.days.map((day) {
           final matched = activities
               .where((a) => evaluateDayMatch(a.conditionProfile, day))
               .toList();
@@ -447,5 +470,11 @@ void invalidateUserScopedProviders(Ref ref) {
   ref.invalidate(dailyForecastProvider);
   // Invalidating the family drops every per-activity entry.
   ref.invalidate(activityDetailProvider);
+  // The notifier loads its handled set once, in its constructor, and
+  // sharedPreferencesProvider never changes identity — so without this the
+  // previous user's answered prompts stayed in memory and the next
+  // markHandled wrote them straight back into the pref key
+  // clearUserScopedState had just removed.
+  ref.invalidate(outcomePromptProvider);
   // scheduleMatchProvider is derived from the above and recomputes itself.
 }

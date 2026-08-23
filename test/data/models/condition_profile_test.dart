@@ -37,6 +37,19 @@ void main() {
       final profile = ConditionProfile.fromJson(json);
       final output = profile.toJson();
 
+      // The name says round-trip; the body only checked toJson keys. Feed
+      // the output back in and compare the models.
+      final reparsed = ConditionProfile.fromJson(output);
+      expect(reparsed.id, profile.id);
+      expect(reparsed.activityId, profile.activityId);
+      expect(reparsed.tempEnabled, profile.tempEnabled);
+      expect(reparsed.tempMin, profile.tempMin);
+      expect(reparsed.tempMax, profile.tempMax);
+      expect(reparsed.precipEnabled, profile.precipEnabled);
+      expect(reparsed.precipLevel, profile.precipLevel);
+      expect(reparsed.windEnabled, profile.windEnabled);
+      expect(reparsed.windMax, profile.windMax);
+
       expect(output['id'], 'cp-1');
       expect(output['activity_id'], 'act-1');
       expect(output['temp_enabled'], true);

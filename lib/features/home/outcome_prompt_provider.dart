@@ -94,8 +94,7 @@ Set<String> pruneHandledKeys(Set<String> keys, DateTime now) {
 /// Shared by the schedule card and the activity detail screen so answering in
 /// one place suppresses the prompt in the other.
 class OutcomePromptNotifier extends StateNotifier<Set<String>> {
-  OutcomePromptNotifier(this._prefs, this._now)
-      : super(_load(_prefs, _now()));
+  OutcomePromptNotifier(this._prefs, this._now) : super(_load(_prefs, _now()));
 
   final SharedPreferences _prefs;
   final DateTime Function() _now;
@@ -118,10 +117,10 @@ class OutcomePromptNotifier extends StateNotifier<Set<String>> {
   /// Called for all three outcomes — yes, not today, and dismiss — because the
   /// rule is once per activity per day regardless of the answer.
   Future<void> markHandled(String activityId, DateTime day) async {
-    final next = pruneHandledKeys(
-      {...state, outcomePromptKey(activityId, day)},
-      _now(),
-    );
+    final next = pruneHandledKeys({
+      ...state,
+      outcomePromptKey(activityId, day),
+    }, _now());
     state = next;
     await _prefs.setString(outcomePromptHandledKey, jsonEncode(next.toList()));
   }
@@ -129,8 +128,8 @@ class OutcomePromptNotifier extends StateNotifier<Set<String>> {
 
 final outcomePromptProvider =
     StateNotifierProvider<OutcomePromptNotifier, Set<String>>((ref) {
-  return OutcomePromptNotifier(
-    ref.watch(sharedPreferencesProvider),
-    ref.watch(nowProvider),
-  );
-});
+      return OutcomePromptNotifier(
+        ref.watch(sharedPreferencesProvider),
+        ref.watch(nowProvider),
+      );
+    });

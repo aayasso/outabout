@@ -30,8 +30,7 @@ class DailyForecast {
   static double _windKmh(Map<String, dynamic> values) {
     final cached = firstNum(values, const ['windSpeedMaxKmh']);
     if (cached != null) return cached.toDouble();
-    return numOr(values, const ['windSpeedMax'], 0, label: _label)
-            .toDouble() *
+    return numOr(values, const ['windSpeedMax'], 0, label: _label).toDouble() *
         metersPerSecondToKmh;
   }
 
@@ -46,10 +45,18 @@ class DailyForecast {
     final values = json['values'] as Map<String, dynamic>;
     return DailyForecast(
       date: DateTime.parse(json['time'] as String),
-      temperatureMax:
-          numOr(values, const ['temperatureMax'], 0, label: _label).toDouble(),
-      temperatureMin:
-          numOr(values, const ['temperatureMin'], 0, label: _label).toDouble(),
+      temperatureMax: numOr(
+        values,
+        const ['temperatureMax'],
+        0,
+        label: _label,
+      ).toDouble(),
+      temperatureMin: numOr(
+        values,
+        const ['temperatureMin'],
+        0,
+        label: _label,
+      ).toDouble(),
       precipitationProbability: numOr(
         values,
         const ['precipitationProbabilityMax', 'precipitationProbability'],
@@ -78,4 +85,21 @@ class DailyForecast {
       'weatherCode': weatherCode,
     },
   };
+}
+
+/// A forecast together with where it came from.
+///
+/// The cache is served on any fetch failure, and without this the UI cannot
+/// tell a live forecast from one saved days ago — which is how a Monday
+/// forecast came to be captioned "Today" on a Wednesday.
+class ForecastSnapshot {
+  const ForecastSnapshot({required this.days, this.servedFromCacheAt});
+
+  final List<DailyForecast> days;
+
+  /// When the served data was originally fetched, if it came from the cache.
+  /// Null means it was fetched live just now.
+  final DateTime? servedFromCacheAt;
+
+  bool get isFromCache => servedFromCacheAt != null;
 }

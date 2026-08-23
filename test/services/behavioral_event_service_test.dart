@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:outabout/data/models/user_location.dart';
 import 'package:outabout/data/models/behavioral_event.dart';
 import 'package:outabout/data/models/daily_forecast.dart';
 import 'package:outabout/data/models/weather_data.dart';
@@ -143,15 +144,17 @@ void main() {
       expect(json.values.any((v) => v == null), isFalse);
     });
 
-    test('takes the weather code from live conditions when no day is given',
-        () {
-      final snapshot = buildConditionsSnapshot(
-        weatherTheme: 'overcast',
-        current: current,
-      );
+    test(
+      'takes the weather code from live conditions when no day is given',
+      () {
+        final snapshot = buildConditionsSnapshot(
+          weatherTheme: 'overcast',
+          current: current,
+        );
 
-      expect(snapshot.weatherCode, 1101);
-    });
+        expect(snapshot.weatherCode, 1101);
+      },
+    );
   });
 
   group('GeographicContext', () {
@@ -312,7 +315,16 @@ void main() {
     test('skips the insert entirely when there is no session', () async {
       final service = BehavioralEventService(
         supabase: mockSupabase,
-        activeThemeName: 'sunny',
+        activeThemeName: () => 'sunny',
+        geographicContext: () => const GeographicContext(
+          metro: '',
+          city: '',
+          state: '',
+          country: '',
+          latBucketed: 0.0,
+          lngBucketed: 0.0,
+          timezone: '',
+        ),
         appVersion: '1.0.0',
       );
 
@@ -327,7 +339,16 @@ void main() {
     test('rejects unknown event types without calling Supabase', () async {
       final service = BehavioralEventService(
         supabase: mockSupabase,
-        activeThemeName: 'sunny',
+        activeThemeName: () => 'sunny',
+        geographicContext: () => const GeographicContext(
+          metro: '',
+          city: '',
+          state: '',
+          country: '',
+          latBucketed: 0.0,
+          lngBucketed: 0.0,
+          timezone: '',
+        ),
         appVersion: '1.0.0',
       );
 
@@ -340,32 +361,49 @@ void main() {
     test('never throws — catches errors internally', () async {
       signIn();
       // Make from() throw to simulate Supabase failure.
-      when(() => mockSupabase.from(any()))
-          .thenThrow(Exception('Supabase error'));
+      when(
+        () => mockSupabase.from(any()),
+      ).thenThrow(Exception('Supabase error'));
 
       final service = BehavioralEventService(
         supabase: mockSupabase,
-        activeThemeName: 'sunny',
+        activeThemeName: () => 'sunny',
+        geographicContext: () => const GeographicContext(
+          metro: '',
+          city: '',
+          state: '',
+          country: '',
+          latBucketed: 0.0,
+          lngBucketed: 0.0,
+          timezone: '',
+        ),
         appVersion: '1.0.0',
       );
 
       // Should not throw.
-      await expectLater(
-        service.log('wishlist_added'),
-        completes,
-      );
+      await expectLater(service.log('wishlist_added'), completes);
     });
 
     test('calls from(behavioral_events) for valid event types', () async {
       signIn();
       // Make from() throw so we can verify it was called
       // (we can't easily mock the full insert chain).
-      when(() => mockSupabase.from('behavioral_events'))
-          .thenThrow(Exception('Expected — verifying table name'));
+      when(
+        () => mockSupabase.from('behavioral_events'),
+      ).thenThrow(Exception('Expected — verifying table name'));
 
       final service = BehavioralEventService(
         supabase: mockSupabase,
-        activeThemeName: 'sunny',
+        activeThemeName: () => 'sunny',
+        geographicContext: () => const GeographicContext(
+          metro: '',
+          city: '',
+          state: '',
+          country: '',
+          latBucketed: 0.0,
+          lngBucketed: 0.0,
+          timezone: '',
+        ),
         appVersion: '1.0.0',
       );
 
@@ -378,7 +416,16 @@ void main() {
     test('builds correct insert payload via buildPayload', () {
       final service = BehavioralEventService(
         supabase: mockSupabase,
-        activeThemeName: 'rainy',
+        activeThemeName: () => 'rainy',
+        geographicContext: () => const GeographicContext(
+          metro: '',
+          city: '',
+          state: '',
+          country: '',
+          latBucketed: 0.0,
+          lngBucketed: 0.0,
+          timezone: '',
+        ),
         appVersion: '2.0.0',
       );
 
@@ -411,17 +458,27 @@ void main() {
       expect(sessionCtx['activity_id'], 'abc-123');
     });
 
-    test('buildPayload sets correct temporal context from DateTime.now()',
-        () {
+    test('buildPayload sets correct temporal context from DateTime.now()', () {
       final service = BehavioralEventService(
         supabase: mockSupabase,
-        activeThemeName: 'sunny',
+        activeThemeName: () => 'sunny',
+        geographicContext: () => const GeographicContext(
+          metro: '',
+          city: '',
+          state: '',
+          country: '',
+          latBucketed: 0.0,
+          lngBucketed: 0.0,
+          timezone: '',
+        ),
         appVersion: '1.0.0',
       );
 
-      final payload = service.buildPayload('wishlist_added', userId: testUserId);
-      final temporal =
-          payload['temporal_context'] as Map<String, dynamic>;
+      final payload = service.buildPayload(
+        'wishlist_added',
+        userId: testUserId,
+      );
+      final temporal = payload['temporal_context'] as Map<String, dynamic>;
 
       // These should be populated from DateTime.now().
       expect(temporal['hour_of_day'], isA<int>());
@@ -440,23 +497,65 @@ void main() {
       expect(temporal['month_of_year'], now.month);
     });
 
-    test('buildPayload sets geographic context defaults', () {
+    test('buildPayload carries the geographic context it is given', () {
+      // This used to be hardcoded inside buildPayload — every row the app
+      // wrote had lat/lng 0.0 and a flat country 'US'. The context is now
+      // supplied by the caller, so this asserts it is actually threaded
+      // through rather than re-fabricated.
       final service = BehavioralEventService(
         supabase: mockSupabase,
-        activeThemeName: 'sunny',
+        activeThemeName: () => 'sunny',
+        geographicContext: () => const GeographicContext(
+          metro: 'Bay Area',
+          city: 'San Francisco',
+          state: 'CA',
+          country: 'US',
+          latBucketed: 37.77,
+          lngBucketed: -122.42,
+          timezone: 'PST',
+        ),
         appVersion: '1.0.0',
       );
 
-      final payload = service.buildPayload('wishlist_added', userId: testUserId);
+      final payload = service.buildPayload(
+        'wishlist_added',
+        userId: testUserId,
+      );
       final geo = payload['geographic_context'] as Map<String, dynamic>;
 
+      expect(geo['city'], 'San Francisco');
+      expect(geo['state'], 'CA');
       expect(geo['country'], 'US');
-      expect(geo['lat_bucketed'], 0.0);
-      expect(geo['lng_bucketed'], 0.0);
-      expect(geo['metro'], '');
-      expect(geo['city'], '');
-      expect(geo['state'], '');
-      expect(geo['timezone'], '');
+      expect(geo['lat_bucketed'], 37.77);
+      expect(geo['lng_bucketed'], -122.42);
+      expect(geo['timezone'], 'PST');
+    });
+
+    test('buildGeographicContext buckets coordinates to ~1.1km', () {
+      final geo = buildGeographicContext(
+        const UserLocation(
+          userId: 'u1',
+          city: 'San Francisco, CA',
+          latitude: 37.774929,
+          longitude: -122.419418,
+        ),
+      );
+
+      // Two decimal places. Full precision must not leave the device.
+      expect(geo.latBucketed, 37.77);
+      expect(geo.lngBucketed, -122.42);
+      expect(geo.city, 'San Francisco');
+      expect(geo.state, 'CA');
+    });
+
+    test('buildGeographicContext reports absence as empty, not as US', () {
+      final geo = buildGeographicContext(null);
+
+      // "Not collected" and "United States" must not look the same.
+      expect(geo.country, '');
+      expect(geo.city, '');
+      expect(geo.latBucketed, 0.0);
+      expect(geo.lngBucketed, 0.0);
     });
 
     test('all approved event types are in the const list', () {
@@ -508,56 +607,201 @@ void main() {
       }
     });
 
-    test('buildPayload carries a supplied snapshot instead of the zero one',
-        () {
+    test(
+      'buildPayload carries a supplied snapshot instead of the zero one',
+      () {
+        final service = BehavioralEventService(
+          supabase: mockSupabase,
+          activeThemeName: () => 'sunny',
+          geographicContext: () => const GeographicContext(
+            metro: '',
+            city: '',
+            state: '',
+            country: '',
+            latBucketed: 0.0,
+            lngBucketed: 0.0,
+            timezone: '',
+          ),
+          appVersion: '1.0.0',
+        );
+
+        final payload = service.buildPayload(
+          'activity_confirmed',
+          userId: testUserId,
+          conditions: buildConditionsSnapshot(
+            weatherTheme: 'sunny',
+            forecastDay: DailyForecast(
+              date: DateTime(2026, 8, 23),
+              temperatureMax: 26.0,
+              temperatureMin: 14.0,
+              precipitationProbability: 18.6,
+              windSpeedMax: 12.0,
+              weatherCode: 1000,
+            ),
+          ),
+        );
+
+        final conditions =
+            payload['conditions_at_event'] as Map<String, dynamic>;
+
+        expect(conditions['temp_c'], 20.0);
+        expect(conditions['weather_code'], 1000);
+        expect(conditions['temp_max_c'], 26.0);
+      },
+    );
+
+    test('buildPayload without a snapshot keeps the historical zero shape', () {
       final service = BehavioralEventService(
         supabase: mockSupabase,
-        activeThemeName: 'sunny',
-        appVersion: '1.0.0',
-      );
-
-      final payload = service.buildPayload(
-        'activity_confirmed',
-        userId: testUserId,
-        conditions: buildConditionsSnapshot(
-          weatherTheme: 'sunny',
-          forecastDay: DailyForecast(
-            date: DateTime(2026, 8, 23),
-            temperatureMax: 26.0,
-            temperatureMin: 14.0,
-            precipitationProbability: 18.6,
-            windSpeedMax: 12.0,
-            weatherCode: 1000,
-          ),
+        activeThemeName: () => 'sunny',
+        geographicContext: () => const GeographicContext(
+          metro: '',
+          city: '',
+          state: '',
+          country: '',
+          latBucketed: 0.0,
+          lngBucketed: 0.0,
+          timezone: '',
         ),
+        appVersion: '1.0.0',
       );
 
       final conditions =
-          payload['conditions_at_event'] as Map<String, dynamic>;
-
-      expect(conditions['temp_c'], 20.0);
-      expect(conditions['weather_code'], 1000);
-      expect(conditions['temp_max_c'], 26.0);
-    });
-
-    test('buildPayload without a snapshot keeps the historical zero shape',
-        () {
-      final service = BehavioralEventService(
-        supabase: mockSupabase,
-        activeThemeName: 'sunny',
-        appVersion: '1.0.0',
-      );
-
-      final conditions = service.buildPayload(
-        'wishlist_added',
-        userId: testUserId,
-      )['conditions_at_event'] as Map<String, dynamic>;
+          service.buildPayload(
+                'wishlist_added',
+                userId: testUserId,
+              )['conditions_at_event']
+              as Map<String, dynamic>;
 
       // The many existing call sites that have no weather in scope must be
       // byte-for-byte unchanged.
       expect(conditions.length, 8);
       expect(conditions['temp_c'], 0.0);
       expect(conditions.containsKey('weather_code'), isFalse);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Pre-auth buffering
+  //
+  // Onboarding logs `onboarding_completed` from steps 1, 2 and 3 — all of
+  // which run before the auth page at step 5. Five of the six call sites were
+  // therefore silent no-ops on every first run, and log() did not even
+  // debugPrint on the no-session path, so the loss was invisible.
+  // -------------------------------------------------------------------------
+
+  group('BehavioralEventService pre-auth buffering', () {
+    const testUserId = '11111111-2222-3333-4444-555555555555';
+    late MockSupabaseClient mockSupabase;
+    late MockGoTrueClient mockAuth;
+
+    BehavioralEventService build() => BehavioralEventService(
+      supabase: mockSupabase,
+      activeThemeName: () => 'sunny',
+      geographicContext: () => const GeographicContext(
+        metro: '',
+        city: '',
+        state: '',
+        country: '',
+        latBucketed: 0.0,
+        lngBucketed: 0.0,
+        timezone: '',
+      ),
+      appVersion: '1.0.0',
+    );
+
+    setUp(() {
+      mockSupabase = MockSupabaseClient();
+      mockAuth = MockGoTrueClient();
+      when(() => mockSupabase.auth).thenReturn(mockAuth);
+      when(() => mockAuth.currentUser).thenReturn(null);
+    });
+
+    test('an event logged without a session is held, not dropped', () async {
+      final service = build();
+
+      await service.log('onboarding_completed', extra: {'step': 3});
+
+      expect(service.pendingCount, 1);
+    });
+
+    test('an unapproved type is still rejected, not buffered', () async {
+      final service = build();
+
+      await service.log('not_a_real_event');
+
+      expect(service.pendingCount, 0);
+    });
+
+    test('no placeholder user id is ever invented', () async {
+      final service = build();
+      await service.log('onboarding_completed', extra: {'step': 1});
+
+      // Nothing may reach the table while there is no real user id — the
+      // user_id column is a uuid and a stand-in would corrupt the dataset.
+      verifyNever(() => mockSupabase.from(any()));
+    });
+
+    test('the buffer is bounded and keeps the most recent events', () async {
+      final service = build();
+
+      for (var i = 0; i < BehavioralEventService.maxPendingEvents + 10; i++) {
+        await service.log('onboarding_completed', extra: {'step': i});
+      }
+
+      expect(
+        service.pendingCount,
+        BehavioralEventService.maxPendingEvents,
+        reason: 'a user who never signs in must not grow this without bound',
+      );
+    });
+
+    test('flushPending does nothing while there is still no session', () async {
+      final service = build();
+      await service.log('onboarding_completed', extra: {'step': 2});
+
+      await service.flushPending();
+
+      expect(service.pendingCount, 1, reason: 'still nothing to attribute to');
+      verifyNever(() => mockSupabase.from(any()));
+    });
+
+    test('flushPending drains the queue once a session exists', () async {
+      final service = build();
+      await service.log('onboarding_completed', extra: {'step': 1});
+      await service.log('onboarding_completed', extra: {'step': 2});
+      expect(service.pendingCount, 2);
+
+      final mockUser = MockUser();
+      when(() => mockUser.id).thenReturn(testUserId);
+      when(() => mockAuth.currentUser).thenReturn(mockUser);
+      // The insert chain is not mockable end to end here; the flush swallows
+      // the resulting error by design, which is what this asserts about.
+      when(() => mockSupabase.from(any())).thenThrow(
+        Exception('Expected — verifying the flush reaches the table'),
+      );
+
+      await service.flushPending();
+
+      expect(service.pendingCount, 0, reason: 'drained, never retried');
+      verify(() => mockSupabase.from('behavioral_events')).called(2);
+    });
+
+    test('a buffered event keeps the time it happened, not the flush time', () {
+      final service = build();
+      final happenedAt = DateTime(2026, 8, 23, 9, 15);
+
+      final payload = service.buildPayload(
+        'onboarding_completed',
+        userId: testUserId,
+        occurredAt: happenedAt,
+      );
+      final temporal = payload['temporal_context'] as Map<String, dynamic>;
+
+      // A flush can land several screens later; the funnel has to describe
+      // when the step was taken.
+      expect(temporal['hour_of_day'], 9);
+      expect(temporal['month_of_year'], 8);
     });
   });
 }

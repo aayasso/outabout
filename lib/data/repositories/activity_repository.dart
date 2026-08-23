@@ -15,8 +15,7 @@ class ActivityRepository {
         .eq('is_archived', false)
         .order('created_at', ascending: false);
     return (data as List)
-        .map((row) =>
-            Activity.fromJson(row as Map<String, dynamic>))
+        .map((row) => Activity.fromJson(row as Map<String, dynamic>))
         .toList();
   }
 
@@ -46,8 +45,7 @@ class ActivityRepository {
       if (profile.tempMin != null) 'temp_min': profile.tempMin,
       if (profile.tempMax != null) 'temp_max': profile.tempMax,
       if (profile.precipEnabled) 'precip_enabled': true,
-      if (profile.precipLevel != null)
-        'precip_level': profile.precipLevel,
+      if (profile.precipLevel != null) 'precip_level': profile.precipLevel,
       if (profile.windEnabled) 'wind_enabled': true,
       if (profile.windMax != null) 'wind_max': profile.windMax,
     };
@@ -67,8 +65,7 @@ class ActivityRepository {
       createdAt: savedActivity.createdAt,
       updatedAt: savedActivity.updatedAt,
       geographicContext: savedActivity.geographicContext,
-      conditionProfile:
-          ConditionProfile.fromJson(profileData),
+      conditionProfile: ConditionProfile.fromJson(profileData),
     );
   }
 
@@ -88,14 +85,17 @@ class ActivityRepository {
   ) async {
     final now = DateTime.now().toIso8601String();
 
-    await _client.from('activities').update({
-      'name': activity.name,
-      'notes': activity.notes,
-      'url': activity.url,
-      'location': activity.location,
-      'category_ids': activity.categoryIds,
-      'updated_at': now,
-    }).eq('id', activity.id!);
+    await _client
+        .from('activities')
+        .update({
+          'name': activity.name,
+          'notes': activity.notes,
+          'url': activity.url,
+          'location': activity.location,
+          'category_ids': activity.categoryIds,
+          'updated_at': now,
+        })
+        .eq('id', activity.id!);
 
     if (profile != null) {
       final profileJson = profile.toJson();
@@ -108,6 +108,17 @@ class ActivityRepository {
       await _client
           .from('condition_profiles')
           .upsert(profileJson, onConflict: 'activity_id');
+    } else {
+      // Clearing every condition has to delete the row, not skip the write.
+      // Without this the old profile survives, `fetchForUser`'s join hands it
+      // straight back, and the app keeps matching on constraints the user
+      // explicitly cleared — while the edit form repopulates its sliders from
+      // them on re-entry. The save reports success either way, so nothing
+      // tells the user their change was discarded.
+      await _client
+          .from('condition_profiles')
+          .delete()
+          .eq('activity_id', activity.id!);
     }
 
     final data = await _client

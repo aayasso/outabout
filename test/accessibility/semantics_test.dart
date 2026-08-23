@@ -72,6 +72,20 @@ Activity _activity() => const Activity(
       name: 'Morning run',
     );
 
+/// The same activity, but with a condition that actually constrains a day.
+Activity _constrainedActivity() => const Activity(
+      id: 'a1',
+      userId: 'u1',
+      name: 'Morning run',
+      conditionProfile: ConditionProfile(
+        id: 'p1',
+        activityId: 'a1',
+        tempEnabled: true,
+        tempMin: 5,
+        tempMax: 30,
+      ),
+    );
+
 void main() {
   late SharedPreferences prefs;
 
@@ -92,15 +106,17 @@ void main() {
         nowProvider.overrideWithValue(() => _day),
       ];
 
-  Widget scheduleHost() => ProviderScope(
+  Widget scheduleHost({bool constrained = true}) {
+    final activity = constrained ? _constrainedActivity() : _activity();
+    return ProviderScope(
         overrides: [
           ...baseOverrides(),
-          activitiesProvider.overrideWith((ref) async => [_activity()]),
+          activitiesProvider.overrideWith((ref) async => [activity]),
           scheduleMatchProvider.overrideWith(
             (ref) => AsyncValue.data([
               ScheduleDay(
                 forecast: _forecast(),
-                matchedActivities: [_activity()],
+                matchedActivities: [activity],
               ),
             ]),
           ),
@@ -113,8 +129,33 @@ void main() {
           ),
         ),
       );
+  }
 
   group('schedule activity card', () {
+    testWidgets(
+      'says "no weather conditions set" when nothing is constrained',
+      (tester) async {
+        await tester.pumpWidget(scheduleHost(constrained: false));
+        await tester.pumpAndSettle();
+        final handle = tester.ensureSemantics();
+
+        // An activity with no conditions is shown on every day — nothing can
+        // rule it out — but the app must not claim its weather matched.
+        expect(
+          find.bySemanticsLabel(
+            RegExp('Activity: Morning run, no weather conditions set'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.bySemanticsLabel(RegExp('conditions match')),
+          findsNothing,
+        );
+
+        handle.dispose();
+      },
+    );
+
     testWidgets(
       'names the activity and the day its conditions match',
       (tester) async {

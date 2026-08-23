@@ -11,6 +11,7 @@ import '../features/home/home_screen.dart';
 import '../features/home/tabs/activities_tab.dart';
 import '../features/home/tabs/settings_tab.dart';
 import '../features/home/home_providers.dart';
+import '../services/behavioral_event_service.dart';
 import '../features/home/tabs/schedule_tab.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import 'providers.dart';
@@ -21,6 +22,15 @@ import 'weather_theme_provider.dart';
 // ---------------------------------------------------------------------------
 // Route constants
 // ---------------------------------------------------------------------------
+
+/// A deep link that arrived before the app could show it.
+///
+/// A notification tap on a cold start runs `redirect` immediately, and an
+/// unauthenticated user is sent to onboarding — with the activity id dropped
+/// on the floor. `notification_opened` has already been logged by then, so the
+/// funnel records an open that produced no screen. Holding the link here lets
+/// the redirect replay it once a session exists.
+final pendingDeepLinkProvider = StateProvider<String?>((ref) => null);
 
 abstract class AppRoutes {
   static const String onboarding = '/onboarding';
@@ -63,12 +73,18 @@ extension SafePop on BuildContext {
 /// mid-flow — sign-out, or a refresh token rejected because the user was
 /// deleted — left the user sitting on a sub-route with a dead session.
 class AuthRefreshNotifier extends ChangeNotifier {
+  /// [onEvent] runs to completion *before* listeners are notified.
+  ///
+  /// It returns a Future and that Future is awaited. Taking a plain `void`
+  /// callback here silently accepted an async teardown and dropped it at its
+  /// first await, so the redirect ran against state that had not been cleared
+  /// yet — the exact ordering the sign-out path depends on.
   AuthRefreshNotifier(
     Stream<AuthState> stream, {
-    void Function(AuthState)? onEvent,
+    Future<void> Function(AuthState)? onEvent,
   }) {
-    _subscription = stream.listen((state) {
-      onEvent?.call(state);
+    _subscription = stream.listen((state) async {
+      await onEvent?.call(state);
       notifyListeners();
     });
   }
@@ -116,19 +132,27 @@ final routerProvider = Provider<GoRouter>((ref) {
 
   final authRefresh = AuthRefreshNotifier(
     supabase.auth.onAuthStateChange,
-    onEvent: (authState) {
+    onEvent: (authState) async {
       // Drop the previous user's cached data the moment the session ends —
       // sign-out, account deletion, or a refresh token rejected because the
       // user no longer exists. Runs before notifyListeners so the redirect
       // sees cleared state.
       switch (authState.event) {
         case AuthChangeEvent.signedOut:
-          clearUserScopedState(ref);
+          // Awaited: clearUserScopedState's first statement is an await, so
+          // calling it bare returned at the first prefs.remove and let
+          // notifyListeners fire — and the redirect run — before a single key
+          // was gone or a single provider invalidated.
+          await clearUserScopedState(ref);
         case AuthChangeEvent.signedIn:
           // A new session must not inherit results the providers resolved
           // while signed out — those are cached and would otherwise persist
           // for the whole app run. Preferences are left alone here.
           invalidateUserScopedProviders(ref);
+          // Onboarding logs its funnel events from steps 1-3, before the auth
+          // page at step 5. They were buffered rather than dropped; now there
+          // is a real user id to attribute them to.
+          await ref.read(behavioralEventServiceProvider).flushPending();
         default:
           break;
       }
@@ -144,7 +168,22 @@ final routerProvider = Provider<GoRouter>((ref) {
       final hasSession = supabase.auth.currentUser != null;
       final isOnboarding = state.matchedLocation == AppRoutes.onboarding;
 
+      // A deep link that could not be shown earlier gets one replay, the
+      // moment the user is past onboarding and signed in.
+      if (onboardingComplete && hasSession) {
+        final pending = ref.read(pendingDeepLinkProvider);
+        if (pending != null) {
+          ref.read(pendingDeepLinkProvider.notifier).state = null;
+          if (state.matchedLocation != pending) return pending;
+        }
+      }
+
       if (onboardingComplete && !hasSession) {
+        // Hold whatever the user was trying to reach, so the tap is not lost.
+        if (!isOnboarding && state.matchedLocation != AppRoutes.home) {
+          ref.read(pendingDeepLinkProvider.notifier).state =
+              state.matchedLocation;
+        }
         prefs.setBool('onboarding_complete', false);
         if (!isOnboarding) return AppRoutes.onboarding;
         return null;

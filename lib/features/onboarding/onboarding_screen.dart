@@ -72,7 +72,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   ref.read(onboardingStepProvider.notifier).goTo(index);
                 },
                 children: [
-                  // Placeholder containers — each task (12-17) replaces one
                   ValuePropositionPage(
                     onNext: () =>
                         ref.read(onboardingStepProvider.notifier).next(),
@@ -103,4 +102,3 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
   }
 }
-

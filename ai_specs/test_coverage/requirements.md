@@ -1,124 +1,65 @@
-# Requirements -- Test Coverage
-# Created: 2026-05-19
-# Status: draft
+# Requirements -- Test Hardening
+# Created: 2026-05-19 (as "test_coverage")
+# Reconciled and executed: 2026-08-23
+# Status: complete
 
 ## Summary
 
-Improve test coverage in areas that are currently thin. Focus on widget
-tests for the Add Activity and Activity Detail save flows, unit tests
-for models and filtering logic, and an integration test for the full
-activity creation flow.
+Find what is broken, fix it, and leave the suite able to catch it next time.
+The original spec assumed the suite's problem was *absence* of tests. The
+larger problem turned out to be tests that pass regardless of what the code
+does.
 
-## User Stories
+## Reconciliation note (2026-08-23)
 
-### Primary flow
-- As a developer, I want widget tests covering the Add Activity save
-  flow (success and error paths) so that regressions are caught early.
-- As a developer, I want widget tests covering the Activity Detail save
-  flow including notification preferences so that edits don't break.
+The 2026-05-19 draft was `Status: draft` with all 83 checkboxes unchecked. Its
+one commit, `9cf60a1` ("Implement Features 1-5"), shipped it as spec-only — the
+sixth member of a batch of five.
 
-### Secondary flows
-- As a developer, I want unit tests for NotificationPreference model
-  fromJson/toJson round trip so that serialization is reliable.
-- As a developer, I want unit tests for category filtering logic so
-  that filter behavior is verified.
-- As a developer, I want unit tests for condition matching edge cases
-  so that the matching algorithm is bulletproof.
-- As a developer, I want an integration test for the full activity
-  creation flow so that the end-to-end path works.
+| Original task | Outcome |
+|---|---|
+| 1 — NotificationPreference unit tests | **Impossible.** Model and repository deleted in `49760bf` (2026-08-22). |
+| 2 — Condition-matching edge cases | **~40% aimed at deleted code.** UV fields removed in `3d3e4f2`; precipitation `'light'` replaced by the bidirectional levels in `fb287b2`; `evaluateMatch` renamed to `evaluateDayMatch` with a changed signature in `6f51462`. Rewritten from scratch as `test/features/home/match_reason_test.dart`. |
+| 3 — Category filtering | **Already done** by the `category_filtering` spec; all six cases exist verbatim. Verified, not repeated. |
+| 4 — AddActivityScreen widget tests | Still valid; folded into this pass. |
+| 5 — ActivityDetailScreen widget tests | Partly moot (notification prefs gone); the save-error and archive paths remain valid. |
+| 6 — Integration test | **Blocked** — `integration_test` is not a dependency and was never added. |
+| 7 — Final verification | Superseded by the checks below. |
 
-### Edge cases
-- Tests must use mocktail for mocking Supabase and repository classes.
-- Tests must provide Riverpod overrides for all providers used by the
-  widgets under test.
+Other stale references now removed: `home_providers.dart:192-197` (that range
+is `nowProvider` today), `precipitationIntensity`, `today_tab.dart`.
 
-## Acceptance Criteria
+## Acceptance criteria
 
-### Widget tests -- AddActivityScreen
-- [ ] Test: entering a name enables the save button.
-- [ ] Test: tapping save with a valid name calls repository
-      `insertWithConditions` and pops the screen.
-- [ ] Test: save failure shows error banner with message.
-- [ ] Test: save button shows loading indicator while saving.
-- [ ] Test: empty name keeps save button disabled.
+### Bugs
+- [x] Every defect found by static review of the notification path, matching
+      logic, session boundaries and `behavioral_events` writes is fixed, or
+      explicitly deferred with a reason.
+- [x] The app was driven adversarially in the simulator and every exception,
+      wrong render and stuck state was recorded before any fix was made.
+- [x] No unfinished-work markers left misdescribing the code.
 
-### Widget tests -- ActivityDetailScreen
-- [ ] Test: activity data populates form fields on load.
-- [ ] Test: tapping save calls repository `updateWithConditions`
-      and notification preference repository `upsert`.
-- [ ] Test: save failure shows error banner.
-- [ ] Test: archive confirmation dialog appears on archive tap.
-- [ ] Test: notification preference toggles update local state.
+### Tests that can fail
+- [x] No test asserts against a re-implementation of the code under test.
+- [x] No test asserts a literal the app never renders.
+- [x] No assertion is a tautology over a non-nullable or a declared type.
+- [x] No test reads its expected value from the same call the code under test
+      makes.
+- [x] Every "nothing threw" assertion is paired with a positive one.
+- [x] Every new regression test was confirmed failing against the pre-fix code
+      before it was kept.
 
-### Unit tests -- NotificationPreference model
-- [ ] Test: fromJson correctly parses all fields including
-      `morning_time` as TimeOfDay.
-- [ ] Test: toJson produces correct snake_case keys.
-- [ ] Test: fromJson -> toJson round trip preserves all values.
-- [ ] Test: fromJson handles null/missing optional fields with
-      correct defaults.
+### Coverage
+- [x] Notification payload parsing, including the malformed shapes that used
+      to throw inside the click listener.
+- [x] Matching: unconstrained profiles, boundary equality, bidirectional
+      precipitation, legacy stored levels.
+- [x] Session boundaries: teardown ordering, and state that must not survive.
+- [x] `behavioral_events`: pre-auth buffering, geographic context, and the
+      rule that no placeholder user id is ever written.
 
-### Unit tests -- Category filtering logic
-- [ ] Test: empty selected categories returns all activities (All).
-- [ ] Test: selecting one category returns only activities containing
-      that category ID in `category_ids`.
-- [ ] Test: selecting multiple categories returns activities matching
-      any (OR logic).
-- [ ] Test: activity with empty `category_ids` is excluded when a
-      filter is active.
-- [ ] Test: activity with multiple `category_ids` matches if any one
-      is in the filter set.
+## Out of scope
 
-### Unit tests -- Condition matching edge cases
-- [ ] Test: `evaluateMatch` with null profile returns true (no
-      conditions = always matches).
-- [ ] Test: all conditions disabled returns true.
-- [ ] Test: all conditions enabled, all met returns true.
-- [ ] Test: all conditions enabled, one not met returns false.
-- [ ] Test: temperature at exact boundary (min/max) returns true.
-- [ ] Test: precipitation 'none' with precipitationIntensity > 0
-      returns false.
-- [ ] Test: precipitation 'light' with any precipitation returns true.
-- [ ] Test: wind at exact max boundary returns true; over max returns
-      false.
-- [ ] Test: UV at exact min/max boundaries returns true.
-
-### Integration test -- Activity creation flow
-- [ ] Test: navigate to Add Activity, fill name, set temperature
-      condition, save, verify activity appears in Activities tab list.
-
-## Screens Involved
-
-- AddActivityScreen -- widget tests
-- ActivityDetailScreen -- widget tests
-- ActivitiesTab -- indirectly tested via integration test
-- No screen modifications -- tests only
-
-## Data Requirements
-
-- Supabase tables: mocked via mocktail
-- New columns needed: none
-- Tomorrow.io fields needed: none
-- SharedPreferences keys: none
-
-## Weather Theme Considerations
-
-- Does this feature behave differently across themes? No -- tests use
-  a fixed theme override for deterministic rendering.
-
-## Dependencies
-
-- Depends on Feature 2 (category_filtering): the category filtering
-  unit tests exercise the filtering logic built in that spec.
-- The condition matching and NotificationPreference model tests have
-  no dependencies -- they test existing code.
-- Widget tests for AddActivityScreen and ActivityDetailScreen test
-  existing screens and can run without other features, but should be
-  updated if Features 1 or 4 modify those screens first.
-
-## Out of Scope
-
-- Tests for onboarding flow (already has test coverage)
-- Tests for settings tab interactions
-- Performance/benchmark tests
-- Snapshot/golden image tests
+Integration tests via `package:integration_test` (still not a dependency).
+Wiring UI for the five allowlisted-but-unused event types — reported for a
+product decision instead, see `design.md`.

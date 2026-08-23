@@ -149,9 +149,19 @@ int _kmhToMph(double kmh) => (kmh * 0.621371).round();
 // Day label helper
 // -------------------------------------------------------------------
 
-String _dayLabel(DateTime date, int index) {
-  if (index == 0) return 'Today';
-  if (index == 1) return 'Tomorrow';
+/// Whether two instants fall on the same calendar day.
+bool _isSameDay(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
+
+/// The heading for a forecast day, derived from its own date.
+///
+/// Position is not a date. The cache is served on any fetch failure, so
+/// `days[0]` is whatever day was fetched last — captioning it "Today" by
+/// index is how a Monday forecast came to be presented as Wednesday's plan,
+/// while the detail screen's date comparison correctly disagreed.
+String _dayLabel(DateTime date, DateTime now) {
+  if (_isSameDay(date, now)) return 'Today';
+  if (_isSameDay(date, now.add(const Duration(days: 1)))) return 'Tomorrow';
   final weekday = const [
     'Monday',
     'Tuesday',
@@ -178,6 +188,14 @@ String _dayLabel(DateTime date, int index) {
   return '$weekday, $month ${date.day}';
 }
 
+/// The short form used on activity-first badges.
+String _shortDayLabel(DateTime date, DateTime now) {
+  if (_isSameDay(date, now)) return 'Today';
+  if (_isSameDay(date, now.add(const Duration(days: 1)))) return 'Tmrw';
+  return const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][date.weekday -
+      1];
+}
+
 // -------------------------------------------------------------------
 // ScheduleTab
 // -------------------------------------------------------------------
@@ -198,8 +216,10 @@ class _ScheduleTabState extends ConsumerState<ScheduleTab> {
     ref.invalidate(weatherDataProvider);
     ref.invalidate(activitiesProvider);
     await ref.read(dailyForecastProvider.future).catchError((Object e) {
+      // Only to stop RefreshIndicator rethrowing. The provider still holds
+      // the AsyncError, so the error state renders.
       debugPrint('ScheduleTab refresh: forecast failed — ${redactApiKey(e)}');
-      return <DailyForecast>[];
+      return const ForecastSnapshot(days: <DailyForecast>[]);
     });
   }
 
@@ -213,6 +233,13 @@ class _ScheduleTabState extends ConsumerState<ScheduleTab> {
     final profileAsync = ref.watch(profileProvider);
     final temperatureUnit = profileAsync.valueOrNull?.temperatureUnit ?? 'F';
     final activitiesAsync = ref.watch(activitiesProvider);
+    final now = ref.watch(nowProvider)();
+    // Null while loading or errored; non-null only when the days on screen
+    // came out of the cache rather than a live fetch.
+    final servedFromCacheAt = ref
+        .watch(dailyForecastProvider)
+        .valueOrNull
+        ?.servedFromCacheAt;
 
     ref.listen<AsyncValue<List<ScheduleDay>>>(scheduleMatchProvider, (
       previous,
@@ -232,16 +259,23 @@ class _ScheduleTabState extends ConsumerState<ScheduleTab> {
       backgroundColor: colors.background,
       floatingActionButton:
           FloatingActionButton(
-            backgroundColor: colors.primary,
-            onPressed: () => context.push(AppRoutes.addActivity),
-            tooltip: 'Add activity',
-            child: Icon(Icons.add, color: colors.onPrimary),
-          ).animateSafely(context).scale(
-            begin: const Offset(0.8, 0.8),
-            end: const Offset(1.0, 1.0),
-            duration: OutAboutAnimations.standardDuration,
-            curve: Curves.easeOutBack,
-          ),
+                // StatefulShellRoute.indexedStack keeps every branch mounted, so
+                // this FAB and the Activities one are in the tree together. With
+                // the default tag both claim <default FloatingActionButton tag>
+                // and every route transition throws.
+                heroTag: 'scheduleFab',
+                backgroundColor: colors.primary,
+                onPressed: () => context.push(AppRoutes.addActivity),
+                tooltip: 'Add activity',
+                child: Icon(Icons.add, color: colors.onPrimary),
+              )
+              .animateSafely(context)
+              .scale(
+                begin: const Offset(0.8, 0.8),
+                end: const Offset(1.0, 1.0),
+                duration: OutAboutAnimations.standardDuration,
+                curve: Curves.easeOutBack,
+              ),
       body: Stack(
         children: [
           // Behind the day list, inside the shell branch: go_router wraps each
@@ -258,7 +292,7 @@ class _ScheduleTabState extends ConsumerState<ScheduleTab> {
                 debugPrint(
                   'ScheduleTab: ${error.runtimeType} — ${redactApiKey(error)}',
                 );
-                return const _ScheduleErrorBanner();
+                return _ScheduleErrorBanner(error: error);
               },
               data: (days) {
                 final allActivities = activitiesAsync.valueOrNull ?? [];
@@ -270,6 +304,8 @@ class _ScheduleTabState extends ConsumerState<ScheduleTab> {
                 if (layout == ScheduleLayout.dayFirst) {
                   return _DayFirstLayout(
                     days: days,
+                    now: now,
+                    staleSince: servedFromCacheAt,
                     colors: colors,
                     isDark: isDark,
                     temperatureUnit: temperatureUnit,
@@ -279,6 +315,8 @@ class _ScheduleTabState extends ConsumerState<ScheduleTab> {
                 return _ActivityFirstLayout(
                   days: days,
                   allActivities: allActivities,
+                  now: now,
+                  staleSince: servedFromCacheAt,
                   colors: colors,
                   isDark: isDark,
                   temperatureUnit: temperatureUnit,
@@ -299,12 +337,18 @@ class _ScheduleTabState extends ConsumerState<ScheduleTab> {
 class _DayFirstLayout extends StatelessWidget {
   const _DayFirstLayout({
     required this.days,
+    required this.now,
+    required this.staleSince,
     required this.colors,
     required this.isDark,
     required this.temperatureUnit,
   });
 
   final List<ScheduleDay> days;
+  final DateTime now;
+
+  /// When the shown forecast was fetched, if it came from the cache.
+  final DateTime? staleSince;
   final WeatherThemeColors colors;
   final bool isDark;
   final String temperatureUnit;
@@ -313,6 +357,22 @@ class _DayFirstLayout extends StatelessWidget {
   Widget build(BuildContext context) {
     return CustomScrollView(
       slivers: [
+        if (staleSince case final fetchedAt?)
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              OutAboutSpacing.md,
+              OutAboutSpacing.md,
+              OutAboutSpacing.md,
+              0,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: _StaleForecastBanner(
+                fetchedAt: fetchedAt,
+                now: now,
+                colors: colors,
+              ),
+            ),
+          ),
         SliverPadding(
           padding: const EdgeInsets.all(OutAboutSpacing.md),
           sliver: SliverList.builder(
@@ -321,6 +381,7 @@ class _DayFirstLayout extends StatelessWidget {
               return _DaySection(
                 scheduleDay: days[index],
                 sectionIndex: index,
+                now: now,
                 colors: colors,
                 isDark: isDark,
                 temperatureUnit: temperatureUnit,
@@ -337,6 +398,68 @@ class _DayFirstLayout extends StatelessWidget {
 }
 
 // -------------------------------------------------------------------
+// _StaleForecastBanner
+// -------------------------------------------------------------------
+
+/// Says out loud that these days came from the cache, and when.
+///
+/// The cache is worth serving offline, but presenting it as the current
+/// forecast is what turned a Monday fetch into Wednesday's plan. Paired with
+/// date-derived day headings, this makes the age explicit instead of implied.
+class _StaleForecastBanner extends StatelessWidget {
+  const _StaleForecastBanner({
+    required this.fetchedAt,
+    required this.now,
+    required this.colors,
+  });
+
+  final DateTime fetchedAt;
+  final DateTime now;
+  final WeatherThemeColors colors;
+
+  String get _age {
+    if (_isSameDay(fetchedAt, now)) return 'earlier today';
+    if (_isSameDay(fetchedAt, now.subtract(const Duration(days: 1)))) {
+      return 'yesterday';
+    }
+    return 'on ${_dayLabel(fetchedAt, now)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: OutAboutSpacing.sm),
+      padding: const EdgeInsets.all(OutAboutSpacing.md),
+      decoration: BoxDecoration(
+        color: colors.surface.withValues(alpha: _scheduleSurfaceOpacity),
+        borderRadius: BorderRadius.circular(OutAboutRadius.cards),
+        border: Border.all(
+          color: OutAboutColors.warning.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Row(
+        children: [
+          const ExcludeSemantics(
+            child: Icon(
+              Icons.cloud_off_outlined,
+              size: 20,
+              color: OutAboutColors.warning,
+            ),
+          ),
+          const SizedBox(width: OutAboutSpacing.sm),
+          Expanded(
+            child: Text(
+              'Showing the forecast saved $_age. Pull to refresh.',
+              style: OutAboutTypography.bodySmall(colors),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// -------------------------------------------------------------------
 // _DaySection
 // -------------------------------------------------------------------
 
@@ -344,13 +467,18 @@ class _DaySection extends StatelessWidget {
   const _DaySection({
     required this.scheduleDay,
     required this.sectionIndex,
+    required this.now,
     required this.colors,
     required this.isDark,
     required this.temperatureUnit,
   });
 
   final ScheduleDay scheduleDay;
+
+  /// Position in the list. Used only to stagger the entrance animation —
+  /// never to decide what day this is.
   final int sectionIndex;
+  final DateTime now;
   final WeatherThemeColors colors;
   final bool isDark;
   final String temperatureUnit;
@@ -364,7 +492,7 @@ class _DaySection extends StatelessWidget {
             children: [
               _DayHeader(
                 forecast: scheduleDay.forecast,
-                dayIndex: sectionIndex,
+                now: now,
                 colors: colors,
                 temperatureUnit: temperatureUnit,
               ),
@@ -379,6 +507,7 @@ class _DaySection extends StatelessWidget {
                       forecast: scheduleDay.forecast,
                       cardIndex: cardIndex,
                       sectionIndex: sectionIndex,
+                      now: now,
                       colors: colors,
                       isDark: isDark,
                     ),
@@ -412,13 +541,13 @@ class _DaySection extends StatelessWidget {
 class _DayHeader extends StatelessWidget {
   const _DayHeader({
     required this.forecast,
-    required this.dayIndex,
+    required this.now,
     required this.colors,
     required this.temperatureUnit,
   });
 
   final DailyForecast forecast;
-  final int dayIndex;
+  final DateTime now;
   final WeatherThemeColors colors;
   final String temperatureUnit;
 
@@ -460,7 +589,7 @@ class _DayHeader extends StatelessWidget {
                       child: Semantics(
                         header: true,
                         child: Text(
-                          _dayLabel(forecast.date, dayIndex),
+                          _dayLabel(forecast.date, now),
                           style: OutAboutTypography.headingSmall(colors),
                         ),
                       ),
@@ -561,6 +690,7 @@ class _ScheduleActivityCard extends ConsumerWidget {
     required this.forecast,
     required this.cardIndex,
     required this.sectionIndex,
+    required this.now,
     required this.colors,
     required this.isDark,
   });
@@ -572,7 +702,10 @@ class _ScheduleActivityCard extends ConsumerWidget {
   /// event the card logs.
   final DailyForecast forecast;
   final int cardIndex;
+
+  /// Stagger position only — see [_DaySection.sectionIndex].
   final int sectionIndex;
+  final DateTime now;
   final WeatherThemeColors colors;
   final bool isDark;
 
@@ -598,13 +731,20 @@ class _ScheduleActivityCard extends ConsumerWidget {
     // The tap action is declared on this node rather than inherited from the
     // GestureDetector below, which is excluded from semantics for the same
     // reason: two overlapping tap nodes read as two buttons.
+    // An activity that set no conditions is shown on every day — nothing can
+    // rule it out — but the app must not claim its weather matched. Only a
+    // profile that actually constrains something earns the success rail and
+    // the "conditions match" wording.
+    final isConstrained = activity.conditionProfile?.isConstraining ?? false;
+
     return Semantics(
           container: true,
           explicitChildNodes: true,
           button: true,
-          label:
-              'Activity: ${activity.name}, '
-              'conditions match ${_dayLabel(forecast.date, sectionIndex)}',
+          label: isConstrained
+              ? 'Activity: ${activity.name}, '
+                    'conditions match ${_dayLabel(forecast.date, now)}'
+              : 'Activity: ${activity.name}, no weather conditions set',
           onTap: openDetail,
           child: GestureDetector(
             excludeFromSemantics: true,
@@ -626,7 +766,9 @@ class _ScheduleActivityCard extends ConsumerWidget {
                     Container(
                       width: 3,
                       decoration: BoxDecoration(
-                        color: OutAboutColors.success,
+                        color: isConstrained
+                            ? OutAboutColors.success
+                            : colors.divider,
                         borderRadius: BorderRadius.only(
                           topLeft: Radius.circular(OutAboutRadius.cards),
                           bottomLeft: Radius.circular(OutAboutRadius.cards),
@@ -722,6 +864,8 @@ class _ActivityFirstLayout extends StatelessWidget {
   const _ActivityFirstLayout({
     required this.days,
     required this.allActivities,
+    required this.now,
+    required this.staleSince,
     required this.colors,
     required this.isDark,
     required this.temperatureUnit,
@@ -729,6 +873,8 @@ class _ActivityFirstLayout extends StatelessWidget {
 
   final List<ScheduleDay> days;
   final List<Activity> allActivities;
+  final DateTime now;
+  final DateTime? staleSince;
   final WeatherThemeColors colors;
   final bool isDark;
   final String temperatureUnit;
@@ -745,6 +891,22 @@ class _ActivityFirstLayout extends StatelessWidget {
 
     return CustomScrollView(
       slivers: [
+        if (staleSince case final fetchedAt?)
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              OutAboutSpacing.md,
+              OutAboutSpacing.md,
+              OutAboutSpacing.md,
+              0,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: _StaleForecastBanner(
+                fetchedAt: fetchedAt,
+                now: now,
+                colors: colors,
+              ),
+            ),
+          ),
         SliverPadding(
           padding: const EdgeInsets.all(OutAboutSpacing.md),
           sliver: SliverList.builder(
@@ -756,6 +918,7 @@ class _ActivityFirstLayout extends StatelessWidget {
                 activity: activity,
                 matchingDays: matching,
                 sectionIndex: index,
+                now: now,
                 colors: colors,
                 isDark: isDark,
                 temperatureUnit: temperatureUnit,
@@ -780,6 +943,7 @@ class _ActivitySection extends StatelessWidget {
     required this.activity,
     required this.matchingDays,
     required this.sectionIndex,
+    required this.now,
     required this.colors,
     required this.isDark,
     required this.temperatureUnit,
@@ -787,7 +951,10 @@ class _ActivitySection extends StatelessWidget {
 
   final Activity activity;
   final List<DailyForecast> matchingDays;
+
+  /// Stagger position only — see [_DaySection.sectionIndex].
   final int sectionIndex;
+  final DateTime now;
   final WeatherThemeColors colors;
   final bool isDark;
   final String temperatureUnit;
@@ -813,7 +980,7 @@ class _ActivitySection extends StatelessWidget {
                       matchingDays.length,
                       (dayIndex) => _MatchingDayBadge(
                         forecast: matchingDays[dayIndex],
-                        dayIndex: dayIndex,
+                        now: now,
                         colors: colors,
                         temperatureUnit: temperatureUnit,
                       ),
@@ -874,30 +1041,15 @@ class _ActivityHeader extends StatelessWidget {
 class _MatchingDayBadge extends StatelessWidget {
   const _MatchingDayBadge({
     required this.forecast,
-    required this.dayIndex,
+    required this.now,
     required this.colors,
     required this.temperatureUnit,
   });
 
   final DailyForecast forecast;
-  final int dayIndex;
+  final DateTime now;
   final WeatherThemeColors colors;
   final String temperatureUnit;
-
-  String _shortDayLabel(DateTime date, int index) {
-    if (index == 0) return 'Today';
-    if (index == 1) return 'Tmrw';
-    final weekday = const [
-      'Mon',
-      'Tue',
-      'Wed',
-      'Thu',
-      'Fri',
-      'Sat',
-      'Sun',
-    ][date.weekday - 1];
-    return weekday;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -914,7 +1066,7 @@ class _MatchingDayBadge extends StatelessWidget {
     // _DayHeader, no text sits beside it — so the label has to carry it.
     return Semantics(
       label:
-          '${_shortDayLabel(forecast.date, dayIndex)}, ${iconData.name}, '
+          '${_shortDayLabel(forecast.date, now)}, ${iconData.name}, '
           'high $highTemp$tempSuffix, low $lowTemp$tempSuffix',
       child: ExcludeSemantics(
         child: Container(
@@ -939,7 +1091,7 @@ class _MatchingDayBadge extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      _shortDayLabel(forecast.date, dayIndex),
+                      _shortDayLabel(forecast.date, now),
                       style: OutAboutTypography.labelMedium(colors),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -1020,46 +1172,50 @@ class _ScheduleEmptyState extends ConsumerWidget {
       slivers: [
         SliverFillRemaining(
           hasScrollBody: false,
-          child: Center(
-            child: Container(
-              margin: const EdgeInsets.all(OutAboutSpacing.md),
-              padding: const EdgeInsets.all(OutAboutSpacing.xl),
-              decoration: _sceneSurface(colors),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.calendar_today_outlined,
-                    size: 64,
-                    color: colors.textSecondary,
-                  ),
-                  const SizedBox(height: OutAboutSpacing.md),
-                  Text(
-                    'Add your first outdoor activity',
-                    style: OutAboutTypography.headingMedium(colors),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: OutAboutSpacing.sm),
-                  Text(
-                    'Set conditions and we\'ll show '
-                    'you the best days',
-                    style: OutAboutTypography.bodyMedium(
-                      colors,
-                    ).copyWith(color: colors.textSecondary),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: OutAboutSpacing.lg),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => context.push(AppRoutes.addActivity),
-                      child: const Text('Add Activity'),
+          child:
+              Center(
+                    child: Container(
+                      margin: const EdgeInsets.all(OutAboutSpacing.md),
+                      padding: const EdgeInsets.all(OutAboutSpacing.xl),
+                      decoration: _sceneSurface(colors),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.calendar_today_outlined,
+                            size: 64,
+                            color: colors.textSecondary,
+                          ),
+                          const SizedBox(height: OutAboutSpacing.md),
+                          Text(
+                            'Add your first outdoor activity',
+                            style: OutAboutTypography.headingMedium(colors),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: OutAboutSpacing.sm),
+                          Text(
+                            'Set conditions and we\'ll show '
+                            'you the best days',
+                            style: OutAboutTypography.bodyMedium(
+                              colors,
+                            ).copyWith(color: colors.textSecondary),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: OutAboutSpacing.lg),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: () =>
+                                  context.push(AppRoutes.addActivity),
+                              child: const Text('Add Activity'),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-          ).animateSafely(context).fadeIn(duration: OutAboutAnimations.standardDuration),
+                  )
+                  .animateSafely(context)
+                  .fadeIn(duration: OutAboutAnimations.standardDuration),
         ),
       ],
     );
@@ -1110,11 +1266,42 @@ class _ScheduleShimmer extends StatelessWidget {
 // -------------------------------------------------------------------
 
 class _ScheduleErrorBanner extends ConsumerWidget {
-  const _ScheduleErrorBanner();
+  const _ScheduleErrorBanner({required this.error});
+
+  final Object error;
+
+  /// What actually failed.
+  ///
+  /// The schedule needs both the forecast and the activity list, and it used
+  /// to blame the forecast whichever one broke — including the common case
+  /// where the forecast came from cache and the activity fetch was the thing
+  /// that failed.
+  ({String message, IconData icon}) _describe() {
+    if (error is NoLocationException) {
+      return (
+        message:
+            'OutAbout needs your location to build a schedule. '
+            'Enable location access in Settings.',
+        icon: Icons.location_off_outlined,
+      );
+    }
+    final text = error.toString();
+    if (text.contains('activities')) {
+      return (
+        message: "Couldn't load your activities.",
+        icon: Icons.cloud_off_outlined,
+      );
+    }
+    return (
+      message: "Couldn't load the forecast.",
+      icon: Icons.cloud_off_outlined,
+    );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = ref.watch(weatherThemeColorsProvider);
+    final described = _describe();
 
     return CustomScrollView(
       slivers: [
@@ -1131,19 +1318,44 @@ class _ScheduleErrorBanner extends ConsumerWidget {
                     color: OutAboutColors.errorColor.withValues(alpha: 0.4),
                   ),
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      Icons.cloud_off_outlined,
-                      color: OutAboutColors.errorColor,
-                      size: 24,
+                    Row(
+                      children: [
+                        ExcludeSemantics(
+                          child: Icon(
+                            described.icon,
+                            color: OutAboutColors.errorColor,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: OutAboutSpacing.sm),
+                        Expanded(
+                          child: Text(
+                            described.message,
+                            style: OutAboutTypography.bodyMedium(colors),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: OutAboutSpacing.sm),
-                    Expanded(
-                      child: Text(
-                        'Couldn\'t load forecast. '
-                        'Pull to refresh.',
-                        style: OutAboutTypography.bodyMedium(colors),
+                    const SizedBox(height: OutAboutSpacing.sm),
+                    // Pull-to-refresh was the only way out of this state, and
+                    // it is neither discoverable nor reachable with a screen
+                    // reader. The Activities tab has always had a button here.
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        onPressed: () {
+                          ref.invalidate(dailyForecastProvider);
+                          ref.invalidate(activitiesProvider);
+                        },
+                        child: Text(
+                          'Try again',
+                          style: OutAboutTypography.labelLarge(
+                            colors,
+                          ).copyWith(color: colors.primaryInteractive),
+                        ),
                       ),
                     ),
                   ],

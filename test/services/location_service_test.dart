@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:geolocator/geolocator.dart';
 
 import 'package:outabout/data/models/behavioral_event.dart';
 import 'package:outabout/services/location_service.dart';
@@ -39,235 +40,137 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  // LocationPermissionResult enum — verify all cases exist.
+  // Permission mapping — the real LocationService.mapPermission.
+  //
+  // This group used to assert against `_TestableLocationService`, a subclass
+  // declared in this file that re-implemented the switch. Every one of these
+  // tests passed no matter what lib/ did.
   // -------------------------------------------------------------------------
 
-  group('LocationPermissionResult enum', () {
-    test('has granted variant', () {
-      expect(LocationPermissionResult.granted, isNotNull);
-    });
+  group('LocationService.mapPermission', () {
+    final service = LocationService();
 
-    test('has denied variant', () {
-      expect(LocationPermissionResult.denied, isNotNull);
-    });
-
-    test('has permanentlyDenied variant', () {
-      expect(LocationPermissionResult.permanentlyDenied, isNotNull);
-    });
-
-    test('enum has exactly 3 values', () {
-      expect(LocationPermissionResult.values.length, 3);
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // _mapPermission — tested indirectly via a subclass that exposes it.
-  // -------------------------------------------------------------------------
-
-  group('Permission enum mapping', () {
-    // We expose the private mapping logic by subclassing LocationService and
-    // making the internal mapper accessible for testing purposes.
-    final service = _TestableLocationService();
-
-    test('LocationPermission.always → granted', () {
+    test('always maps to granted', () {
       expect(
-        service.testMapPermission(MockLocationPermission.always),
+        service.mapPermission(LocationPermission.always),
         LocationPermissionResult.granted,
       );
     });
 
-    test('LocationPermission.whileInUse → granted', () {
+    test('whileInUse maps to granted', () {
       expect(
-        service.testMapPermission(MockLocationPermission.whileInUse),
+        service.mapPermission(LocationPermission.whileInUse),
         LocationPermissionResult.granted,
       );
     });
 
-    test('LocationPermission.denied → denied', () {
+    test('denied maps to denied', () {
       expect(
-        service.testMapPermission(MockLocationPermission.denied),
+        service.mapPermission(LocationPermission.denied),
         LocationPermissionResult.denied,
       );
     });
 
-    test('LocationPermission.deniedForever → permanentlyDenied', () {
+    test('deniedForever maps to permanentlyDenied, not denied', () {
+      // The distinction drives whether the app offers a retry or sends the
+      // user to Settings, so collapsing the two is a real behaviour change.
       expect(
-        service.testMapPermission(MockLocationPermission.deniedForever),
+        service.mapPermission(LocationPermission.deniedForever),
         LocationPermissionResult.permanentlyDenied,
       );
     });
 
-    test('LocationPermission.unableToDetermine → denied', () {
+    test('unableToDetermine maps to denied', () {
       expect(
-        service.testMapPermission(MockLocationPermission.unableToDetermine),
+        service.mapPermission(LocationPermission.unableToDetermine),
         LocationPermissionResult.denied,
       );
+    });
+
+    test('every plugin permission is mapped', () {
+      // Guards the switch against a new enum value being added upstream and
+      // silently falling through.
+      for (final permission in LocationPermission.values) {
+        expect(
+          () => service.mapPermission(permission),
+          returnsNormally,
+          reason: '$permission',
+        );
+      }
     });
   });
 
   // -------------------------------------------------------------------------
-  // reverseGeocode extraction — tested via a subclass that injects placemarks.
+  // Placemark mapping — the real LocationService.mapPlacemark.
+  //
+  // Previously asserted against an @override in this file that replaced the
+  // production method wholesale.
   // -------------------------------------------------------------------------
 
-  group('reverseGeocode field extraction', () {
-    test('extracts city, state, country, and metro from placemark', () async {
-      final service = _InjectablePlacemarkService(
-        placemarks: [
-          _FakePlacemark(
-            locality: 'San Francisco',
-            administrativeArea: 'CA',
-            isoCountryCode: 'US',
-            subAdministrativeArea: 'San Francisco County',
-          ),
-        ],
-      );
+  group('LocationService.mapPlacemark', () {
+    final service = LocationService();
 
-      final result = await service.reverseGeocode(37.77, -122.42);
-
-      expect(result.city, 'San Francisco');
-      expect(result.state, 'CA');
-      expect(result.country, 'US');
-      expect(result.metro, 'San Francisco County');
-    });
-
-    test('falls back to subAdministrativeArea when locality is null', () async {
-      final service = _InjectablePlacemarkService(
-        placemarks: [
-          _FakePlacemark(
-            locality: null,
-            administrativeArea: 'CA',
-            isoCountryCode: 'US',
-            subAdministrativeArea: 'Los Angeles County',
-          ),
-        ],
-      );
-
-      final result = await service.reverseGeocode(34.05, -118.24);
-
-      expect(result.city, 'Los Angeles County');
-      expect(result.state, 'CA');
-      expect(result.country, 'US');
-    });
-
-    test('returns empty strings when no placemarks found', () async {
-      final service = _InjectablePlacemarkService(placemarks: []);
-
-      final result = await service.reverseGeocode(0.0, 0.0);
+    test('no placemark fields yields empty values', () {
+      final result = service.mapPlacemark();
 
       expect(result.city, '');
       expect(result.state, '');
       expect(result.metro, '');
+      // Empty, not 'US' — an unknown country must not read as the States.
+      expect(result.country, '');
+    });
+
+    test('locality wins over subAdministrativeArea for city', () {
+      final result = service.mapPlacemark(
+        locality: 'San Francisco',
+        subAdministrativeArea: 'San Francisco County',
+        administrativeArea: 'CA',
+        isoCountryCode: 'US',
+      );
+
+      expect(result.city, 'San Francisco');
+      expect(result.state, 'CA');
       expect(result.country, 'US');
     });
 
-    test('when subAdministrativeArea equals city, metro falls back to city',
-        () async {
-      final service = _InjectablePlacemarkService(
-        placemarks: [
-          _FakePlacemark(
-            locality: 'Portland',
-            administrativeArea: 'OR',
-            isoCountryCode: 'US',
-            subAdministrativeArea: 'Portland',
-          ),
-        ],
+    test('subAdministrativeArea becomes metro when it differs from city', () {
+      final result = service.mapPlacemark(
+        locality: 'Oakland',
+        subAdministrativeArea: 'Alameda County',
       );
 
-      final result = await service.reverseGeocode(45.52, -122.68);
-
-      expect(result.city, 'Portland');
-      expect(result.metro, 'Portland');
+      expect(result.metro, 'Alameda County');
+      expect(result.city, 'Oakland');
     });
 
-    test('uses US as default when isoCountryCode is null', () async {
-      final service = _InjectablePlacemarkService(
-        placemarks: [
-          _FakePlacemark(
-            locality: 'Somewhere',
-            administrativeArea: 'TX',
-            isoCountryCode: null,
-            subAdministrativeArea: null,
-          ),
-        ],
+    test('metro falls back to city when the two are the same', () {
+      final result = service.mapPlacemark(
+        locality: 'Berlin',
+        subAdministrativeArea: 'Berlin',
       );
 
-      final result = await service.reverseGeocode(30.0, -97.0);
-
-      expect(result.country, 'US');
+      expect(result.metro, 'Berlin');
     });
-  });
-}
 
-// ---------------------------------------------------------------------------
-// Test doubles
-// ---------------------------------------------------------------------------
+    test('city falls back to subAdministrativeArea when locality is null', () {
+      final result = service.mapPlacemark(
+        subAdministrativeArea: 'Marin County',
+      );
 
-/// Mirrors the geolocator LocationPermission enum values used in mapping.
-enum MockLocationPermission {
-  always,
-  whileInUse,
-  denied,
-  deniedForever,
-  unableToDetermine,
-}
+      expect(result.city, 'Marin County');
+      // city and subAdministrativeArea now match, so metro collapses to it.
+      expect(result.metro, 'Marin County');
+    });
 
-/// Exposes the private _mapPermission logic for unit testing without
-/// requiring the actual Geolocator plugin (which needs platform channels).
-class _TestableLocationService extends LocationService {
-  LocationPermissionResult testMapPermission(MockLocationPermission mock) {
-    switch (mock) {
-      case MockLocationPermission.always:
-      case MockLocationPermission.whileInUse:
-        return LocationPermissionResult.granted;
-      case MockLocationPermission.denied:
-        return LocationPermissionResult.denied;
-      case MockLocationPermission.deniedForever:
-        return LocationPermissionResult.permanentlyDenied;
-      case MockLocationPermission.unableToDetermine:
-        return LocationPermissionResult.denied;
-    }
-  }
-}
+    test('a non-US placemark keeps its own country code', () {
+      final result = service.mapPlacemark(
+        locality: 'Sydney',
+        administrativeArea: 'NSW',
+        isoCountryCode: 'AU',
+      );
 
-/// Overrides reverseGeocode to inject fake placemarks, bypassing
-/// the geocoding platform channel.
-class _InjectablePlacemarkService extends LocationService {
-  final List<_FakePlacemark> placemarks;
-
-  _InjectablePlacemarkService({required this.placemarks});
-
-  @override
-  Future<({String metro, String city, String state, String country})>
-      reverseGeocode(double lat, double lng) async {
-    if (placemarks.isEmpty) {
-      return (metro: '', city: '', state: '', country: 'US');
-    }
-
-    final place = placemarks.first;
-
-    final city = place.locality ?? place.subAdministrativeArea ?? '';
-    final state = place.administrativeArea ?? '';
-    final country = place.isoCountryCode ?? 'US';
-
-    final metro = (place.subAdministrativeArea?.isNotEmpty == true &&
-            place.subAdministrativeArea != city)
-        ? place.subAdministrativeArea!
-        : city;
-
-    return (metro: metro, city: city, state: state, country: country);
-  }
-}
-
-class _FakePlacemark {
-  final String? locality;
-  final String? administrativeArea;
-  final String? isoCountryCode;
-  final String? subAdministrativeArea;
-
-  _FakePlacemark({
-    this.locality,
-    this.administrativeArea,
-    this.isoCountryCode,
-    this.subAdministrativeArea,
+      expect(result.country, 'AU');
+      expect(result.state, 'NSW');
+    });
   });
 }

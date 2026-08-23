@@ -25,6 +25,19 @@ class ConditionProfile {
     this.updatedAt,
   });
 
+  /// Whether this profile actually constrains which days match.
+  ///
+  /// A flag can be on with no bound behind it — `tempEnabled` with both
+  /// `tempMin` and `tempMax` null constrains nothing, and neither does a
+  /// profile with all three flags off. [evaluateDayMatch] returns true in
+  /// every one of those cases, which is correct as a *filter* but must not be
+  /// reported to the user as a weather match: the app would be claiming the
+  /// day suits an activity that expressed no preference.
+  bool get isConstraining =>
+      (tempEnabled && (tempMin != null || tempMax != null)) ||
+      precipEnabled ||
+      (windEnabled && windMax != null);
+
   factory ConditionProfile.fromJson(Map<String, dynamic> json) =>
       ConditionProfile(
         id: json['id'] as String,
@@ -32,8 +45,7 @@ class ConditionProfile {
         tempEnabled: json['temp_enabled'] as bool? ?? false,
         tempMin: (json['temp_min'] as num?)?.toDouble(),
         tempMax: (json['temp_max'] as num?)?.toDouble(),
-        precipEnabled:
-            json['precip_enabled'] as bool? ?? false,
+        precipEnabled: json['precip_enabled'] as bool? ?? false,
         precipLevel: json['precip_level'] as String?,
         windEnabled: json['wind_enabled'] as bool? ?? false,
         windMax: (json['wind_max'] as num?)?.toDouble(),
@@ -46,20 +58,18 @@ class ConditionProfile {
       );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'activity_id': activityId,
-        'temp_enabled': tempEnabled,
-        if (tempMin != null) 'temp_min': tempMin,
-        if (tempMax != null) 'temp_max': tempMax,
-        'precip_enabled': precipEnabled,
-        if (precipLevel != null) 'precip_level': precipLevel,
-        'wind_enabled': windEnabled,
-        if (windMax != null) 'wind_max': windMax,
-        if (createdAt != null)
-          'created_at': createdAt!.toIso8601String(),
-        if (updatedAt != null)
-          'updated_at': updatedAt!.toIso8601String(),
-      };
+    'id': id,
+    'activity_id': activityId,
+    'temp_enabled': tempEnabled,
+    if (tempMin != null) 'temp_min': tempMin,
+    if (tempMax != null) 'temp_max': tempMax,
+    'precip_enabled': precipEnabled,
+    if (precipLevel != null) 'precip_level': precipLevel,
+    'wind_enabled': windEnabled,
+    if (windMax != null) 'wind_max': windMax,
+    if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
+    if (updatedAt != null) 'updated_at': updatedAt!.toIso8601String(),
+  };
 }
 
 /// The two precipitation preferences, stored as text in `precip_level`.

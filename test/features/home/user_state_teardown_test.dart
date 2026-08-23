@@ -9,6 +9,7 @@ import 'package:outabout/core/providers.dart';
 import 'package:outabout/core/router.dart';
 import 'package:outabout/core/weather_theme_provider.dart';
 import 'package:outabout/features/home/home_providers.dart';
+import 'package:outabout/features/home/outcome_prompt_provider.dart';
 import 'package:outabout/features/onboarding/onboarding_provider.dart';
 
 /// Exposes the container's own [Ref], which is what clearUserScopedState
@@ -17,6 +18,8 @@ import 'package:outabout/features/onboarding/onboarding_provider.dart';
 final _refProvider = Provider<Ref>((ref) => ref);
 
 void main() {
+  _signOutBoundaryTests();
+
   group('userScopedPrefsKeys', () {
     test('covers per-user state and excludes device preferences', () {
       expect(
@@ -90,34 +93,36 @@ void main() {
       expect(captured.read(onboardingStepProvider), 1);
     });
 
-    test('invalidateUserScopedProviders leaves prefs and the cursor alone',
-        () async {
-      // Runs on sign-IN: a new session must not inherit provider results
-      // resolved while signed out, but wiping onboarding_complete or the
-      // cursor mid-flow would break the very flow that just signed in.
-      SharedPreferences.setMockInitialValues({
-        for (final key in userScopedPrefsKeys) key: 'in-flight',
-      });
-      final prefs = await SharedPreferences.getInstance();
+    test(
+      'invalidateUserScopedProviders leaves prefs and the cursor alone',
+      () async {
+        // Runs on sign-IN: a new session must not inherit provider results
+        // resolved while signed out, but wiping onboarding_complete or the
+        // cursor mid-flow would break the very flow that just signed in.
+        SharedPreferences.setMockInitialValues({
+          for (final key in userScopedPrefsKeys) key: 'in-flight',
+        });
+        final prefs = await SharedPreferences.getInstance();
 
-      final container = ProviderContainer(
-        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
-      );
-      addTearDown(container.dispose);
-      final ref = container.read(_refProvider);
+        final container = ProviderContainer(
+          overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+        );
+        addTearDown(container.dispose);
+        final ref = container.read(_refProvider);
 
-      ref.read(onboardingStepProvider.notifier).goTo(5);
-      invalidateUserScopedProviders(ref);
+        ref.read(onboardingStepProvider.notifier).goTo(5);
+        invalidateUserScopedProviders(ref);
 
-      for (final key in userScopedPrefsKeys) {
-        expect(prefs.get(key), 'in-flight', reason: '$key must survive');
-      }
-      expect(
-        ref.read(onboardingStepProvider),
-        5,
-        reason: 'the anonymous sign-in happens at step 5',
-      );
-    });
+        for (final key in userScopedPrefsKeys) {
+          expect(prefs.get(key), 'in-flight', reason: '$key must survive');
+        }
+        expect(
+          ref.read(onboardingStepProvider),
+          5,
+          reason: 'the anonymous sign-in happens at step 5',
+        );
+      },
+    );
 
     test('is safe to call twice', () async {
       SharedPreferences.setMockInitialValues({'onboarding_complete': true});
@@ -154,6 +159,92 @@ void main() {
 
       await controller.close();
       notifier.dispose();
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Sign-out ordering and outcome-prompt teardown
+// ---------------------------------------------------------------------------
+
+void _signOutBoundaryTests() {
+  group('clearUserScopedState completes before it returns', () {
+    late SharedPreferences prefs;
+
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({
+        'onboarding_complete': true,
+        'categories_seeded': true,
+        outcomePromptHandledKey: '["a1|2026-08-23"]',
+      });
+      prefs = await SharedPreferences.getInstance();
+    });
+
+    test('every user-scoped pref is gone once the future resolves', () async {
+      final container = ProviderContainer(
+        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      );
+      addTearDown(container.dispose);
+
+      // The regression: the router called this without awaiting, so it
+      // returned at its first `await prefs.remove(...)` and the redirect ran
+      // against state that had not been cleared. Awaiting must be enough.
+      await clearUserScopedState(container.read(_refProvider));
+
+      for (final key in userScopedPrefsKeys) {
+        expect(prefs.get(key), isNull, reason: key);
+      }
+    });
+
+    test(
+      'the handled-prompt set does not survive into the next session',
+      () async {
+        final container = ProviderContainer(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            nowProvider.overrideWithValue(() => DateTime(2026, 8, 23, 18)),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        // Loaded once, in the notifier's constructor.
+        expect(
+          container.read(outcomePromptProvider),
+          contains('a1|2026-08-23'),
+        );
+
+        await clearUserScopedState(container.read(_refProvider));
+
+        // Previously the pref was removed but the notifier was never
+        // invalidated, so the previous user's answers stayed in memory — and
+        // the next markHandled wrote them straight back into the cleared key.
+        expect(container.read(outcomePromptProvider), isEmpty);
+      },
+    );
+  });
+
+  group('AuthRefreshNotifier ordering', () {
+    test('onEvent runs to completion before listeners are notified', () async {
+      final controller = StreamController<AuthState>();
+      addTearDown(controller.close);
+
+      final order = <String>[];
+      final notifier = AuthRefreshNotifier(
+        controller.stream,
+        onEvent: (_) async {
+          order.add('onEvent:start');
+          // Any await at all was enough to break the old ordering.
+          await Future<void>.delayed(Duration.zero);
+          order.add('onEvent:end');
+        },
+      );
+      addTearDown(notifier.dispose);
+      notifier.addListener(() => order.add('notified'));
+
+      controller.add(AuthState(AuthChangeEvent.signedOut, null));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(order, ['onEvent:start', 'onEvent:end', 'notified']);
     });
   });
 }

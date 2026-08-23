@@ -86,7 +86,17 @@ class _AddActivityScreenState extends ConsumerState<AddActivityScreen> {
 
     try {
       final client = ref.read(supabaseClientProvider);
-      final userId = client.auth.currentUser!.id;
+      final userId = client.auth.currentUser?.id;
+      if (userId == null) {
+        // The session can end while this form is open. A bang here reads as a
+        // generic save failure and tells the user to retry, which can never
+        // succeed.
+        setState(() {
+          _isSaving = false;
+          _errorMessage = 'Your session ended. Sign in again to save.';
+        });
+        return;
+      }
 
       final activity = Activity(
         userId: userId,
@@ -97,20 +107,30 @@ class _AddActivityScreenState extends ConsumerState<AddActivityScreen> {
         categoryIds: _selectedCategoryIds.toList(),
       );
 
-      final profile = ConditionProfile(
-        id: '',
-        activityId: '',
-        tempEnabled: _tempEnabled,
-        tempMin: _tempEnabled ? _tempRange.start : null,
-        tempMax: _tempEnabled ? _tempRange.end : null,
-        precipEnabled: _precipEnabled,
-        precipLevel: _precipEnabled ? _precipLevel : null,
-        windEnabled: _windEnabled,
-        windMax: _windEnabled ? _windMax : null,
-      );
+      // No conditions means no row, the same as the edit screen. Writing a
+      // profile with all three flags false left the two screens disagreeing
+      // about what "no conditions" is stored as.
+      final hasConditions = _tempEnabled || _precipEnabled || _windEnabled;
+      final profile = hasConditions
+          ? ConditionProfile(
+              id: '',
+              activityId: '',
+              tempEnabled: _tempEnabled,
+              tempMin: _tempEnabled ? _tempRange.start : null,
+              tempMax: _tempEnabled ? _tempRange.end : null,
+              precipEnabled: _precipEnabled,
+              precipLevel: _precipEnabled ? _precipLevel : null,
+              windEnabled: _windEnabled,
+              windMax: _windEnabled ? _windMax : null,
+            )
+          : null;
 
       final repo = ref.read(activityRepositoryProvider);
-      await repo.insertWithConditions(activity: activity, profile: profile);
+      if (profile != null) {
+        await repo.insertWithConditions(activity: activity, profile: profile);
+      } else {
+        await repo.insert(activity);
+      }
 
       ref
           .read(behavioralEventServiceProvider)
@@ -393,36 +413,38 @@ class _SaveButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SizedBox(
-          height: 48,
-          child: ElevatedButton(
-            onPressed: canSave ? onPressed : null,
-            child: isSaving
-                ? SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: colors.background,
-                    ),
-                  )
-                : const Text('Save'),
-          ),
-        ),
-        if (disabledReason case final reason?)
-          Padding(
-            padding: const EdgeInsets.only(top: OutAboutSpacing.sm),
-            child: Text(
-              reason,
-              style: OutAboutTypography.bodySmall(
-                colors,
-              ).copyWith(color: colors.textSecondary),
-              textAlign: TextAlign.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              height: 48,
+              child: ElevatedButton(
+                onPressed: canSave ? onPressed : null,
+                child: isSaving
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: colors.background,
+                        ),
+                      )
+                    : const Text('Save'),
+              ),
             ),
-          ),
-      ],
-    ).animateSafely(context).fadeIn(duration: OutAboutAnimations.standardDuration);
+            if (disabledReason case final reason?)
+              Padding(
+                padding: const EdgeInsets.only(top: OutAboutSpacing.sm),
+                child: Text(
+                  reason,
+                  style: OutAboutTypography.bodySmall(
+                    colors,
+                  ).copyWith(color: colors.textSecondary),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+          ],
+        )
+        .animateSafely(context)
+        .fadeIn(duration: OutAboutAnimations.standardDuration);
   }
 }
