@@ -12,6 +12,7 @@ import 'core/router.dart';
 import 'core/theme.dart';
 import 'core/weather_theme_provider.dart';
 import 'features/home/home_providers.dart';
+import 'features/weather_scene/weather_scene_provider.dart';
 import 'services/behavioral_event_service.dart';
 import 'services/notification_service.dart';
 
@@ -56,8 +57,21 @@ class _OutAboutAppState extends ConsumerState<OutAboutApp> {
   @override
   void initState() {
     super.initState();
-    _lifecycleListener = AppLifecycleListener(onResume: _onResume);
+    _lifecycleListener = AppLifecycleListener(
+      onResume: _onResume,
+      onStateChange: _onLifecycleStateChange,
+    );
     _setupNotificationClickHandler();
+  }
+
+  /// Keeps the animated weather scene off the CPU while the app is not visible.
+  ///
+  /// The engine already stops producing frames for a backgrounded app, so this
+  /// is belt and braces — but it makes the guarantee explicit rather than
+  /// inherited, and it is what the scene's TickerMode reads.
+  void _onLifecycleStateChange(AppLifecycleState state) {
+    ref.read(appIsForegroundProvider.notifier).state =
+        state == AppLifecycleState.resumed;
   }
 
   void _setupNotificationClickHandler() {

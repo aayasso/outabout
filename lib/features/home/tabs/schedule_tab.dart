@@ -12,7 +12,20 @@ import '../../../data/models/daily_forecast.dart';
 import '../../../data/models/schedule_day.dart';
 import '../../../data/repositories/weather_repository.dart';
 import '../../../services/behavioral_event_service.dart';
+import '../../weather_scene/weather_scene_background.dart';
 import '../home_providers.dart';
+
+// -------------------------------------------------------------------
+// Scene legibility
+// -------------------------------------------------------------------
+
+/// Opacity of day headers and activity cards over the animated scene.
+///
+/// The scene is already dimmed toward `colors.background` by the veil, so the
+/// residual contrast shift on card text is roughly a tenth of the scene's
+/// deviation from the background. Measured on all five palettes; see the
+/// branch notes.
+const double _scheduleSurfaceOpacity = 0.90;
 
 // -------------------------------------------------------------------
 // Unit conversion helpers
@@ -216,43 +229,51 @@ class _ScheduleTabState extends ConsumerState<ScheduleTab> {
             duration: OutAboutAnimations.standardDuration,
             curve: Curves.easeOutBack,
           ),
-      body: RefreshIndicator(
-        color: colors.primary,
-        backgroundColor: colors.surface,
-        onRefresh: _onRefresh,
-        child: scheduleAsync.when(
-          loading: () => _ScheduleShimmer(colors: colors),
-          error: (error, _) {
-            debugPrint(
-              'ScheduleTab: ${error.runtimeType} — ${redactApiKey(error)}',
-            );
-            return const _ScheduleErrorBanner();
-          },
-          data: (days) {
-            final allActivities = activitiesAsync.valueOrNull ?? [];
+      body: Stack(
+        children: [
+          // Behind the day list, inside the shell branch: go_router wraps each
+          // branch in a TickerMode, so the scene stops animating the moment the
+          // user switches tabs.
+          const Positioned.fill(child: WeatherSceneBackground()),
+          RefreshIndicator(
+            color: colors.primary,
+            backgroundColor: colors.surface,
+            onRefresh: _onRefresh,
+            child: scheduleAsync.when(
+              loading: () => _ScheduleShimmer(colors: colors),
+              error: (error, _) {
+                debugPrint(
+                  'ScheduleTab: ${error.runtimeType} — ${redactApiKey(error)}',
+                );
+                return const _ScheduleErrorBanner();
+              },
+              data: (days) {
+                final allActivities = activitiesAsync.valueOrNull ?? [];
 
-            if (allActivities.isEmpty) {
-              return const _ScheduleEmptyState();
-            }
+                if (allActivities.isEmpty) {
+                  return const _ScheduleEmptyState();
+                }
 
-            if (layout == ScheduleLayout.dayFirst) {
-              return _DayFirstLayout(
-                days: days,
-                colors: colors,
-                isDark: isDark,
-                temperatureUnit: temperatureUnit,
-              );
-            }
+                if (layout == ScheduleLayout.dayFirst) {
+                  return _DayFirstLayout(
+                    days: days,
+                    colors: colors,
+                    isDark: isDark,
+                    temperatureUnit: temperatureUnit,
+                  );
+                }
 
-            return _ActivityFirstLayout(
-              days: days,
-              allActivities: allActivities,
-              colors: colors,
-              isDark: isDark,
-              temperatureUnit: temperatureUnit,
-            );
-          },
-        ),
+                return _ActivityFirstLayout(
+                  days: days,
+                  allActivities: allActivities,
+                  colors: colors,
+                  isDark: isDark,
+                  temperatureUnit: temperatureUnit,
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -406,7 +427,7 @@ class _DayHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(OutAboutSpacing.md),
       decoration: BoxDecoration(
-        color: colors.surface,
+        color: colors.surface.withValues(alpha: _scheduleSurfaceOpacity),
         borderRadius: BorderRadius.circular(OutAboutRadius.cards),
       ),
       child: Row(
@@ -502,7 +523,8 @@ class _ScheduleActivityCard extends StatelessWidget {
             child: Container(
               constraints: const BoxConstraints(minHeight: 48),
               decoration: BoxDecoration(
-                color: colors.cardBackground,
+                color: colors.cardBackground
+                    .withValues(alpha: _scheduleSurfaceOpacity),
                 borderRadius: BorderRadius.circular(OutAboutRadius.cards),
                 boxShadow: isDark
                     ? OutAboutShadows.cardDark
@@ -777,7 +799,7 @@ class _MatchingDayBadge extends StatelessWidget {
         vertical: OutAboutSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: colors.surface,
+        color: colors.surface.withValues(alpha: _scheduleSurfaceOpacity),
         borderRadius: BorderRadius.circular(OutAboutRadius.sm),
       ),
       child: Row(

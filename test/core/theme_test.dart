@@ -173,6 +173,31 @@ void main() {
       expect(notifier.state, WeatherTheme.snowy);
     });
 
+    test('maps thunderstorm codes to rainy', () {
+      // 8000 used to fall through to the default and paint the *sunny* theme
+      // during a thunderstorm.
+      final notifier = WeatherThemeNotifier(null);
+      notifier.setThemeFromConditions(8000); // thunderstorm
+      expect(notifier.state, WeatherTheme.rainy);
+    });
+
+    test('maps freezing rain codes to rainy', () {
+      final notifier = WeatherThemeNotifier(null);
+      notifier.setThemeFromConditions(6001); // freezing rain
+      expect(notifier.state, WeatherTheme.rainy);
+    });
+
+    test('maps ice pellet codes to snowy', () {
+      final notifier = WeatherThemeNotifier(null);
+      notifier.setThemeFromConditions(7101); // heavy ice pellets
+      expect(notifier.state, WeatherTheme.snowy);
+    });
+
+    test('mapWeatherCode is exposed for the scene to share', () {
+      expect(WeatherThemeNotifier.mapWeatherCode(1000), WeatherTheme.sunny);
+      expect(WeatherThemeNotifier.mapWeatherCode(8000), WeatherTheme.rainy);
+    });
+
     test('night override applied after sunset', () {
       final notifier = WeatherThemeNotifier(null);
       notifier.setThemeFromTimeOfDay(DateTime(2026, 4, 14, 21)); // 9 PM

@@ -174,8 +174,16 @@ final weatherDataProvider = FutureProvider<WeatherData>((ref) async {
 /// when the notifier is rebuilt — which happens when the user sets or clears
 /// a manual override, so clearing one returns to live conditions instead of
 /// stranding on the default.
+/// The clock the night override reads.
+///
+/// Injected rather than called directly so the sync is testable: reading
+/// `DateTime.now()` inline made the sync tests pass only between 06:00 and
+/// 20:00 and fail every evening.
+final nowProvider = Provider<DateTime Function()>((ref) => DateTime.now);
+
 final weatherThemeSyncProvider = Provider<void>((ref) {
   final notifier = ref.watch(weatherThemeProvider.notifier);
+  final now = ref.watch(nowProvider);
   final data = ref.watch(weatherDataProvider).valueOrNull;
   if (data == null) return;
 
@@ -184,7 +192,7 @@ final weatherThemeSyncProvider = Provider<void>((ref) {
   Future.microtask(() {
     if (!notifier.mounted) return;
     notifier.setThemeFromConditions(data.weatherCode);
-    notifier.setThemeFromTimeOfDay(DateTime.now());
+    notifier.setThemeFromTimeOfDay(now());
   });
 });
 

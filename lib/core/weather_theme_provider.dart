@@ -73,7 +73,7 @@ class WeatherThemeNotifier extends StateNotifier<WeatherTheme> {
   /// Map a Tomorrow.io weather code to a theme.
   void setThemeFromConditions(int weatherCode) {
     if (_userOverride != null) return; // user override takes precedence
-    state = _mapWeatherCode(weatherCode);
+    state = mapWeatherCode(weatherCode);
   }
 
   /// Apply night override after sunset.
@@ -87,9 +87,18 @@ class WeatherThemeNotifier extends StateNotifier<WeatherTheme> {
   /// The theme name for session_context.active_theme logging.
   String get activeThemeName => state.name;
 
-  // Tomorrow.io weather code mapping
-  // https://docs.tomorrow.io/reference/data-layers-weather-codes
-  static WeatherTheme _mapWeatherCode(int code) {
+  /// Maps a Tomorrow.io weather code to the theme it should paint.
+  ///
+  /// Public because the animated scene resolves its own intensity from the
+  /// same code and must agree with the palette — see
+  /// `resolveWeatherScene` in features/weather_scene. Duplicating the ranges
+  /// there would let the two drift apart.
+  ///
+  /// https://docs.tomorrow.io/reference/data-layers-weather-codes
+  static WeatherTheme mapWeatherCode(int code) {
+    if (code >= 8000 && code < 9000) return WeatherTheme.rainy;  // thunderstorm
+    if (code >= 7000 && code < 8000) return WeatherTheme.snowy;  // ice pellets
+    if (code >= 6000 && code < 7000) return WeatherTheme.rainy;  // freezing rain
     if (code >= 5000 && code < 6000) return WeatherTheme.snowy;  // snow
     if (code >= 4000 && code < 5000) return WeatherTheme.rainy;  // rain/drizzle
     if (code >= 2000 && code < 3000) return WeatherTheme.rainy;  // fog → rainy mood

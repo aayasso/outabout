@@ -23,10 +23,15 @@ void main() {
         uvIndex: 3,
       );
 
+  /// Midday, so the night override does not fire. Pinned rather than read from
+  /// the wall clock — these assertions used to fail every evening.
+  DateTime midday() => DateTime(2026, 4, 14, 12);
+
   /// Builds a container with [weatherDataProvider] pinned to [weatherCode].
   Future<ProviderContainer> containerFor(
     int weatherCode, {
     WeatherTheme? override,
+    DateTime Function()? clock,
   }) async {
     SharedPreferences.setMockInitialValues(
       override == null
@@ -38,6 +43,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
+        nowProvider.overrideWithValue(clock ?? midday),
         weatherDataProvider.overrideWith((ref) async => conditions(weatherCode)),
       ],
     );
@@ -74,6 +80,14 @@ void main() {
     test('snow produces the snowy theme', () async {
       final container = await containerFor(5001);
       expect(await themeAfterSync(container), WeatherTheme.snowy);
+    });
+
+    test('after sunset the night theme wins over live conditions', () async {
+      final container = await containerFor(
+        1000, // clear sky
+        clock: () => DateTime(2026, 4, 14, 21),
+      );
+      expect(await themeAfterSync(container), WeatherTheme.night);
     });
 
     test('a manual override wins over live conditions', () async {

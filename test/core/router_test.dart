@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:outabout/core/providers.dart';
 import 'package:outabout/core/router.dart';
+import 'package:outabout/core/theme.dart';
 import 'package:outabout/core/weather_theme_provider.dart';
 
 class MockSupabaseClient extends Mock implements SupabaseClient {}
@@ -85,7 +86,11 @@ void main() {
             ),
           ),
         );
-        await tester.pumpAndSettle();
+        // Not pumpAndSettle: /home hosts the animated weather scene, whose
+        // rain and cloud loops never come to rest. Pump past the 300ms route
+        // fade instead.
+        await tester.pump();
+        await tester.pump(OutAboutAnimations.standardDuration);
 
         expect(find.text('Schedule'), findsWidgets);
       },
