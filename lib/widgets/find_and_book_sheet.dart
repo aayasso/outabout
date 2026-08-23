@@ -109,6 +109,7 @@ class _FindAndBookSheet extends ConsumerWidget {
     final providers = providersFor(
       activityName: activityName,
       categoryNames: categoryNames,
+      city: city,
     );
 
     return SafeArea(

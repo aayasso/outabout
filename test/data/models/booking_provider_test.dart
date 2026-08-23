@@ -56,37 +56,128 @@ void main() {
     });
 
     test('substring keywords match inflections', () {
-      // 'hik' catches hike/hiking, 'cycl' catches cycle/cycling. Neither has a
-      // provider rule any more, so both land on the fallback.
-      expect(providersFor(activityName: 'Morning hike'), fallbackProviders);
-      expect(providersFor(activityName: 'Cycling club'), fallbackProviders);
+      // 'hik' catches hike/hiking, 'cycl' catches cycle/cycling.
+      expect(
+        providersFor(activityName: 'Morning hike', city: 'Boulder, CO').first,
+        BookingProvider.allTrails,
+      );
+      expect(
+        providersFor(activityName: 'Cycling club', city: 'Boulder, CO').first,
+        BookingProvider.allTrails,
+      );
     });
 
-    test('dropped providers are unreachable from any input', () {
-      // AllTrails and GolfNow were removed after live verification showed
-      // neither honours a URL search term. Nothing should resolve to a
-      // provider that is not in the enum.
-      const names = [
+    test('outdoor activities lead with AllTrails, Google Maps second', () {
+      for (final name in [
         'Trail run',
-        'Golf at dawn',
+        'Morning jog',
         'Backpacking trip',
         'Camping weekend',
-      ];
-      for (final name in names) {
-        final resolved = providersFor(activityName: name);
-        expect(resolved, isNotEmpty, reason: name);
+        'Mountain biking',
+      ]) {
         expect(
-          resolved.every(BookingProvider.values.contains),
-          isTrue,
+          providersFor(activityName: name, city: 'Denver, CO'),
+          [BookingProvider.allTrails, BookingProvider.googleMaps],
           reason: name,
         );
       }
+    });
+
+    test('AllTrails is dropped when the city cannot be resolved', () {
+      // A link to an AllTrails city page that does not exist is a guaranteed
+      // 404, which is worse than the Google Maps result we already have.
+      for (final city in ['', 'Toronto, ON', 'Paris', 'Berlin, Germany']) {
+        expect(
+          providersFor(activityName: 'Morning hike', city: city),
+          [BookingProvider.googleMaps],
+          reason: 'city: "$city"',
+        );
+      }
+    });
+
+    test('dropping AllTrails never leaves an empty sheet', () {
+      for (final name in ['Trail run', 'Camping weekend', 'Cycling club']) {
+        expect(
+          providersFor(activityName: name, city: ''),
+          isNotEmpty,
+          reason: name,
+        );
+      }
+    });
+
+    test('GolfNow stays out — golf resolves to Google Maps and Yelp', () {
+      expect(
+        providersFor(activityName: 'Golf at dawn', city: 'Denver, CO'),
+        [BookingProvider.googleMaps, BookingProvider.yelp],
+      );
     });
 
     test('every rule resolves to at least one provider', () {
       for (final provider in BookingProvider.values) {
         expect(provider.label, isNotEmpty);
         expect(provider.subtitle, isNotEmpty);
+      }
+    });
+  });
+
+  group('parseUsCityPath', () {
+    test('splits the geocoder\'s "City, ST" into AllTrails slugs', () {
+      final path = parseUsCityPath('San Francisco, CA');
+
+      expect(path?.citySlug, 'san-francisco');
+      expect(path?.stateSlug, 'california');
+    });
+
+    test('accepts a full state name as well as the abbreviation', () {
+      expect(parseUsCityPath('Asheville, North Carolina')?.stateSlug,
+          'north-carolina');
+      expect(parseUsCityPath('Asheville, NC')?.stateSlug, 'north-carolina');
+    });
+
+    test('is case insensitive on the state', () {
+      expect(parseUsCityPath('Denver, co')?.stateSlug, 'colorado');
+      expect(parseUsCityPath('Denver, CO')?.stateSlug, 'colorado');
+    });
+
+    test('handles multi-word states and DC', () {
+      expect(parseUsCityPath('Newark, NJ')?.stateSlug, 'new-jersey');
+      expect(parseUsCityPath('Washington, DC')?.stateSlug,
+          'district-of-columbia');
+    });
+
+    test('slugs multi-word city names', () {
+      expect(parseUsCityPath('Salt Lake City, UT')?.citySlug,
+          'salt-lake-city');
+      expect(parseUsCityPath("Coeur d'Alene, ID")?.citySlug, 'coeur-d-alene');
+    });
+
+    test('returns null rather than guessing', () {
+      for (final input in [
+        '',
+        'Paris',
+        'Toronto, ON',
+        'Berlin, Germany',
+        ', CA',
+        'San Francisco, ',
+        'San Francisco, ZZ',
+      ]) {
+        expect(parseUsCityPath(input), isNull, reason: 'input: "$input"');
+      }
+    });
+
+    test('splits on the last comma, so a three-part line still resolves', () {
+      final path = parseUsCityPath('Brooklyn, New York, NY');
+
+      expect(path?.stateSlug, 'new-york');
+      expect(path?.citySlug, 'brooklyn-new-york');
+    });
+
+    test('covers all 50 states plus DC', () {
+      expect(usStateNames.length, 51);
+      // Slugs are what goes into the path, so none may carry a space.
+      for (final name in usStateNames.values) {
+        expect(name, isNot(contains(' ')), reason: name);
+        expect(name, equals(name.toLowerCase()), reason: name);
       }
     });
   });
@@ -201,6 +292,47 @@ void main() {
       expect(url.queryParameters['query'], 'Surf & turf San Francisco, CA');
       expect(url.queryParameters.length, 2);
       expect(url.toString(), contains('%26'));
+    });
+
+    test('AllTrails uses its city page, not a search query', () {
+      final url = bookingUrl(
+        provider: BookingProvider.allTrails,
+        activityName: 'Morning hike',
+        city: city,
+      );
+
+      // Verified live: /us/california/san-francisco renders "Best trails in
+      // San Francisco". The abbreviation form (/us/ca/...) 404s.
+      expect(url.host, 'www.alltrails.com');
+      expect(url.path, '/us/california/san-francisco');
+      expect(url.queryParameters, isEmpty);
+    });
+
+    test('AllTrails ignores the activity name — the page is the city', () {
+      final hike = bookingUrl(
+        provider: BookingProvider.allTrails,
+        activityName: 'Morning hike',
+        city: city,
+      );
+      final ride = bookingUrl(
+        provider: BookingProvider.allTrails,
+        activityName: 'Evening bike ride',
+        city: city,
+      );
+
+      expect(hike, ride);
+    });
+
+    test('AllTrails degrades to Google Maps if the city never resolved', () {
+      // providersFor filters this case out, so it is unreachable in the app.
+      // Asserted so the function stays total rather than throwing.
+      final url = bookingUrl(
+        provider: BookingProvider.allTrails,
+        activityName: 'Morning hike',
+        city: 'Toronto, ON',
+      );
+
+      expect(url.host, 'www.google.com');
     });
 
     test('leading and trailing whitespace in the name is trimmed', () {

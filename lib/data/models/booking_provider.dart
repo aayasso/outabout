@@ -10,6 +10,7 @@
 enum BookingProvider {
   googleMaps('Google Maps', 'Search nearby places'),
   yelp('Yelp', 'Reviews and listings'),
+  allTrails('AllTrails', 'Trails and routes'),
   eventbrite('Eventbrite', 'Local events'),
   playtomic('Playtomic', 'Court bookings'),
   mindbody('Mindbody', 'Classes and studios'),
@@ -41,17 +42,22 @@ class _ProviderRule {
 /// Order is the tiebreak and is deliberate: the specific, bookable activities
 /// come first so "Golf Yoga Retreat" resolves to golf rather than to fitness.
 ///
-/// Hiking, running, cycling, photography, picnics and parks have no rule and
-/// fall through to Google Maps on purpose. AllTrails was the natural provider
-/// for the first three, but it has no URL-addressable search: `/search?q=`
-/// redirects to a geolocated `/explore` and discards the term entirely, so a
-/// link would always land the user on "trails near wherever the browser thinks
-/// you are" no matter what they tapped. Google Maps answers the same question
-/// and actually honours the query.
+/// Photography, picnics and parks have no rule and fall through to Google Maps
+/// on purpose.
+///
+/// AllTrails is offered by city page rather than by search: its `/search?q=`
+/// discards the term and redirects to a geolocated `/explore`, but
+/// `/us/{state}/{city}` is a real, URL-addressable page. That page 404s for a
+/// city AllTrails has never heard of, so [providersFor] drops it whenever the
+/// city cannot be resolved, and Google Maps always follows it in the sheet so
+/// a 404 is never a dead end.
 const List<_ProviderRule> _providerRules = [
-  // GolfNow is absent for the same reason as AllTrails: it ignores both `q`
-  // and `searchterm` and keeps its own default city, so the link would be
-  // actively misleading.
+  // GolfNow stays out. It ignores both `q` and `searchterm` and keeps its own
+  // default city, and its city pages are keyed by an opaque numeric id
+  // (/course-directory/us/ca/17245-san-francisco) that cannot be derived from
+  // a name. Only the state page is constructible, and "California golf
+  // courses" is worse than what Google Maps and Yelp return for the user's
+  // actual city.
   _ProviderRule(
     ['golf'],
     [BookingProvider.googleMaps, BookingProvider.yelp],
@@ -73,6 +79,18 @@ const List<_ProviderRule> _providerRules = [
     ],
   ),
   _ProviderRule(
+    ['hik', 'trail', 'trek', 'backpack'],
+    [BookingProvider.allTrails, BookingProvider.googleMaps],
+  ),
+  _ProviderRule(
+    ['run', 'jog'],
+    [BookingProvider.allTrails, BookingProvider.googleMaps],
+  ),
+  _ProviderRule(
+    ['cycl', 'bike', 'biking', 'mtb'],
+    [BookingProvider.allTrails, BookingProvider.googleMaps],
+  ),
+  _ProviderRule(
     ['concert', 'festival', 'event', 'market', 'show'],
     [BookingProvider.eventbrite, BookingProvider.googleMaps],
   ),
@@ -86,9 +104,105 @@ const List<_ProviderRule> _providerRules = [
   ),
   _ProviderRule(
     ['camp'],
-    [BookingProvider.googleMaps, BookingProvider.yelp],
+    [BookingProvider.allTrails, BookingProvider.googleMaps],
   ),
 ];
+
+// ---------------------------------------------------------------------------
+// US location parsing (AllTrails city pages)
+// ---------------------------------------------------------------------------
+
+/// US state and territory abbreviations to the names AllTrails uses in its
+/// paths.
+///
+/// AllTrails will not accept the abbreviation — `/us/ca/san-francisco` 404s
+/// while `/us/california/san-francisco` resolves — and `userLocationProvider`
+/// gives us "San Francisco, CA", so the two have to be bridged. A static map
+/// rather than a lookup: this is closed, well-known data that has not changed
+/// in decades, and no network call belongs on a link tap.
+const Map<String, String> usStateNames = {
+  'al': 'alabama',
+  'ak': 'alaska',
+  'az': 'arizona',
+  'ar': 'arkansas',
+  'ca': 'california',
+  'co': 'colorado',
+  'ct': 'connecticut',
+  'de': 'delaware',
+  'dc': 'district-of-columbia',
+  'fl': 'florida',
+  'ga': 'georgia',
+  'hi': 'hawaii',
+  'id': 'idaho',
+  'il': 'illinois',
+  'in': 'indiana',
+  'ia': 'iowa',
+  'ks': 'kansas',
+  'ky': 'kentucky',
+  'la': 'louisiana',
+  'me': 'maine',
+  'md': 'maryland',
+  'ma': 'massachusetts',
+  'mi': 'michigan',
+  'mn': 'minnesota',
+  'ms': 'mississippi',
+  'mo': 'missouri',
+  'mt': 'montana',
+  'ne': 'nebraska',
+  'nv': 'nevada',
+  'nh': 'new-hampshire',
+  'nj': 'new-jersey',
+  'nm': 'new-mexico',
+  'ny': 'new-york',
+  'nc': 'north-carolina',
+  'nd': 'north-dakota',
+  'oh': 'ohio',
+  'ok': 'oklahoma',
+  'or': 'oregon',
+  'pa': 'pennsylvania',
+  'ri': 'rhode-island',
+  'sc': 'south-carolina',
+  'sd': 'south-dakota',
+  'tn': 'tennessee',
+  'tx': 'texas',
+  'ut': 'utah',
+  'vt': 'vermont',
+  'va': 'virginia',
+  'wa': 'washington',
+  'wv': 'west-virginia',
+  'wi': 'wisconsin',
+  'wy': 'wyoming',
+};
+
+/// One resolved US location, in the slug form AllTrails' paths want.
+typedef UsCityPath = ({String citySlug, String stateSlug});
+
+/// Parses `userLocationProvider`'s "City, State" string.
+///
+/// Returns null when the string is empty, has no state part, or names a state
+/// this map does not cover — which includes every non-US location. Callers
+/// treat null as "AllTrails cannot serve this user", never as "guess".
+///
+/// Accepts either the abbreviation ("CA") or the full name ("California"),
+/// because the geocoder's `administrativeArea` is not guaranteed to be one or
+/// the other across platforms.
+UsCityPath? parseUsCityPath(String cityLine) {
+  final separator = cityLine.lastIndexOf(',');
+  if (separator <= 0) return null;
+
+  final cityPart = cityLine.substring(0, separator).trim();
+  final statePart = cityLine.substring(separator + 1).trim().toLowerCase();
+  if (cityPart.isEmpty || statePart.isEmpty) return null;
+
+  final stateSlug = usStateNames[statePart] ??
+      (usStateNames.containsValue(_slug(statePart)) ? _slug(statePart) : null);
+  if (stateSlug == null) return null;
+
+  final citySlug = _slug(cityPart);
+  if (citySlug.isEmpty) return null;
+
+  return (citySlug: citySlug, stateSlug: stateSlug);
+}
 
 /// The universal fallback. Google Maps can answer "where near me" for anything.
 const List<BookingProvider> fallbackProviders = [BookingProvider.googleMaps];
@@ -98,16 +212,34 @@ const List<BookingProvider> fallbackProviders = [BookingProvider.googleMaps];
 /// [categoryNames] are the activity's category names, [activityName] its own
 /// name. Both are searched because a user who never assigns a category still
 /// tells us what they are doing by naming it "Sunday tennis".
+///
+/// [city] is `userLocationProvider`'s "City, State" string. It is needed here,
+/// not just when building the URL, because AllTrails can only be offered when
+/// that city resolves to one of its city pages — offering it otherwise would
+/// send the user to a guaranteed 404. Dropping it never empties the list:
+/// every rule that names AllTrails also names Google Maps.
 List<BookingProvider> providersFor({
   required String activityName,
   List<String> categoryNames = const [],
+  String city = '',
 }) {
   final haystack = [activityName, ...categoryNames].join(' ').toLowerCase();
 
   for (final rule in _providerRules) {
-    if (rule.keywords.any(haystack.contains)) return rule.providers;
+    if (rule.keywords.any(haystack.contains)) {
+      return rule.providers.where((p) => _canServe(p, city)).toList();
+    }
   }
   return fallbackProviders;
+}
+
+/// Whether [provider] can build a working link for [city].
+///
+/// Only AllTrails is city-gated; every other provider either takes a free-text
+/// location or falls back to the browser's own.
+bool _canServe(BookingProvider provider, String city) {
+  if (provider != BookingProvider.allTrails) return true;
+  return parseUsCityPath(city) != null;
 }
 
 // ---------------------------------------------------------------------------
@@ -145,6 +277,21 @@ Uri bookingUrl({
         '/search',
         {'find_desc': term, if (city.isNotEmpty) 'find_loc': city},
       ),
+    // Path-based, and only reachable when the city resolved — see
+    // [providersFor]. The Google Maps fallback here is unreachable in
+    // practice; it exists so this function stays total rather than throwing on
+    // a caller that skipped the filter.
+    BookingProvider.allTrails => switch (parseUsCityPath(city)) {
+        final UsCityPath path => Uri.https(
+            'www.alltrails.com',
+            '/us/${path.stateSlug}/${path.citySlug}',
+          ),
+        null => Uri.https(
+            'www.google.com',
+            '/maps/search/',
+            {'api': '1', 'query': withCity},
+          ),
+      },
     BookingProvider.eventbrite => Uri.https(
         'www.eventbrite.com',
         '/d/${city.isEmpty ? 'online' : _slug(city)}/${_slug(term)}/',

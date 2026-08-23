@@ -129,16 +129,69 @@ void main() {
     expect(find.text('OpenTable'), findsNothing);
   });
 
-  testWidgets('never offers a provider that was dropped in verification',
+  testWidgets('leads with AllTrails for hiking, Google Maps second',
       (tester) async {
     await tester.pumpWidget(
       harness(activityName: 'Trail hike', categoryNames: ['Hiking']),
     );
     await openSheet(tester);
 
+    expect(find.text('AllTrails'), findsOneWidget);
+    expect(find.text('Google Maps'), findsOneWidget);
+
+    // Order matters: AllTrails answers the question better, but Google Maps
+    // has to be right underneath it because an AllTrails city page can 404.
+    final allTrailsY = tester.getCenter(find.text('AllTrails')).dy;
+    final mapsY = tester.getCenter(find.text('Google Maps')).dy;
+    expect(allTrailsY, lessThan(mapsY));
+  });
+
+  testWidgets('hides AllTrails when the city is not a US city',
+      (tester) async {
+    await tester.pumpWidget(
+      harness(
+        activityName: 'Trail hike',
+        categoryNames: ['Hiking'],
+        city: 'Toronto, ON',
+      ),
+    );
+    await openSheet(tester);
+
     expect(find.text('AllTrails'), findsNothing);
+    expect(find.text('Google Maps'), findsOneWidget);
+  });
+
+  testWidgets('hides AllTrails when no city has resolved yet', (tester) async {
+    await tester.pumpWidget(
+      harness(activityName: 'Trail hike', categoryNames: ['Hiking'], city: ''),
+    );
+    await openSheet(tester);
+
+    expect(find.text('AllTrails'), findsNothing);
+    expect(find.text('Google Maps'), findsOneWidget);
+  });
+
+  testWidgets('GolfNow is still absent for golf', (tester) async {
+    await tester.pumpWidget(harness(activityName: 'Saturday golf'));
+    await openSheet(tester);
+
     expect(find.text('GolfNow'), findsNothing);
     expect(find.text('Google Maps'), findsOneWidget);
+    expect(find.text('Yelp'), findsOneWidget);
+  });
+
+  testWidgets('tapping AllTrails launches its city page', (tester) async {
+    await tester.pumpWidget(
+      harness(activityName: 'Trail hike', categoryNames: ['Hiking']),
+    );
+    await openSheet(tester);
+
+    await tester.tap(find.text('AllTrails'));
+    await tester.pumpAndSettle();
+
+    expect(launched.single.host, 'www.alltrails.com');
+    expect(launched.single.path, '/us/california/san-francisco');
+    expect(events.logged.single.extra?['provider'], 'allTrails');
   });
 
   testWidgets('tapping a provider launches the constructed URL',
