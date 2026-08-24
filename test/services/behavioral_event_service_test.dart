@@ -630,6 +630,9 @@ void main() {
       expect(approvedEventTypes, contains('condition_suggestion_shown'));
       expect(approvedEventTypes, contains('condition_suggestion_accepted'));
       expect(approvedEventTypes, contains('condition_suggestion_declined'));
+      // Added for the home-screen widget. One type, because a widget
+      // impression is not observable at all — see 20260827000000.
+      expect(approvedEventTypes, contains('app_opened_from_widget'));
 
       // Removed: neither ever had a call site. 'partner_cta_clicked' is
       // covered by partner_impression_viewed + affiliate_link_clicked, and
@@ -646,7 +649,7 @@ void main() {
       // writes it, and dropping it would silently reject a future client call.
       expect(approvedEventTypes, contains('condition_match_notified'));
 
-      expect(approvedEventTypes.length, 29);
+      expect(approvedEventTypes.length, 30);
     });
 
     test('the outcome-stage event types are all loggable', () {

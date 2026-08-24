@@ -1,5 +1,9 @@
 # Uncomment this line to define a global platform for your project
-# platform :ios, '13.0'
+# Raised from a commented-out 13.0 when the widget arrived: the home_widget
+# pod will not install below 14.0. Now uncommented as well as raised, so the
+# Pods project stops inheriting a mix of 9.0/11.0/12.0 targets from individual
+# podspecs and CocoaPods stops warning on every install.
+platform :ios, '14.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'

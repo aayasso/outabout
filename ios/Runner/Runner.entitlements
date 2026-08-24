@@ -6,5 +6,18 @@
 	     export, so one file covers both development and release. -->
 	<key>aps-environment</key>
 	<string>development</string>
+
+	<!-- Shared with the OutaboutWidget extension, which has the identical key
+	     in its own entitlements file. This is the whole data path to the
+	     home-screen widget: the app writes the payload into
+	     UserDefaults(suiteName:) for this group and the widget reads it.
+
+	     Both halves must match this string exactly and the group must be
+	     registered on the Apple Developer portal — a mismatch fails silently,
+	     writing into a container the widget cannot see. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.outabout.outabout</string>
+	</array>
 </dict>
 </plist>

@@ -24,6 +24,24 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<!-- The home-screen widget's deep link. `outabout://schedule` is the only
+	     URL this app answers; the widget sets it via widgetURL and
+	     WidgetLaunchCoordinator turns it back into a route. Without this key
+	     the tap opens the app at whatever screen it was last on, which reads
+	     as the widget doing nothing. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.outabout.outabout.widget</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>outabout</string>
+			</array>
+		</dict>
+	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>

@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:developer';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -15,6 +17,9 @@ import 'features/outcomes/outcome_providers.dart';
 import 'core/weather_theme_provider.dart';
 import 'features/home/home_providers.dart';
 import 'features/weather_scene/weather_scene_provider.dart';
+import 'features/widget/widget_gateway.dart';
+import 'features/widget/widget_launch.dart';
+import 'features/widget/widget_providers.dart';
 import 'services/behavioral_event_service.dart';
 import 'services/notification_service.dart';
 
@@ -35,6 +40,12 @@ Future<void> main() async {
   } catch (e) {
     log('OneSignal init failed: $e', name: 'OutAbout');
   }
+
+  // Points home_widget at the App Group before anything tries to write. Its
+  // own failure is swallowed — a widget that cannot be fed is not a reason to
+  // stop the app launching, and on any build without the entitlement this is
+  // the expected path.
+  await initialiseHomeWidget();
 
   final prefs = await SharedPreferences.getInstance();
 
@@ -60,6 +71,9 @@ class _OutAboutAppState extends ConsumerState<OutAboutApp> {
   /// one" — see [NotificationOpenTracker].
   final _notificationOpens = NotificationOpenTracker();
 
+  late final WidgetLaunchCoordinator _widgetLaunch;
+  StreamSubscription<Uri?>? _widgetClicks;
+
   @override
   void initState() {
     super.initState();
@@ -68,6 +82,37 @@ class _OutAboutAppState extends ConsumerState<OutAboutApp> {
       onStateChange: _onLifecycleStateChange,
     );
     _setupNotificationClickHandler();
+    _setupWidgetTapHandler();
+  }
+
+  /// Routes home-screen widget taps to the schedule.
+  ///
+  /// Both delivery paths are wired, because iOS uses a different one depending
+  /// on whether the app was already running, and the coordinator is what stops
+  /// a cold start that fires both from counting one tap twice.
+  void _setupWidgetTapHandler() {
+    _widgetLaunch = WidgetLaunchCoordinator(
+      // The same shape the notification tap uses: the router is read off the
+      // container rather than through a global navigator key.
+      onRoute: (route) => ref.read(routerProvider).go(route),
+      onOpened: () =>
+          ref.read(behavioralEventServiceProvider).log(widgetOpenEvent),
+    );
+
+    _widgetClicks = HomeWidget.widgetClicked.listen(_widgetLaunch.handleClick);
+
+    // Deferred: the launch URL is available immediately, but routing before
+    // the first frame runs go_router's redirect against a router that has not
+    // been built yet.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        _widgetLaunch.handleLaunch(
+          await HomeWidget.initiallyLaunchedFromHomeWidget(),
+        );
+      } catch (e) {
+        log('Widget launch url unavailable: $e', name: 'OutAbout');
+      }
+    });
   }
 
   /// Keeps the animated weather scene off the CPU while the app is not visible.
@@ -121,6 +166,7 @@ class _OutAboutAppState extends ConsumerState<OutAboutApp> {
 
   @override
   void dispose() {
+    _widgetClicks?.cancel();
     _lifecycleListener.dispose();
     super.dispose();
   }
@@ -142,6 +188,11 @@ class _OutAboutAppState extends ConsumerState<OutAboutApp> {
     // the result, so the sooner it resolves the fewer events fall back to the
     // abbreviation.
     ref.watch(deviceTimezoneProvider);
+
+    // Same reason again: this one pushes today's summary to the home-screen
+    // widget whenever the schedule changes, and a provider nothing watches
+    // never runs.
+    ref.watch(widgetSyncProvider);
 
     final themeData = ref.watch(themeDataProvider);
 

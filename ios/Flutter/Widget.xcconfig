@@ -1,0 +1,12 @@
+// Build settings for the OutaboutWidget extension.
+//
+// Exists for one reason: the extension needs FLUTTER_BUILD_NAME and
+// FLUTTER_BUILD_NUMBER so its Info.plist can carry the same version as the
+// app. Without them the two keys resolve to empty, Xcode drops them, and the
+// resulting .appex fails to install with "Failed to create app extension
+// placeholder" — which names neither the missing key nor the target.
+//
+// Deliberately NOT Debug.xcconfig or Release.xcconfig: those also pull in
+// Pods-Runner, which would link the app's dynamic frameworks into an extension
+// that needs none of them.
+#include "Generated.xcconfig"

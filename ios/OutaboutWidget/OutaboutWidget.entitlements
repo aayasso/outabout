@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The read side of the widget's data path. Must be byte-identical to the
+	     entry in ios/Runner/Runner.entitlements: the app writes the payload
+	     into UserDefaults for this suite and WidgetPayload.load() reads it
+	     back. A mismatch fails silently — both halves succeed against
+	     different containers and the widget shows its empty state forever.
+
+	     No aps-environment here: the extension does not receive push. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.outabout.outabout</string>
+	</array>
+</dict>
+</plist>

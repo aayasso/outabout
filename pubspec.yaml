@@ -51,6 +51,7 @@ dependencies:
   weather_animation: ^1.2.0
   device_calendar_plus: ^0.8.0
   flutter_timezone: ^5.1.0
+  home_widget: ^0.9.3
 
 dev_dependencies:
   flutter_test:

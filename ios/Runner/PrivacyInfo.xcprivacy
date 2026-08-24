@@ -12,8 +12,13 @@
 	     Every linked SDK ships its own manifest (OneSignal, and each of the
 	     Flutter plugin pods), so only the app's own usage is declared here.
 	     1C8F.1 = read/write accessible only to the app itself, which is what
-	     shared_preferences does; CA92.1 would describe app-group or
-	     third-party-SDK access and does not apply. -->
+	     shared_preferences does.
+	     CA92.1 now applies too: the home-screen widget reads its payload from
+	     UserDefaults in the group.com.outabout.outabout App Group, written by
+	     the app. Both reasons are declared because both accesses happen — the
+	     app's own preferences are still 1C8F.1, and only the widget payload is
+	     CA92.1. The extension carries its own manifest declaring the read
+	     side. -->
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>
 		<dict>
@@ -22,6 +27,7 @@
 			<key>NSPrivacyAccessedAPITypeReasons</key>
 			<array>
 				<string>1C8F.1</string>
+				<string>CA92.1</string>
 			</array>
 		</dict>
 	</array>

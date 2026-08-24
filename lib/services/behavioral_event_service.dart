@@ -64,6 +64,11 @@ const approvedEventTypes = <String>[
   'condition_suggestion_shown',
   'condition_suggestion_accepted',
   'condition_suggestion_declined',
+  // Added for the home-screen widget. The tap itself is not observable inside
+  // a widget — WidgetKit gives the extension no callback — so the open is
+  // logged by the app when it is launched via the widget's deep link. That is
+  // the whole funnel available: impressions are unmeasurable by design.
+  'app_opened_from_widget',
 ];
 
 // ---------------------------------------------------------------------------

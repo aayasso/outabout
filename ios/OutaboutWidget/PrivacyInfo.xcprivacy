@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The widget tracks nothing and collects nothing. It cannot: it has no
+	     network access, no session, and no code that runs outside a render. -->
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+
+	<!-- CA92.1 = UserDefaults access limited to an App Group the app belongs
+	     to, which is exactly and only what this extension does: one read of
+	     the payload the app wrote. 1C8F.1 does not apply — the extension keeps
+	     no preferences of its own. The app's own manifest declares both, since
+	     it does both. -->
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+	</array>
+
+	<!-- Nothing leaves the device, so nothing is collected. The data the
+	     widget displays was collected by the app and is declared there. -->
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+</dict>
+</plist>
