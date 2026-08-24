@@ -6,8 +6,13 @@
 -- walkthrough is reproducible, and it deletes only rows it owns.
 --
 -- Run AFTER 20260826000000 (the conditions column) and 20260826000100 (the
--- suggestion event types), against a development project, with the email of
--- the account signed into the simulator.
+-- suggestion event types).
+--
+-- TARGET: the most recently created auth user, because the simulator account
+-- is anonymous and has no email to match on. That is a heuristic, not an
+-- identity — if anyone else has signed in against this project since, it will
+-- pick them instead. The script prints the account it chose before writing
+-- anything, so check the NOTICE. To be certain, set v_user_id explicitly.
 --
 -- What it builds, twice — 'Morning Run' to accept on, 'Evening Walk' to
 -- decline on, so both paths can be shown without re-seeding:
@@ -27,13 +32,20 @@
 --
 -- Wind only, so no other dimension can compete for the one suggestion slot
 -- and the demo is deterministic.
+--
+-- Idempotent: re-running replaces these two activities' histories and touches
+-- nothing else the user owns.
 
 do $$
 declare
-  -- The account signed into the simulator.
-  v_email       text := 'CHANGE_ME@example.com';
+  -- Leave null to take the most recently created auth user. Set it to a
+  -- literal uuid to target a specific account instead.
+  v_user_id     uuid := null;
 
-  v_user_id     uuid;
+  v_created_at  timestamptz;
+  v_label       text;
+  v_user_count  int;
+
   v_activity_id uuid;
   v_name        text;
   v_days_ago    int;
@@ -41,10 +53,23 @@ declare
   v_wind        numeric;
   v_date        date;
 begin
-  select id into v_user_id from auth.users where email = v_email;
   if v_user_id is null then
-    raise exception 'No auth user for %. Set v_email to the simulator account.',
-      v_email;
+    select count(*) into v_user_count from auth.users;
+    if v_user_count = 0 then
+      raise exception 'No auth users exist in this project.';
+    end if;
+
+    select id, created_at, coalesce(email, '(anonymous)')
+      into v_user_id, v_created_at, v_label
+      from auth.users
+     order by created_at desc
+     limit 1;
+
+    raise notice
+      'Seeding for the newest of % auth users: % — % — created %',
+      v_user_count, v_user_id, v_label, v_created_at;
+  else
+    raise notice 'Seeding for the explicitly named user %', v_user_id;
   end if;
 
   foreach v_name in array array['Morning Run', 'Evening Walk'] loop
@@ -57,9 +82,21 @@ begin
      limit 1;
 
     if v_activity_id is null then
-      insert into public.activities (user_id, name)
-      values (v_user_id, v_name)
-      returning id into v_activity_id;
+      begin
+        insert into public.activities (user_id, name)
+        values (v_user_id, v_name)
+        returning id into v_activity_id;
+      exception when foreign_key_violation then
+        -- activities.user_id references profiles.id, and the app only ever
+        -- reads that table — the row is created by a signup trigger. An
+        -- account that never got one cannot own an activity, and the raw FK
+        -- error does not say so.
+        raise exception
+          'User % cannot own an activity: no public.profiles row. Either the '
+          'signup trigger did not run for this anonymous account, or the '
+          'newest auth user is not the simulator account. Check the NOTICE '
+          'above and set v_user_id explicitly.', v_user_id;
+      end;
     end if;
 
     -- Wind only, at a limit the history is about to contradict.
@@ -75,9 +112,9 @@ begin
 
     for v_days_ago, v_outcome, v_wind in
       select * from unnest(
-        array[ 30,      27,      24,      20,      17,      12,       9,       5],
-        array['done',  'done',  'done',  'done',  'done',  'skipped','skipped','skipped'],
-        array[  8.0,    10.0,    12.0,     9.0,    14.0,     21.0,    23.0,    24.0]
+        array[    30,      27,      24,      20,      17,        12,        9,         5],
+        array['done',  'done',  'done',  'done',  'done', 'skipped','skipped', 'skipped'],
+        array[   8.0,    10.0,    12.0,     9.0,    14.0,      21.0,     23.0,      24.0]
       )
     loop
       v_date := current_date - v_days_ago;
