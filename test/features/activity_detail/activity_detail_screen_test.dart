@@ -4,13 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shimmer/shimmer.dart';
 
 import 'package:outabout/core/theme.dart';
 import 'package:outabout/core/weather_theme_provider.dart';
 import 'package:outabout/features/activity_detail/activity_detail_screen.dart';
 import 'package:outabout/features/home/home_providers.dart';
+import 'package:outabout/features/outcomes/outcome_providers.dart';
 import 'package:outabout/data/models/activity.dart';
+import 'package:outabout/data/models/activity_day_outcome.dart';
 import 'package:outabout/services/behavioral_event_service.dart';
 
 class MockBehavioralEventService extends Mock
@@ -18,6 +21,15 @@ class MockBehavioralEventService extends Mock
 
 void main() {
   const testId = 'test-activity-id';
+
+  late SharedPreferences prefs;
+
+  setUp(() async {
+    // The screen reads prefs transitively now: the suggestion card's
+    // declined-suggestion store lives there.
+    SharedPreferences.setMockInitialValues({});
+    prefs = await SharedPreferences.getInstance();
+  });
 
   final testActivity = Activity(
     id: testId,
@@ -35,12 +47,8 @@ void main() {
     return mock;
   }
 
-  Widget buildSubject({
-    List<Override> overrides = const [],
-    Activity? activity,
-  }) {
-    return ProviderScope(
-      overrides: [
+  List<Override> baseOverrides({Activity? activity}) => [
+        sharedPreferencesProvider.overrideWithValue(prefs),
         weatherThemeProvider.overrideWith(
           (ref) => WeatherThemeNotifier(WeatherTheme.sunny),
         ),
@@ -55,8 +63,14 @@ void main() {
         activityDetailProvider(testId).overrideWith(
           (ref) async => activity ?? testActivity,
         ),
-        ...overrides,
-      ],
+      ];
+
+  Widget buildSubject({
+    List<Override> overrides = const [],
+    Activity? activity,
+  }) {
+    return ProviderScope(
+      overrides: [...baseOverrides(activity: activity), ...overrides],
       child: const MaterialApp(
         home: ActivityDetailScreen(activityId: testId),
       ),
@@ -68,6 +82,44 @@ void main() {
 
   Finder findNotesField() =>
       find.widgetWithText(TextField, 'Notes (optional)');
+
+  group('record freshness', () {
+    testWidgets('refetches the history every time the screen opens',
+        (tester) async {
+      // activityOutcomesProvider is a family and is not autoDispose, so its
+      // list survives navigation for the whole app run. Before this, the only
+      // thing that refreshed it was answering a day — so a day answered on the
+      // schedule tab, or recorded as an opportunity while the app was open,
+      // did not appear in the heat map until the process restarted.
+      var fetches = 0;
+      final container = ProviderContainer(
+        overrides: [
+          ...baseOverrides(),
+          activityOutcomesProvider(testId).overrideWith((ref) async {
+            fetches += 1;
+            return <ActivityDayOutcome>[];
+          }),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      // Something already read the history this session and cached it.
+      await container.read(activityOutcomesProvider(testId).future);
+      expect(fetches, 1);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: ActivityDetailScreen(activityId: testId),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(fetches, 2, reason: 'opening the screen must refetch');
+    });
+  });
 
   group('ActivityDetailScreen', () {
     testWidgets(

@@ -145,7 +145,7 @@ OutcomeDayState stateFor(
   return OutcomeDayState.pending;
 }
 
-/// [rows], deduplicated by day, classified, and sorted oldest first.
+/// [rows], one per day, sorted oldest first.
 ///
 /// The unique index on (user_id, activity_id, local_date) makes duplicates
 /// impossible in the database, but this must not assume that: rows can arrive
@@ -153,11 +153,14 @@ OutcomeDayState stateFor(
 /// deterministic — an answered row beats an unanswered one, a later
 /// `answeredAt` beats an earlier one, and a remaining tie goes to whichever
 /// came last in the input.
-List<OutcomeDayCell> classifyOutcomeDays(
-  List<ActivityDayOutcome> rows, {
-  required DateTime now,
-  int graceDays = defaultOutcomeGraceDays,
-}) {
+///
+/// Split out of [classifyOutcomeDays] so the suggestion engine resolves
+/// duplicates by exactly the same rule. It needs the rows themselves rather
+/// than their states — the weather snapshot rides on the row — and two
+/// independent resolutions could disagree about which of two rows for one day
+/// is the real one, which would put the record and the inference drawn from it
+/// out of step.
+List<ActivityDayOutcome> dedupeOutcomeRowsByDay(List<ActivityDayOutcome> rows) {
   final byDate = <String, ActivityDayOutcome>{};
   for (final row in rows) {
     final existing = byDate[row.localDate];
@@ -167,11 +170,20 @@ List<OutcomeDayCell> classifyOutcomeDays(
   }
 
   final dates = byDate.keys.toList()..sort();
+  return [for (final date in dates) byDate[date]!];
+}
+
+/// [rows], deduplicated by day, classified, and sorted oldest first.
+List<OutcomeDayCell> classifyOutcomeDays(
+  List<ActivityDayOutcome> rows, {
+  required DateTime now,
+  int graceDays = defaultOutcomeGraceDays,
+}) {
   return [
-    for (final date in dates)
+    for (final row in dedupeOutcomeRowsByDay(rows))
       (
-        localDate: date,
-        state: stateFor(byDate[date]!, now: now, graceDays: graceDays),
+        localDate: row.localDate,
+        state: stateFor(row, now: now, graceDays: graceDays),
       ),
   ];
 }

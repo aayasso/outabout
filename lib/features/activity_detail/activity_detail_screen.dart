@@ -18,7 +18,11 @@ import '../../widgets/find_and_book_sheet.dart';
 import '../../widgets/outcome_prompt.dart';
 import '../home/home_providers.dart';
 import '../outcomes/outcome_providers.dart';
+import '../outcomes/outcome_stats.dart';
+import '../suggestions/condition_suggestion.dart';
+import '../suggestions/suggestion_providers.dart';
 import 'widgets/activity_record_section.dart';
+import 'widgets/condition_suggestion_card.dart';
 import '../shared/condition_profile_form.dart';
 
 const int maxNameLength = 50;
@@ -57,6 +61,35 @@ class _ActivityDetailScreenState extends ConsumerState<ActivityDetailScreen> {
     super.initState();
     _nameController.addListener(() => setState(() {}));
     _notesController.addListener(() => setState(() {}));
+  }
+
+  bool _recordRefreshed = false;
+
+  /// Refetches the history on every entry, not just after an answer.
+  ///
+  /// activityOutcomesProvider is a non-autoDispose family, so its list
+  /// survives navigation and lives as long as the process. Until now the only
+  /// thing that refreshed it was OutcomeAnswerController.submit — which meant
+  /// a day answered from the schedule tab, or an opportunity recorded while
+  /// the app sat open, was missing from the heat map until the next launch.
+  /// The record is the reason to open this screen; showing a stale one is
+  /// worse than showing a shimmer for a moment.
+  ///
+  /// Here rather than in [initState], where `ref` cannot reach the provider
+  /// scope yet, and rather than in a post-frame callback, which would paint
+  /// the stale record and then swap it — the flicker this exists to prevent.
+  /// This runs before the first build, so that build already sees the refetch
+  /// and renders `_RecordShimmer`.
+  ///
+  /// Guarded because dependencies change for unrelated reasons — a theme
+  /// switch, a keyboard opening — and refetching on each of those would put
+  /// the record into a shimmer every time the weather did something.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_recordRefreshed) return;
+    _recordRefreshed = true;
+    ref.invalidate(activityOutcomesProvider(widget.activityId));
   }
 
   @override
@@ -336,19 +369,66 @@ class _ActivityDetailScreenState extends ConsumerState<ActivityDetailScreen> {
   /// date back to a local DateTime here is safe and necessary: the controller
   /// normalises it straight back with localDateKeyOf, and the round trip
   /// cannot cross a day boundary because midday is nowhere near one.
-  Future<void> _answerPastDay(
+  ///
+  /// Returns what the write changed, so the sheet can say it back — a
+  /// milestone crossed from the heat map is the same event as one crossed from
+  /// the prompt, and was previously logged upstream and never mentioned.
+  ///
+  /// Failures are swallowed and reported as an empty result, matching
+  /// `OutcomePrompt._record`. A history write that fails must not put a red
+  /// screen over a day the user has already answered — and now that the sheet
+  /// waits on this, a throw would leave the modal open with no way out, since
+  /// the close timer is set from the line that follows.
+  Future<({OutcomeMilestone? milestone, OutcomeStats? stats})> _answerPastDay(
     String activityId,
     String localDate,
     String outcome,
   ) async {
     final parts = localDate.split('-').map(int.parse).toList();
-    await ref
-        .read(outcomeAnswerControllerProvider)
-        .submit(
-          activityId: activityId,
-          matchedDay: DateTime(parts[0], parts[1], parts[2], 12),
-          outcome: outcome,
-        );
+    try {
+      return await ref
+          .read(outcomeAnswerControllerProvider)
+          .submit(
+            activityId: activityId,
+            matchedDay: DateTime(parts[0], parts[1], parts[2], 12),
+            outcome: outcome,
+          );
+    } catch (e) {
+      log('ActivityDetailScreen: could not record the past day — $e');
+      return (milestone: null, stats: null);
+    }
+  }
+
+  /// Applies an accepted suggestion, to the database and to this form.
+  ///
+  /// Both halves are required and the second is the easy one to forget. The
+  /// condition sliders are local state, initialised once per screen entry
+  /// behind `_initialized`, so persisting alone would leave the slider showing
+  /// the value the suggestion just replaced — and the next Save would write
+  /// that stale number straight back over the change the user asked for.
+  ///
+  /// Errors propagate: the card catches them and says so. This is the one
+  /// write on this screen the user explicitly requested, so unlike the outcome
+  /// history it must not fail quietly.
+  Future<void> _applySuggestion(
+    Activity activity,
+    ConditionSuggestion suggestion,
+  ) async {
+    final updated = await ref
+        .read(suggestionControllerProvider)
+        .accept(activity: activity, suggestion: suggestion);
+
+    if (!mounted) return;
+    setState(() {
+      switch (suggestion.dimension) {
+        case SuggestionDimension.windMax:
+          _windMax = updated.windMax ?? _windMax;
+        case SuggestionDimension.tempMax:
+          _tempMax = updated.tempMax ?? _tempMax;
+        case SuggestionDimension.tempMin:
+          _tempMin = updated.tempMin ?? _tempMin;
+      }
+    });
   }
 
   Widget _buildForm(
@@ -367,13 +447,28 @@ class _ActivityDetailScreenState extends ConsumerState<ActivityDetailScreen> {
             children: [
               // The record comes first. The history is why this screen is
               // worth opening; the form is what you do once you have seen it.
-              if (activity.id case final id?)
+              if (activity.id case final id?) ...[
                 ActivityRecordSection(
                   activityId: id,
                   activityName: activity.name,
                   onAnswerDay: (localDate, outcome) =>
                       _answerPastDay(id, localDate, outcome),
                 ),
+                // Reads as a footnote to the record above it rather than a
+                // section of its own — it is an inference drawn from exactly
+                // that history, and it sits above the sliders it would move.
+                if (ref.watch(conditionSuggestionProvider(id)).valueOrNull
+                    case final suggestion?)
+                  ConditionSuggestionCard(
+                    activityId: id,
+                    activityName: activity.name,
+                    suggestion: suggestion,
+                    temperatureUnit: temperatureUnit,
+                    onAccept: (s) => _applySuggestion(activity, s),
+                    onDecline: (s) =>
+                        ref.read(suggestionControllerProvider).decline(id, s),
+                  ),
+              ],
               TextField(
                 controller: _nameController,
                 style: OutAboutTypography.bodyLarge(colors),

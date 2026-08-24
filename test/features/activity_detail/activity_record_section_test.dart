@@ -12,6 +12,7 @@ import 'package:outabout/features/activity_detail/widgets/activity_record_sectio
 import 'package:outabout/features/home/home_providers.dart';
 import 'package:outabout/features/outcomes/outcome_providers.dart';
 import 'package:outabout/features/outcomes/outcome_stats.dart';
+import 'package:outabout/widgets/outcome_celebration.dart';
 
 ActivityDayOutcome _row(
   String localDate, {
@@ -32,7 +33,7 @@ void main() {
 
   Widget host({
     required List<ActivityDayOutcome> rows,
-    void Function(String, String)? onAnswerDay,
+    RetroAnswerHandler? onAnswerDay,
     bool loading = false,
     bool fails = false,
   }) {
@@ -203,8 +204,10 @@ void main() {
       await tester.pumpWidget(
         host(
           rows: [_row('2026-08-22')],
-          onAnswerDay: (date, outcome) =>
-              answered.add((date: date, outcome: outcome)),
+          onAnswerDay: (date, outcome) async {
+            answered.add((date: date, outcome: outcome));
+            return (milestone: null, stats: null);
+          },
         ),
       );
       await tester.pumpAndSettle();
@@ -230,7 +233,10 @@ void main() {
       await tester.pumpWidget(
         host(
           rows: [_row('2026-08-01')],
-          onAnswerDay: (date, _) => answered.add(date),
+          onAnswerDay: (date, _) async {
+            answered.add(date);
+            return (milestone: null, stats: null);
+          },
         ),
       );
       await tester.pumpAndSettle();
@@ -243,6 +249,157 @@ void main() {
 
       expect(find.textContaining('Did you go on'), findsNothing);
       expect(answered, isEmpty);
+    });
+  });
+
+  group('the retroactive confirmation', () {
+    OutcomeStats statsWithStreak(int streak) => (
+      currentStreak: streak,
+      bestStreak: streak,
+      totalCompleted: streak,
+      totalSkipped: 0,
+      totalExpired: 0,
+      totalPending: 0,
+      decidedDays: streak,
+      completionRate: 1.0,
+      milestone: null,
+    );
+
+    Future<void> answerYes(WidgetTester tester) async {
+      await tester.tap(
+        find.bySemanticsLabel(RegExp('no answer yet')),
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Yes, I went'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+
+    testWidgets('shows the milestone note before the sheet closes', (
+      tester,
+    ) async {
+      // Crossing a milestone from the heat map is the same event as crossing
+      // it from the prompt. Logging it upstream and saying nothing here would
+      // make the reaction look arbitrary — some answers count, some do not.
+      await tester.pumpWidget(
+        host(
+          rows: [_row('2026-08-22')],
+          onAnswerDay: (_, _) async =>
+              (milestone: OutcomeMilestone.ten, stats: statsWithStreak(10)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await answerYes(tester);
+
+      expect(find.byType(OutcomeCelebration), findsOneWidget);
+      expect(find.text('Ten times out — this one has stuck.'), findsOneWidget);
+    });
+
+    testWidgets('falls back to the streak when no milestone lands', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        host(
+          rows: [_row('2026-08-22')],
+          onAnswerDay: (_, _) async =>
+              (milestone: null, stats: statsWithStreak(4)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await answerYes(tester);
+
+      expect(find.text('4 matched days in a row.'), findsOneWidget);
+    });
+
+    testWidgets('takes itself away without a dismiss control', (tester) async {
+      await tester.pumpWidget(
+        host(
+          rows: [_row('2026-08-22')],
+          onAnswerDay: (_, _) async =>
+              (milestone: OutcomeMilestone.five, stats: statsWithStreak(5)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await answerYes(tester);
+      expect(find.byType(OutcomeCelebration), findsOneWidget);
+
+      await tester.pump(outcomeCelebrationDuration);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(OutcomeCelebration), findsNothing);
+      expect(find.text('Yes, I went'), findsNothing);
+    });
+
+    testWidgets('closes even when the write fails', (tester) async {
+      // Before this the throw escaped _answerPastDay entirely: an unhandled
+      // async error, no feedback, and — once the sheet learned to wait for a
+      // result — a sheet that would sit there forever with no way out.
+      await tester.pumpWidget(
+        host(
+          rows: [_row('2026-08-22')],
+          onAnswerDay: (_, _) async => throw Exception('offline'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await answerYes(tester);
+
+      expect(find.text('Logged.'), findsOneWidget);
+
+      await tester.pump(outcomeCelebrationDuration);
+      await tester.pumpAndSettle();
+      expect(find.text('Yes, I went'), findsNothing);
+    });
+
+    testWidgets('a no closes straight away, with no beat', (tester) async {
+      // Symmetric with OutcomePrompt, where only a Yes is celebrated. A
+      // congratulatory line after "I did not go" would read as sarcasm.
+      await tester.pumpWidget(
+        host(
+          rows: [_row('2026-08-22')],
+          onAnswerDay: (_, _) async =>
+              (milestone: null, stats: statsWithStreak(0)),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.bySemanticsLabel(RegExp('no answer yet')),
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text("No, I didn't"));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(OutcomeCelebration), findsNothing);
+      expect(find.text("No, I didn't"), findsNothing);
+    });
+
+    testWidgets('a failing no is swallowed, not left unhandled', (
+      tester,
+    ) async {
+      // The no path pops first and lets the write finish on its own. Nothing
+      // is awaiting it, so a throw would surface as an unowned async error
+      // with no sheet left to report it — and in the suite, as a failure
+      // blamed on whichever test ran next.
+      await tester.pumpWidget(
+        host(
+          rows: [_row('2026-08-22')],
+          onAnswerDay: (_, _) async => throw Exception('offline'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.bySemanticsLabel(RegExp('no answer yet')),
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text("No, I didn't"));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text("No, I didn't"), findsNothing);
     });
   });
 

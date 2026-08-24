@@ -137,6 +137,12 @@ class _OutAboutAppState extends ConsumerState<OutAboutApp> {
     // numerator and no denominator.
     ref.watch(matchedDayRecorderProvider);
 
+    // Starts the platform timezone lookup as early as anything is on screen.
+    // It is an async channel call and every event's geographic_context wants
+    // the result, so the sooner it resolves the fewer events fall back to the
+    // abbreviation.
+    ref.watch(deviceTimezoneProvider);
+
     final themeData = ref.watch(themeDataProvider);
 
     final router = ref.watch(routerProvider);

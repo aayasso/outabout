@@ -16,7 +16,9 @@ import 'package:outabout/data/models/schedule_day.dart';
 import 'package:outabout/features/home/home_providers.dart';
 import 'package:outabout/services/behavioral_event_service.dart';
 import 'package:outabout/features/home/tabs/schedule_tab.dart';
+import 'package:outabout/features/activity_detail/widgets/condition_suggestion_card.dart';
 import 'package:outabout/features/shared/condition_profile_form.dart';
+import 'package:outabout/features/suggestions/condition_suggestion.dart';
 
 /// iOS accessibility text sizes, as `textScaler` factors.
 ///
@@ -114,6 +116,64 @@ void main() {
   });
 
   _scheduleTests();
+
+  group('the condition suggestion survives the accessibility text sizes', () {
+    const suggestion = (
+      dimension: SuggestionDimension.windMax,
+      currentValue: 25.0,
+      suggestedValue: 20.0,
+      qualifyingSkips: 3,
+      eligibleDays: 9,
+    );
+
+    for (final scale in _scales) {
+      testWidgets('sentence and both actions at ${scale}x', (tester) async {
+        // Two buttons side by side is the shape most likely to overflow: at
+        // 3x, "Not for me" alone is wider than half a phone. The Wrap is what
+        // stops that, and this is what proves the Wrap is still there.
+        SharedPreferences.setMockInitialValues({});
+        final prefs = await SharedPreferences.getInstance();
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              sharedPreferencesProvider.overrideWithValue(prefs),
+              weatherThemeProvider.overrideWith(
+                (ref) => WeatherThemeNotifier(WeatherTheme.sunny),
+              ),
+              weatherThemeColorsProvider.overrideWithValue(
+                WeatherThemeColors.sunny,
+              ),
+              behavioralEventServiceProvider.overrideWithValue(_silentEvents()),
+            ],
+            child: MaterialApp(
+              home: MediaQuery(
+                data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+                child: Scaffold(
+                  body: SingleChildScrollView(
+                    child: ConditionSuggestionCard(
+                      activityId: 'act-1',
+                      activityName: 'Morning trail run',
+                      suggestion: suggestion,
+                      temperatureUnit: 'C',
+                      onAccept: (_) async {},
+                      onDecline: (_) async {},
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.textContaining('Lower the wind limit'), findsOneWidget);
+        expect(find.text('Apply'), findsOneWidget);
+        expect(find.text('Not for me'), findsOneWidget);
+        expectNoOverflow(tester, scale);
+      });
+    }
+  });
 
   group('condition form survives the accessibility text sizes', () {
     for (final scale in _scales) {

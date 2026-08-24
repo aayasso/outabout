@@ -14,10 +14,12 @@ import 'package:outabout/data/models/daily_forecast.dart';
 import 'package:outabout/data/models/schedule_day.dart';
 import 'package:outabout/features/home/home_providers.dart';
 import 'package:outabout/features/home/outcome_prompt_provider.dart';
+import 'package:outabout/features/activity_detail/widgets/condition_suggestion_card.dart';
 import 'package:outabout/features/home/tabs/schedule_tab.dart';
 import 'package:outabout/features/onboarding/widgets/onboarding_button.dart';
 import 'package:outabout/features/onboarding/widgets/progress_dots.dart';
 import 'package:outabout/features/shared/condition_profile_form.dart';
+import 'package:outabout/features/suggestions/condition_suggestion.dart';
 import 'package:outabout/services/behavioral_event_service.dart';
 import 'package:outabout/widgets/outcome_prompt.dart';
 
@@ -303,6 +305,100 @@ void main() {
       final dismiss = tester.getSize(find.byTooltip(RegExp('^Dismiss')));
       expect(dismiss.height, greaterThanOrEqualTo(44.0));
       expect(dismiss.width, greaterThanOrEqualTo(44.0));
+    });
+  });
+
+  group('condition suggestion card', () {
+    const suggestion = (
+      dimension: SuggestionDimension.windMax,
+      currentValue: 25.0,
+      suggestedValue: 20.0,
+      qualifyingSkips: 3,
+      eligibleDays: 9,
+    );
+
+    Widget suggestionHost() => ProviderScope(
+      overrides: baseOverrides(),
+      child: MaterialApp(
+        home: Scaffold(
+          body: ConditionSuggestionCard(
+            activityId: 'a1',
+            activityName: 'Morning run',
+            suggestion: suggestion,
+            temperatureUnit: 'C',
+            onAccept: (_) async {},
+            onDecline: (_) async {},
+          ),
+        ),
+      ),
+    );
+
+    testWidgets('is one node that names the activity and the change', (
+      tester,
+    ) async {
+      // The card proposes editing a setting. A screen reader user who hears
+      // only "You've skipped 3 of your windiest matches" has no idea which
+      // activity is about to change, and the two buttons below it say even
+      // less on their own.
+      await tester.pumpWidget(suggestionHost());
+      await tester.pumpAndSettle();
+      final handle = tester.ensureSemantics();
+
+      final cards = _allSemantics(
+        tester,
+      ).where((d) => d.label.startsWith('Suggestion for Morning run')).toList();
+      expect(cards, hasLength(1));
+      expect(cards.single.label, contains('Lower the wind limit to 20 km/h'));
+
+      handle.dispose();
+    });
+
+    testWidgets('the two actions are distinct, labelled buttons', (
+      tester,
+    ) async {
+      await tester.pumpWidget(suggestionHost());
+      await tester.pumpAndSettle();
+      final handle = tester.ensureSemantics();
+
+      final buttons = _allSemantics(tester)
+          .where((d) => d.flagsCollection.isButton)
+          .map((d) => d.label)
+          .toList();
+      expect(buttons, contains('Apply'));
+      expect(buttons, contains('Not for me'));
+
+      handle.dispose();
+    });
+
+    testWidgets('the sentence is not announced twice', (tester) async {
+      // The container carries it as its label, so the Text beneath must not
+      // also be its own node.
+      await tester.pumpWidget(suggestionHost());
+      await tester.pumpAndSettle();
+      final handle = tester.ensureSemantics();
+
+      final echoes = _allSemantics(
+        tester,
+      ).where((d) => d.label.startsWith("You've skipped 3")).toList();
+      expect(echoes, isEmpty);
+
+      handle.dispose();
+    });
+
+    testWidgets('both actions meet the 44pt minimum', (tester) async {
+      await tester.pumpWidget(suggestionHost());
+      await tester.pumpAndSettle();
+
+      // Measured on the buttons themselves: the 48pt floor comes from their
+      // `minimumSize` style, so there is no wrapping SizedBox to look at.
+      for (final finder in [
+        find.widgetWithText(ElevatedButton, 'Apply'),
+        find.widgetWithText(TextButton, 'Not for me'),
+      ]) {
+        final size = tester.getSize(finder);
+        expect(size.height, greaterThanOrEqualTo(44.0));
+        expect(size.width, greaterThanOrEqualTo(44.0));
+      }
     });
   });
 

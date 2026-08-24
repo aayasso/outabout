@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/providers.dart';
@@ -57,6 +58,12 @@ const approvedEventTypes = <String>[
   // needs no migration. The value is bounded vocabulary (1|5|10|25), so it
   // survives deidentify_behavioral_events' key-drop list intact.
   'activity_milestone_reached',
+  // Added for adaptive condition suggestions. Three types rather than one
+  // carrying the stage, because shown/accepted/declined is a funnel and a
+  // funnel is counted per stage — see 20260826000100.
+  'condition_suggestion_shown',
+  'condition_suggestion_accepted',
+  'condition_suggestion_declined',
 ];
 
 // ---------------------------------------------------------------------------
@@ -359,16 +366,25 @@ class _PendingEvent {
 /// they leave the device. When there is no location yet, the fields stay empty
 /// and `country` is empty rather than a hardcoded 'US' — "not collected" and
 /// "United States" must not look the same in the dataset.
-GeographicContext buildGeographicContext(UserLocation? location) {
+///
+/// [timezone] is the device's IANA identifier, supplied by
+/// [deviceTimezoneProvider]. Passed in rather than read here so this stays a
+/// function of its arguments: the lookup is an async platform call and this is
+/// synchronous, called on the hot path of every event.
+GeographicContext buildGeographicContext(
+  UserLocation? location, {
+  required String timezone,
+}) {
+  final zone = _resolveTimezone(timezone);
   if (location == null) {
-    return const GeographicContext(
+    return GeographicContext(
       metro: '',
       city: '',
       state: '',
       country: '',
       latBucketed: 0.0,
       lngBucketed: 0.0,
-      timezone: '',
+      timezone: zone,
     );
   }
 
@@ -384,9 +400,45 @@ GeographicContext buildGeographicContext(UserLocation? location) {
     country: '',
     latBucketed: bucket(location.latitude),
     lngBucketed: bucket(location.longitude),
-    timezone: DateTime.now().timeZoneName,
+    timezone: zone,
   );
 }
+
+/// The zone to record, never empty.
+///
+/// The platform lookup is async and this path is not, so the first events of a
+/// session can arrive before it resolves. `DateTime.now().timeZoneName` is
+/// what this field held before — an abbreviation like "PDT" — so falling back
+/// to it degrades to the old behaviour rather than to a hole in the dataset.
+/// Distinguishable downstream on sight: an IANA identifier always contains a
+/// slash and an abbreviation never does.
+String _resolveTimezone(String timezone) =>
+    timezone.isNotEmpty ? timezone : DateTime.now().timeZoneName;
+
+/// The device's IANA timezone identifier, e.g. `America/Los_Angeles`.
+///
+/// Resolved once per app run. The device is the only place the user's real
+/// zone is known — `user_locations` does not store one — and until now the app
+/// reported only an abbreviation, which is ambiguous across zones, absent in
+/// much of the world, and changes twice a year for a user who has not moved.
+///
+/// Recorded now so that server-side work has it when it arrives: anything that
+/// wants to know which local day an event fell on, or to run at a sensible
+/// local hour, needs the identifier, and it cannot be backfilled onto events
+/// already written.
+///
+/// Failure yields an empty string rather than throwing. A timezone lookup must
+/// never be able to take down event logging, and [_resolveTimezone] turns the
+/// empty string back into the old abbreviation.
+final deviceTimezoneProvider = FutureProvider<String>((ref) async {
+  try {
+    final info = await FlutterTimezone.getLocalTimezone();
+    return info.identifier;
+  } catch (e) {
+    debugPrint('deviceTimezoneProvider: no IANA timezone available — $e');
+    return '';
+  }
+});
 
 final behavioralEventServiceProvider = Provider<BehavioralEventService>((ref) {
   final supabase = ref.watch(supabaseClientProvider);
@@ -398,8 +450,13 @@ final behavioralEventServiceProvider = Provider<BehavioralEventService>((ref) {
     // Read at log time — see the field docs. Capturing the value here is what
     // froze weather_theme at whatever the theme was on first build.
     activeThemeName: () => themeNotifier.activeThemeName,
-    geographicContext: () =>
-        buildGeographicContext(ref.read(userLocationProvider).valueOrNull),
+    geographicContext: () => buildGeographicContext(
+      ref.read(userLocationProvider).valueOrNull,
+      // Read at log time, like the location beside it: the zone resolves
+      // asynchronously and capturing it here would freeze whatever was known
+      // when the service was first built, which is nothing.
+      timezone: ref.read(deviceTimezoneProvider).valueOrNull ?? '',
+    ),
     appVersion: appVersion,
   );
 });

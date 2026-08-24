@@ -34,6 +34,17 @@ const cachedForecastFetchedAtKey = 'cached_forecast_fetched_at';
 /// dismissed, as a JSON list of `"<activityId>|<yyyy-MM-dd>"` entries.
 const outcomePromptHandledKey = 'outcome_prompt_handled';
 
+/// SharedPreferences key holding what has already been suggested and refused,
+/// as a JSON object keyed `"<activityId>|<dimension>"`.
+///
+/// Local rather than a table, and user-scoped rather than device-level. This
+/// is suppression state — the same class of fact as
+/// [outcomePromptHandledKey] — not history: the accept and the decline are
+/// both logged to `behavioral_events`, which is where the dataset lives. What
+/// stays here is only "do not ask this again yet", and the cost of losing it
+/// is one re-offered suggestion on a new device.
+const declinedSuggestionsKey = 'condition_suggestions_declined';
+
 /// SharedPreferences flag recording that the calendar-permission explainer
 /// has been shown once.
 ///
@@ -63,6 +74,7 @@ const userScopedPrefsKeys = <String>[
   cachedForecastDataKey,
   cachedForecastFetchedAtKey,
   outcomePromptHandledKey,
+  declinedSuggestionsKey,
 ];
 
 // ---------------------------------------------------------------------------

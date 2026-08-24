@@ -15,6 +15,16 @@ void main() {
         'reason': 'too_busy',
         'answered_at': '2026-08-23T18:04:00.000Z',
         'created_at': '2026-08-23T09:00:00.000Z',
+        'conditions': {
+          'time': '2026-08-23T13:00:00.000Z',
+          'values': {
+            'temperatureMax': 24.0,
+            'temperatureMin': 14.0,
+            'precipitationProbability': 5.0,
+            'windSpeedMaxKmh': 22.0,
+            'weatherCode': 1000,
+          },
+        },
       });
 
       expect(row.id, 'row-1');
@@ -26,6 +36,22 @@ void main() {
       expect(row.reason, 'too_busy');
       expect(row.answeredAt, DateTime.utc(2026, 8, 23, 18, 4));
       expect(row.createdAt, DateTime.utc(2026, 8, 23, 9));
+      expect(row.conditions, isNotNull);
+      expect(
+        (row.conditions!['values'] as Map<String, dynamic>)['windSpeedMaxKmh'],
+        22.0,
+      );
+    });
+
+    test('tolerates a row written before the conditions column existed', () {
+      final row = ActivityDayOutcome.fromJson({
+        'user_id': 'user-1',
+        'activity_id': 'act-1',
+        'local_date': '2026-08-23',
+        'matched': true,
+      });
+
+      expect(row.conditions, isNull);
     });
 
     test('tolerates an unanswered row', () {
@@ -90,6 +116,30 @@ void main() {
       expect(json.containsKey('reason'), isFalse);
     });
 
+    test('omits conditions when there is no snapshot', () {
+      // answer() upserts *without* ignoreDuplicates, and PostgREST only SETs
+      // the columns present in the payload. A payload carrying
+      // `conditions: null` would therefore blank the snapshot every time the
+      // user answered the day it belongs to — destroying the only evidence
+      // the suggestion engine has, at the exact moment it becomes useful.
+      final json = unanswered.toJson();
+      expect(json.containsKey('conditions'), isFalse);
+    });
+
+    test('emits conditions when a snapshot is attached', () {
+      final json = ActivityDayOutcome(
+        userId: 'user-1',
+        activityId: 'act-1',
+        localDate: '2026-08-23',
+        conditions: const {
+          'time': '2026-08-23T13:00:00.000Z',
+          'values': {'windSpeedMaxKmh': 22.0},
+        },
+      ).toJson();
+
+      expect(json['conditions'], isA<Map<String, dynamic>>());
+    });
+
     test('emits outcome and answered_at when answered', () {
       final json = ActivityDayOutcome(
         userId: 'user-1',
@@ -112,6 +162,10 @@ void main() {
         localDate: '2026-08-23',
         outcome: DayOutcome.done,
         answeredAt: DateTime.utc(2026, 8, 23, 18),
+        conditions: const {
+          'time': '2026-08-23T13:00:00.000Z',
+          'values': {'temperatureMax': 24.0, 'windSpeedMaxKmh': 22.0},
+        },
       );
       final restored = ActivityDayOutcome.fromJson(original.toJson());
 
@@ -120,6 +174,7 @@ void main() {
       expect(restored.localDate, original.localDate);
       expect(restored.outcome, original.outcome);
       expect(restored.answeredAt, original.answeredAt);
+      expect(restored.conditions, original.conditions);
     });
   });
 

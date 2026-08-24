@@ -161,6 +161,80 @@ void main() {
     });
   });
 
+  group('conditions snapshot', () {
+    test('attaches the day forecast to every opportunity it builds', () {
+      final rows = matchedOpportunitiesForToday(
+        days: [
+          _day(DateTime(2026, 8, 23, 13), [
+            _activity(profile: _constraining()),
+          ]),
+        ],
+        now: now,
+        userId: 'user-1',
+      );
+
+      expect(rows, hasLength(1));
+      expect(rows.single.conditions, isNotNull);
+    });
+
+    test('writes a snapshot DailyForecast.fromJson reads straight back', () {
+      // The whole point of storing toJson() verbatim rather than a bespoke
+      // shape: the reader already exists, so there is no second parser to keep
+      // in step with the first. Wind is the field that would break first — the
+      // API sends m/s and the model stores km/h — so assert on it by value.
+      final forecast = _forecast(DateTime(2026, 8, 23, 13));
+      final rows = matchedOpportunitiesForToday(
+        days: [
+          ScheduleDay(
+            forecast: forecast,
+            matchedActivities: [_activity(profile: _constraining())],
+          ),
+        ],
+        now: now,
+        userId: 'user-1',
+      );
+
+      final restored = DailyForecast.fromJson(rows.single.conditions!);
+      expect(restored.windSpeedMax, forecast.windSpeedMax);
+      expect(restored.temperatureMax, forecast.temperatureMax);
+      expect(restored.temperatureMin, forecast.temperatureMin);
+      expect(
+        restored.precipitationProbability,
+        forecast.precipitationProbability,
+      );
+      expect(restored.weatherCode, forecast.weatherCode);
+    });
+
+    test('gives every activity on one day the same snapshot', () {
+      // One forecast, many matched activities. A per-activity divergence here
+      // would mean the snapshot came from somewhere other than the day, and
+      // it would also break the batch upsert: PostgREST takes the union of
+      // keys across a batch, so a payload where some rows carry `conditions`
+      // and others do not is not the shape it expects.
+      final rows = matchedOpportunitiesForToday(
+        days: [
+          _day(DateTime(2026, 8, 23, 13), [
+            _activity(profile: _constraining()),
+            _activity(
+              id: 'act-3',
+              profile: const ConditionProfile(
+                id: 'p-3',
+                activityId: 'act-3',
+                windEnabled: true,
+                windMax: 20,
+              ),
+            ),
+          ]),
+        ],
+        now: now,
+        userId: 'user-1',
+      );
+
+      expect(rows, hasLength(2));
+      expect(rows.first.conditions, rows.last.conditions);
+    });
+  });
+
   group('OpportunityRecorder', () {
     late _MockRepository repository;
 

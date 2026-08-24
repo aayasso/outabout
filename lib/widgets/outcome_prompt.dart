@@ -15,13 +15,12 @@ import '../features/home/outcome_prompt_provider.dart';
 import '../features/outcomes/outcome_providers.dart';
 import '../features/outcomes/outcome_stats.dart';
 import '../services/behavioral_event_service.dart';
+import 'outcome_celebration.dart';
 
-/// How long the confirmation stays up before the row collapses.
-///
-/// Long enough to read a short sentence, short enough that it never becomes
-/// something to dismiss. Unaffected by Reduce Motion: the sentence is
-/// information, and hiding it faster would be worse, not calmer.
-const Duration outcomeCelebrationDuration = Duration(milliseconds: 2200);
+// Re-exported so the many importers of this file — and its tests — keep
+// resolving these three names after the move to outcome_celebration.dart.
+export 'outcome_celebration.dart'
+    show OutcomeCelebration, celebrationLine, outcomeCelebrationDuration;
 
 /// The optional reasons offered after a "Not today".
 ///
@@ -32,30 +31,6 @@ const List<({String value, String label})> outcomeReasons = [
   (value: 'conditions_wrong', label: 'Wrong conditions'),
   (value: 'not_feeling_it', label: 'Not feeling it'),
 ];
-
-/// What to say back when the user says they went.
-///
-/// A milestone outranks a streak: crossing 10 is the more interesting fact,
-/// and saying both would be two sentences where the moment wants one.
-String celebrationLine({
-  required OutcomeMilestone? milestone,
-  required int currentStreak,
-}) {
-  switch (milestone) {
-    case OutcomeMilestone.first:
-      return 'First one in the books.';
-    case OutcomeMilestone.five:
-      return "That's five times out.";
-    case OutcomeMilestone.ten:
-      return 'Ten times out — this one has stuck.';
-    case OutcomeMilestone.twentyFive:
-      return 'Twenty-five. Call it a habit.';
-    case null:
-      break;
-  }
-  if (currentStreak >= 2) return '$currentStreak matched days in a row.';
-  return 'Logged.';
-}
 
 enum _Phase {
   /// "Did you go?" with Yes / Not today / dismiss.
@@ -272,7 +247,7 @@ class _OutcomePromptState extends ConsumerState<OutcomePrompt> {
     // instant markHandled landed.
     switch (_phase) {
       case _Phase.celebrating:
-        return _Celebration(text: _celebration, colors: colors);
+        return OutcomeCelebration(text: _celebration, colors: colors);
       case _Phase.reasons:
         return _ReasonRow(
           colors: colors,
@@ -344,57 +319,6 @@ class _OutcomePromptState extends ConsumerState<OutcomePrompt> {
                     tooltip:
                         'Dismiss the question about ${widget.activityName}',
                     onPressed: _onDismiss,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        )
-        .animateSafely(context)
-        .fadeIn(duration: OutAboutAnimations.standardDuration);
-  }
-}
-
-/// One beat of acknowledgement. No confetti, no dialog, no dismiss control —
-/// it takes itself away.
-class _Celebration extends StatelessWidget {
-  const _Celebration({required this.text, required this.colors});
-
-  final String text;
-  final WeatherThemeColors colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-          // The text is announced explicitly on arrival; leaving it as a live
-          // label as well would say it twice.
-          excludeSemantics: true,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: OutAboutSpacing.md,
-              vertical: OutAboutSpacing.sm,
-            ),
-            child: Row(
-              children: [
-                Icon(
-                      Icons.check_circle,
-                      size: 18,
-                      color: colors.primaryInteractive,
-                    )
-                    .animateSafely(context)
-                    .scale(
-                      begin: const Offset(0.8, 0.8),
-                      end: const Offset(1, 1),
-                      duration: OutAboutAnimations.standardDuration,
-                      curve: Curves.easeOutBack,
-                    ),
-                const SizedBox(width: OutAboutSpacing.sm),
-                Expanded(
-                  child: Text(
-                    text,
-                    style: OutAboutTypography.labelMedium(
-                      colors,
-                    ).copyWith(color: colors.text),
                   ),
                 ),
               ],

@@ -27,6 +27,17 @@ import 'outcome_stats.dart';
 ///    [ConditionProfile.isConstraining] is the predicate the schedule card
 ///    already uses to decide whether to claim "conditions match", so reusing it
 ///    keeps what the UI calls a match and what the streak counts identical.
+///
+/// Every row carries the day's forecast in [ActivityDayOutcome.conditions].
+/// This is the only moment the weather behind a matched day is in hand — the
+/// forecast window is five days wide and moves, so by the time the user
+/// answers, the day that prompted the question may already have fallen out of
+/// it. Recording the observation with the claim is what makes the ledger
+/// something the app can later reason about rather than merely count.
+///
+/// All rows from one day share one snapshot object, which is both honest — it
+/// is one day's weather — and required: the batch upsert sends these together,
+/// and PostgREST takes the union of keys across a batch.
 List<ActivityDayOutcome> matchedOpportunitiesForToday({
   required List<ScheduleDay> days,
   required DateTime now,
@@ -35,6 +46,7 @@ List<ActivityDayOutcome> matchedOpportunitiesForToday({
   final today = localDateKeyOf(now);
   for (final day in days) {
     if (localDateKeyOf(day.forecast.date) != today) continue;
+    final conditions = day.forecast.toJson();
     return [
       for (final activity in day.matchedActivities)
         if (activity.id case final id?)
@@ -43,6 +55,7 @@ List<ActivityDayOutcome> matchedOpportunitiesForToday({
               userId: userId,
               activityId: id,
               localDate: today,
+              conditions: conditions,
             ),
     ];
   }

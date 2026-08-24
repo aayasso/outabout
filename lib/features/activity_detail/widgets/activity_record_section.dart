@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -9,6 +12,7 @@ import '../../../data/models/activity_day_outcome.dart';
 import '../../home/home_providers.dart';
 import '../../outcomes/outcome_providers.dart';
 import '../../outcomes/outcome_stats.dart';
+import '../../../widgets/outcome_celebration.dart';
 
 /// How much history the heat map shows.
 ///
@@ -21,6 +25,18 @@ const int heatMapWeeks = 10;
 /// Below this the cells stop reading as a calendar and start reading as noise,
 /// and they fall under the tap target a pending day needs.
 const double heatMapMinCellSize = 14.0;
+
+/// Answers a still-answerable day and reports what the write changed.
+///
+/// Returns the milestone and refreshed stats rather than void, because the
+/// sheet that calls it has to say something back. The write itself stays with
+/// the screen — it owns the controller and the error handling — and only its
+/// result travels down here.
+typedef RetroAnswerHandler =
+    Future<({OutcomeMilestone? milestone, OutcomeStats? stats})> Function(
+      String localDate,
+      String outcome,
+    );
 
 /// The activity's record: what it has amounted to, and when.
 ///
@@ -38,7 +54,7 @@ class ActivityRecordSection extends ConsumerWidget {
   final String activityName;
 
   /// Called when the user answers a still-answerable day from the grid.
-  final void Function(String localDate, String outcome)? onAnswerDay;
+  final RetroAnswerHandler? onAnswerDay;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -86,7 +102,7 @@ class _RecordBody extends StatelessWidget {
   final DateTime now;
   final WeatherThemeColors colors;
   final String activityName;
-  final void Function(String localDate, String outcome)? onAnswerDay;
+  final RetroAnswerHandler? onAnswerDay;
 
   @override
   Widget build(BuildContext context) {
@@ -248,7 +264,7 @@ class HistoryHeatMap extends StatelessWidget {
   final DateTime now;
   final WeatherThemeColors colors;
   final String activityName;
-  final void Function(String localDate, String outcome)? onAnswerDay;
+  final RetroAnswerHandler? onAnswerDay;
 
   @override
   Widget build(BuildContext context) {
@@ -370,7 +386,7 @@ class _HeatMapCell extends StatelessWidget {
   final int index;
   final WeatherThemeColors colors;
   final String activityName;
-  final void Function(String localDate, String outcome)? onAnswer;
+  final RetroAnswerHandler? onAnswer;
 
   @override
   Widget build(BuildContext context) {
@@ -412,10 +428,17 @@ class _HeatMapCell extends StatelessWidget {
         );
   }
 
-  Future<void> _answer(BuildContext context) async {
-    final choice = await showModalBottomSheet<String>(
+  /// Opens the sheet, which now owns the answer from tap to acknowledgement.
+  ///
+  /// It used to pop a bare outcome string and let the caller do the write,
+  /// which is why the retroactive path had no confirmation: by the time the
+  /// result existed, the only thing that could have shown it was gone.
+  void _answer(BuildContext context) {
+    showModalBottomSheet<void>(
       context: context,
       backgroundColor: colors.surface,
+      // Not dismissible by dragging mid-write: the sheet is briefly showing
+      // the outcome of something it is still doing.
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(
           top: Radius.circular(OutAboutRadius.bottomSheet),
@@ -425,9 +448,9 @@ class _HeatMapCell extends StatelessWidget {
         localDate: localDate,
         activityName: activityName,
         colors: colors,
+        onAnswer: onAnswer!,
       ),
     );
-    if (choice != null) onAnswer!(localDate, choice);
   }
 }
 
@@ -436,19 +459,117 @@ class _HeatMapCell extends StatelessWidget {
 /// The prompt is a same-day affordance and an unanswered day counts against
 /// the user once its grace window runs out. Without a way back in, that would
 /// be a penalty with no recourse — this is what makes expiry fair.
-class _RetroAnswerSheet extends StatelessWidget {
+///
+/// The sheet performs the answer rather than popping a value for someone else
+/// to act on. That is what lets it acknowledge the result: an answer from here
+/// can cross a milestone exactly as an answer from the prompt can, and the
+/// beat has to happen somewhere the user is still looking.
+class _RetroAnswerSheet extends StatefulWidget {
   const _RetroAnswerSheet({
     required this.localDate,
     required this.activityName,
     required this.colors,
+    required this.onAnswer,
   });
 
   final String localDate;
   final String activityName;
   final WeatherThemeColors colors;
+  final RetroAnswerHandler onAnswer;
+
+  @override
+  State<_RetroAnswerSheet> createState() => _RetroAnswerSheetState();
+}
+
+class _RetroAnswerSheetState extends State<_RetroAnswerSheet> {
+  /// The confirmation line, once there is one. Null while asking.
+  String? _celebration;
+  Timer? _close;
+
+  @override
+  void dispose() {
+    _close?.cancel();
+    super.dispose();
+  }
+
+  /// Yes: write, then say what it came to, then leave.
+  ///
+  /// Only a Yes gets a beat. `OutcomePrompt` makes the same call, and for the
+  /// same reason — a congratulatory line after "I did not go" reads as
+  /// sarcasm.
+  Future<void> _onYes() async {
+    OutAboutHaptics.onActivitySave();
+    setState(() => _celebration = 'Logged.');
+
+    // Caught here even though the handler already swallows its own failures.
+    // "This sheet always closes" is the sheet's invariant to keep, not a
+    // property to inherit from whoever supplied the callback: the close timer
+    // is set *after* this await, so a throw escaping would strand the modal
+    // open over the record with no control to dismiss it. A stuck sheet is a
+    // far worse outcome than a missing streak line.
+    OutcomeMilestone? milestone;
+    OutcomeStats? stats;
+    try {
+      final result = await widget.onAnswer(widget.localDate, DayOutcome.done);
+      milestone = result.milestone;
+      stats = result.stats;
+    } catch (e) {
+      debugPrint('_RetroAnswerSheet: could not record the day — $e');
+    }
+    if (!mounted) return;
+
+    // 'Logged.' is the honest fallback: the answer reached behavioral_events
+    // regardless, and claiming a streak the app could not read back would be
+    // worse than saying little.
+    final line = celebrationLine(
+      milestone: milestone,
+      currentStreak: stats?.currentStreak ?? 0,
+    );
+    setState(() => _celebration = line);
+
+    // VoiceOver gets the reaction too. Without this the sheet simply closes
+    // and the answer appears to have done nothing.
+    SemanticsService.sendAnnouncement(
+      View.of(context),
+      line,
+      Directionality.of(context),
+    );
+
+    _close = Timer(outcomeCelebrationDuration, () {
+      if (mounted) Navigator.of(context).pop();
+    });
+  }
+
+  /// No: recorded, and out of the way immediately.
+  ///
+  /// Popped first so the sheet does not sit there during the write. Nothing is
+  /// waiting on the result — there is no line to show — and holding a modal
+  /// open over a network round trip for an answer that needs no reply would be
+  /// the app taking longer than the user did.
+  void _onNo() {
+    OutAboutHaptics.onConditionToggle();
+    unawaited(_recordSkip());
+    Navigator.of(context).pop();
+  }
+
+  /// The skip write, detached from the sheet that started it.
+  ///
+  /// Its own method so the failure has somewhere to be caught. An unawaited
+  /// future that throws becomes an unhandled async error with no owner — the
+  /// sheet is gone by then and cannot show anything — and in a test that is a
+  /// failure attributed to whatever happens to run next.
+  Future<void> _recordSkip() async {
+    try {
+      await widget.onAnswer(widget.localDate, DayOutcome.skipped);
+    } catch (e) {
+      debugPrint('_RetroAnswerSheet: could not record the skip — $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final colors = widget.colors;
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(OutAboutSpacing.lg),
@@ -456,32 +577,30 @@ class _RetroAnswerSheet extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Did you go on ${readableDate(localDate)}?',
-              style: OutAboutTypography.headingSmall(colors),
-            ),
-            const SizedBox(height: OutAboutSpacing.lg),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size.fromHeight(48),
+            if (_celebration case final line?)
+              OutcomeCelebration(text: line, colors: colors)
+            else ...[
+              Text(
+                'Did you go on ${readableDate(widget.localDate)}?',
+                style: OutAboutTypography.headingSmall(colors),
               ),
-              onPressed: () {
-                OutAboutHaptics.onActivitySave();
-                Navigator.of(context).pop(DayOutcome.done);
-              },
-              child: const Text('Yes, I went'),
-            ),
-            const SizedBox(height: OutAboutSpacing.sm),
-            TextButton(
-              style: TextButton.styleFrom(
-                minimumSize: const Size.fromHeight(48),
+              const SizedBox(height: OutAboutSpacing.lg),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                ),
+                onPressed: _onYes,
+                child: const Text('Yes, I went'),
               ),
-              onPressed: () {
-                OutAboutHaptics.onConditionToggle();
-                Navigator.of(context).pop(DayOutcome.skipped);
-              },
-              child: const Text("No, I didn't"),
-            ),
+              const SizedBox(height: OutAboutSpacing.sm),
+              TextButton(
+                style: TextButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                ),
+                onPressed: _onNo,
+                child: const Text("No, I didn't"),
+              ),
+            ],
           ],
         ),
       ),

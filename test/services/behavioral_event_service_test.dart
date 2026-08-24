@@ -539,6 +539,7 @@ void main() {
           latitude: 37.774929,
           longitude: -122.419418,
         ),
+        timezone: 'America/Los_Angeles',
       );
 
       // Two decimal places. Full precision must not leave the device.
@@ -549,7 +550,7 @@ void main() {
     });
 
     test('buildGeographicContext reports absence as empty, not as US', () {
-      final geo = buildGeographicContext(null);
+      final geo = buildGeographicContext(null, timezone: 'America/Denver');
 
       // "Not collected" and "United States" must not look the same.
       expect(geo.country, '');
@@ -557,6 +558,39 @@ void main() {
       expect(geo.latBucketed, 0.0);
       expect(geo.lngBucketed, 0.0);
     });
+
+    test(
+      'buildGeographicContext carries the IANA zone, not an abbreviation',
+      () {
+        // "PDT" is ambiguous across zones, says nothing in half the world, and
+        // changes twice a year for the same user in the same place. Every
+        // downstream question — what local hour did this happen at, does this
+        // cohort share a timezone — needs the identifier, and no amount of
+        // post-processing can recover it from the abbreviation.
+        final geo = buildGeographicContext(
+          null,
+          timezone: 'America/Los_Angeles',
+        );
+
+        expect(geo.timezone, 'America/Los_Angeles');
+        expect(geo.toJson()['timezone'], 'America/Los_Angeles');
+      },
+    );
+
+    test(
+      'buildGeographicContext falls back to the abbreviation, never to empty',
+      () {
+        // The platform lookup is async and the payload builder is not, so an
+        // event logged in the first moments of a session may find nothing
+        // resolved. A worse answer beats no answer: the abbreviation is what
+        // this field held before, so the fallback is the old behaviour rather
+        // than a regression to an empty string.
+        final geo = buildGeographicContext(null, timezone: '');
+
+        expect(geo.timezone, isNotEmpty);
+        expect(geo.timezone, DateTime.now().timeZoneName);
+      },
+    );
 
     test('all approved event types are in the const list', () {
       expect(approvedEventTypes, contains('wishlist_added'));
@@ -590,6 +624,12 @@ void main() {
       // Added for the outcome loop's streak milestones. One type carrying the
       // threshold in session_context, not four — see 20260825000100.
       expect(approvedEventTypes, contains('activity_milestone_reached'));
+      // Added for adaptive condition suggestions. Three types, because
+      // shown/accepted/declined is a funnel and each stage needs its own
+      // denominator — see 20260826000100.
+      expect(approvedEventTypes, contains('condition_suggestion_shown'));
+      expect(approvedEventTypes, contains('condition_suggestion_accepted'));
+      expect(approvedEventTypes, contains('condition_suggestion_declined'));
 
       // Removed: neither ever had a call site. 'partner_cta_clicked' is
       // covered by partner_impression_viewed + affiliate_link_clicked, and
@@ -606,7 +646,7 @@ void main() {
       // writes it, and dropping it would silently reject a future client call.
       expect(approvedEventTypes, contains('condition_match_notified'));
 
-      expect(approvedEventTypes.length, 26);
+      expect(approvedEventTypes.length, 29);
     });
 
     test('the outcome-stage event types are all loggable', () {

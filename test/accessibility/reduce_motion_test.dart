@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shimmer/shimmer.dart';
 
 import 'package:outabout/core/motion.dart';
@@ -9,9 +11,12 @@ import 'package:outabout/core/theme.dart';
 import 'package:outabout/core/weather_theme_provider.dart';
 import 'package:outabout/data/models/activity_day_outcome.dart';
 import 'package:outabout/features/activity_detail/widgets/activity_record_section.dart';
+import 'package:outabout/features/activity_detail/widgets/condition_suggestion_card.dart';
 import 'package:outabout/features/home/home_providers.dart';
 import 'package:outabout/features/onboarding/widgets/progress_dots.dart';
 import 'package:outabout/features/outcomes/outcome_providers.dart';
+import 'package:outabout/features/suggestions/condition_suggestion.dart';
+import 'package:outabout/services/behavioral_event_service.dart';
 
 void main() {
   Widget host({required bool reduceMotion, required Widget child}) {
@@ -226,6 +231,86 @@ void main() {
     });
   });
 
+  group('the condition suggestion', () {
+    const suggestion = (
+      dimension: SuggestionDimension.windMax,
+      currentValue: 25.0,
+      suggestedValue: 20.0,
+      qualifyingSkips: 3,
+      eligibleDays: 9,
+    );
+
+    Widget cardHost({
+      required bool reduceMotion,
+      required SharedPreferences prefs,
+    }) => ProviderScope(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+        weatherThemeProvider.overrideWith(
+          (ref) => WeatherThemeNotifier(WeatherTheme.sunny),
+        ),
+        weatherThemeColorsProvider.overrideWithValue(WeatherThemeColors.sunny),
+        behavioralEventServiceProvider.overrideWithValue(_silentEvents()),
+      ],
+      child: MaterialApp(
+        home: MediaQuery(
+          data: MediaQueryData(disableAnimations: reduceMotion),
+          child: Scaffold(
+            body: ConditionSuggestionCard(
+              activityId: 'act-1',
+              activityName: 'Morning trail run',
+              suggestion: suggestion,
+              temperatureUnit: 'C',
+              onAccept: (_) async {},
+              onDecline: (_) async {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    testWidgets('is fully opaque on the first frame when reduced', (
+      tester,
+    ) async {
+      // The card carries a question. Fading it in over 300ms when the user has
+      // asked for less motion means the thing they have to answer arrives
+      // last.
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+
+      await tester.pumpWidget(cardHost(reduceMotion: true, prefs: prefs));
+      await tester.pump();
+
+      final opacity = tester.widgetList<FadeTransition>(
+        find.byType(FadeTransition),
+      );
+      for (final fade in opacity) {
+        expect(fade.opacity.value, 1.0);
+      }
+      expect(find.textContaining('Lower the wind limit'), findsOneWidget);
+
+      // Drains the deferred markShown write before teardown.
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('still animates in when motion is allowed', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+
+      await tester.pumpWidget(cardHost(reduceMotion: false, prefs: prefs));
+      await tester.pump();
+
+      final fades = tester
+          .widgetList<FadeTransition>(find.byType(FadeTransition))
+          .toList();
+      expect(fades, isNotEmpty);
+      expect(fades.any((f) => f.opacity.value < 1.0), isTrue);
+
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Lower the wind limit'), findsOneWidget);
+    });
+  });
+
   group('MotionSafeShimmer', () {
     Widget subject(bool reduceMotion) => host(
       reduceMotion: reduceMotion,
@@ -277,4 +362,18 @@ void main() {
       handle.dispose();
     });
   });
+}
+
+class _MockEventService extends Mock implements BehavioralEventService {}
+
+_MockEventService _silentEvents() {
+  final mock = _MockEventService();
+  when(
+    () => mock.log(
+      any(),
+      extra: any(named: 'extra'),
+      conditions: any(named: 'conditions'),
+    ),
+  ).thenAnswer((_) async {});
+  return mock;
 }

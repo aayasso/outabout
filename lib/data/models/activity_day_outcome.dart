@@ -35,6 +35,25 @@ class ActivityDayOutcome {
   final DateTime? answeredAt;
   final DateTime? createdAt;
 
+  /// The day's forecast as [DailyForecast.toJson] wrote it, or null.
+  ///
+  /// Stored so the record can be reasoned about later: the ledger says the day
+  /// matched and what the user answered, and this says what the weather
+  /// actually was. Without all three, "you skip your windy matches" is not a
+  /// statement anything can derive.
+  ///
+  /// Deliberately the raw map rather than a parsed model. Reading it back is
+  /// [DailyForecast.fromJson]'s job — that factory already accepts this exact
+  /// spelling because it is the local forecast cache's format — and keeping
+  /// the field untyped means a snapshot written by a newer build, carrying a
+  /// field this one has never heard of, round-trips instead of throwing.
+  ///
+  /// Null on every row written before the column existed, and never
+  /// backfilled: the weather of those days is not recorded anywhere readable.
+  /// Consumers must skip null rather than default, because a defaulted
+  /// observation is an invented one.
+  final Map<String, dynamic>? conditions;
+
   const ActivityDayOutcome({
     this.id,
     required this.userId,
@@ -45,6 +64,7 @@ class ActivityDayOutcome {
     this.reason,
     this.answeredAt,
     this.createdAt,
+    this.conditions,
   });
 
   bool get isAnswered =>
@@ -65,6 +85,7 @@ class ActivityDayOutcome {
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
           : null,
+      conditions: json['conditions'] as Map<String, dynamic>?,
     );
   }
 
@@ -75,6 +96,12 @@ class ActivityDayOutcome {
   /// carrying `outcome: null` would blank a previously recorded answer the next
   /// time the app re-observes that day as an opportunity — the user's completed
   /// day would quietly become unanswered, and then expire.
+  ///
+  /// [conditions] is omitted for the mirror-image reason. `answer()` builds a
+  /// row from the answer fields alone and upserts it *without*
+  /// ignoreDuplicates; PostgREST only SETs the columns a payload mentions, so
+  /// omission is the whole of what stops an answer from erasing the snapshot
+  /// recorded when the day was first observed.
   Map<String, dynamic> toJson() => {
     if (id != null) 'id': id,
     'user_id': userId,
@@ -84,6 +111,7 @@ class ActivityDayOutcome {
     if (outcome != null) 'outcome': outcome,
     if (reason != null) 'reason': reason,
     if (answeredAt != null) 'answered_at': answeredAt!.toIso8601String(),
+    if (conditions != null) 'conditions': conditions,
   };
 }
 
