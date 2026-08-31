@@ -171,9 +171,15 @@ serve(async (req) => {
     const now = new Date();
 
     // Get all users with a saved location
+    // Only the columns user_locations actually has: id, user_id, city,
+    // latitude, longitude, updated_at. It previously also selected metro,
+    // state and country, none of which exist — PostgREST rejects an unknown
+    // column with 42703, `locError` is thrown, and the whole run 500s before
+    // a single activity is examined. That was invisible only because the cron
+    // never successfully called this function.
     const { data: locations, error: locError } = await supabase
       .from("user_locations")
-      .select("user_id, latitude, longitude, metro, city, state, country");
+      .select("user_id, latitude, longitude, city");
 
     if (locError) throw locError;
 
@@ -183,13 +189,17 @@ serve(async (req) => {
         location.longitude
       );
 
+      // metro and state are not stored, so they stay null rather than being
+      // invented. country keeps its "US" default, which is what the previous
+      // `location.country ?? "US"` evaluated to anyway once the column turned
+      // out not to exist — behaviour is unchanged, it just no longer depends
+      // on reading a column that isn't there.
       const geoContext = buildGeographicContext(
         location.latitude,
         location.longitude,
-        location.metro,
+        undefined,
         location.city,
-        location.state,
-        location.country ?? "US"
+        undefined,
       );
 
       // Which of this user's activities were notified recently enough to stay
