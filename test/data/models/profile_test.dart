@@ -13,6 +13,27 @@ void main() {
       'updated_at': '2026-05-01T10:00:00.000Z',
     };
 
+    test('notifications_paused defaults to false when the column is absent', () {
+      // The column was added after launch, so a row read from a client that
+      // has not migrated, or a cached row, will not carry it. Defaulting to
+      // true would silence a user who never asked for silence.
+      expect(Profile.fromJson(json).notificationsPaused, false);
+    });
+
+    test('notifications_paused round-trips when set', () {
+      final paused = Profile.fromJson({...json, 'notifications_paused': true});
+      expect(paused.notificationsPaused, true);
+      expect(paused.toJson()['notifications_paused'], true);
+    });
+
+    test('notifications_paused is always written, never omitted', () {
+      // Unlike the nullable columns, this one is sent even when false: an
+      // update that dropped the key would leave a resumed user paused.
+      const resumed = Profile(id: 'user-1');
+      expect(resumed.toJson().containsKey('notifications_paused'), true);
+      expect(resumed.toJson()['notifications_paused'], false);
+    });
+
     test('fromJson parses all fields correctly', () {
       final profile = Profile.fromJson(json);
 

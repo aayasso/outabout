@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:outabout/core/providers.dart';
 import 'package:outabout/core/theme.dart';
 import 'package:outabout/core/weather_theme_provider.dart';
+import 'package:outabout/data/models/profile.dart';
 import 'package:outabout/features/home/home_providers.dart';
 import 'package:outabout/features/home/tabs/settings_tab.dart';
 import 'package:outabout/services/auth_service.dart';
@@ -38,7 +39,7 @@ void main() {
     launchSucceeds = true;
   });
 
-  Future<void> pumpSettings(WidgetTester tester) async {
+  Future<void> pumpSettings(WidgetTester tester, {Profile? profile}) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -57,7 +58,7 @@ void main() {
           weatherThemeColorsProvider.overrideWithValue(
             WeatherThemeColors.sunny,
           ),
-          profileProvider.overrideWith((ref) async => null),
+          profileProvider.overrideWith((ref) async => profile),
           userLocationProvider.overrideWith((ref) async => null),
           authServiceProvider.overrideWithValue(mockAuthService),
           urlLauncherProvider.overrideWithValue((Uri url) async {
@@ -245,6 +246,62 @@ void main() {
         findsOneWidget,
       );
 
+      handle.dispose();
+    });
+  });
+
+  group('Notifications section', () {
+    testWidgets('the pause control is reachable from Settings', (tester) async {
+      // The control this section exists for. Before it, the only way to stop
+      // OutAbout notifying you was to revoke the OS permission — a decision
+      // the app can never ask the user to reverse.
+      await pumpSettings(tester);
+      await tester.ensureVisible(find.text('Pause notifications'));
+      await tester.pumpAndSettle();
+      expect(find.text('Pause notifications'), findsOneWidget);
+    });
+
+    testWidgets('the cadence is stated, not left to be discovered', (tester) async {
+      await pumpSettings(tester);
+      expect(
+        find.textContaining('at most two a day'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a profile with no pause set reads as On', (tester) async {
+      await pumpSettings(tester, profile: const Profile(id: 'u1'));
+      await tester.ensureVisible(find.text('Pause notifications'));
+      await tester.pumpAndSettle();
+      expect(find.text('On'), findsOneWidget);
+      expect(find.text('Paused'), findsNothing);
+    });
+
+    testWidgets('a paused profile reads as Paused', (tester) async {
+      await pumpSettings(
+        tester,
+        profile: const Profile(id: 'u1', notificationsPaused: true),
+      );
+      await tester.ensureVisible(find.text('Pause notifications'));
+      await tester.pumpAndSettle();
+      expect(find.text('Paused'), findsOneWidget);
+    });
+
+    testWidgets('the row carries its state and action to VoiceOver', (tester) async {
+      // Accessibility is a launch gate in this codebase, not a follow-up: the
+      // whole app was brought to WCAG AA in 7cdcf85 and a new row must not be
+      // the one that regresses it.
+      final handle = tester.ensureSemantics();
+      await pumpSettings(
+        tester,
+        profile: const Profile(id: 'u1', notificationsPaused: true),
+      );
+      await tester.ensureVisible(find.text('Pause notifications'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.getSemantics(find.text('Pause notifications')),
+        isNotNull,
+      );
       handle.dispose();
     });
   });

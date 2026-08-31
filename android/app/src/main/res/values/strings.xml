@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The launcher label. Was the lowercase "outabout" hardcoded in the
+         manifest; everything else user-facing spells it "OutAbout". -->
+    <string name="app_name">OutAbout</string>
+</resources>

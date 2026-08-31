@@ -9,9 +9,10 @@
 	<key>NSPrivacyTrackingDomains</key>
 	<array/>
 
-	<!-- CA92.1 = UserDefaults access limited to an App Group the app belongs
-	     to, which is exactly and only what this extension does: one read of
-	     the payload the app wrote. 1C8F.1 does not apply — the extension keeps
+	<!-- 1C8F.1 = UserDefaults access limited to the App Group the app and this
+	     extension both belong to, which is exactly and only what this
+	     extension does: one read of the payload the app wrote. CA92.1 is the
+	     app's-own-defaults code and does not apply here — the extension keeps
 	     no preferences of its own. The app's own manifest declares both, since
 	     it does both. -->
 	<key>NSPrivacyAccessedAPITypes</key>
@@ -21,7 +22,7 @@
 			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
 			<key>NSPrivacyAccessedAPITypeReasons</key>
 			<array>
-				<string>CA92.1</string>
+				<string>1C8F.1</string>
 			</array>
 		</dict>
 	</array>

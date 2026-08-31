@@ -14,6 +14,7 @@ import '../../../data/models/schedule_day.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/behavioral_event_service.dart';
 import '../../../services/notification_service.dart';
+import '../../widget/widget_providers.dart';
 import '../home_providers.dart';
 
 // ---------------------------------------------------------------------------
@@ -83,6 +84,25 @@ class SettingsTab extends ConsumerWidget {
                       label: cityName,
                       colors: colors,
                     ),
+                ],
+              ),
+              const SizedBox(height: OutAboutSpacing.md),
+              _SettingsSection(
+                header: 'Notifications',
+                colors: colors,
+                children: [
+                  _NotificationsPausedRow(colors: colors),
+                  Divider(height: 1, color: colors.divider),
+                  Padding(
+                    padding: const EdgeInsets.all(OutAboutSpacing.md),
+                    child: Text(
+                      'OutAbout sends at most two a day, never before 7am or '
+                      'after 9pm, and never twice about the same day.',
+                      style: OutAboutTypography.bodySmall(
+                        colors,
+                      ).copyWith(color: colors.textSecondary),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: OutAboutSpacing.md),
@@ -435,20 +455,37 @@ class _TemperatureUnitRow extends ConsumerWidget {
         ).copyWith(color: colors.textSecondary),
       ),
       onTap: () async {
-        final profile = profileAsync.valueOrNull;
-        if (profile == null) return;
         final messenger = ScaffoldMessenger.maybeOf(context);
         final colors = ref.read(weatherThemeColorsProvider);
         final newUnit = currentUnit == 'F' ? 'C' : 'F';
         final client = ref.read(supabaseClientProvider);
+        // Identity comes from the session, not from the profile row. Guarding
+        // on `profile == null` made this tap an unconditional no-op — no
+        // snackbar, no haptic, no event — for every anonymous user, and
+        // anonymous is the default path through onboarding. delete-account
+        // says as much: a guest "may never have had a profiles row".
+        final userId = client.auth.currentUser?.id;
+        if (userId == null) {
+          messenger?.showSnackBar(
+            SnackBar(
+              backgroundColor: colors.cardBackground,
+              content: Text(
+                'Sign in again to change your settings.',
+                style: OutAboutTypography.bodyMedium(colors),
+              ),
+            ),
+          );
+          return;
+        }
         try {
-          await client
-              .from('profiles')
-              .update({
-                'temperature_unit': newUnit,
-                'updated_at': DateTime.now().toIso8601String(),
-              })
-              .eq('id', profile.id);
+          // Upsert, not update: an .update() matching no row succeeds while
+          // writing nothing, which is the other half of why this setting
+          // looked ignored for guests.
+          await client.from('profiles').upsert({
+            'id': userId,
+            'temperature_unit': newUnit,
+            'updated_at': DateTime.now().toIso8601String(),
+          });
         } catch (e, st) {
           // This had no try/catch. A failed update threw into the zone and
           // the row simply did not change — no message, no haptic, no event.
@@ -478,6 +515,89 @@ class _TemperatureUnitRow extends ConsumerWidget {
               'settings_changed',
               extra: {'setting': 'temperature_unit', 'new_value': newUnit},
             );
+      },
+      colors: colors,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// _NotificationsPausedRow
+// ---------------------------------------------------------------------------
+
+/// The user-level off switch.
+///
+/// Phrased as "Pause notifications" rather than an "Enabled" toggle, and worded
+/// so the on state is the quiet one, because the honest thing to offer someone
+/// reaching for this row is a way to stop — not a negotiation. The alternative
+/// they have without it is revoking the OS permission, which the app can never
+/// ask back.
+class _NotificationsPausedRow extends ConsumerWidget {
+  const _NotificationsPausedRow({required this.colors});
+
+  final WeatherThemeColors colors;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final paused =
+        ref.watch(profileProvider).valueOrNull?.notificationsPaused ?? false;
+
+    return _SettingsRow(
+      icon: paused
+          ? Icons.notifications_off_outlined
+          : Icons.notifications_active_outlined,
+      label: 'Pause notifications',
+      semanticValue: paused ? 'Paused' : 'On',
+      semanticHint: paused ? 'Resumes notifications' : 'Pauses notifications',
+      trailing: Text(
+        paused ? 'Paused' : 'On',
+        style: OutAboutTypography.bodyMedium(
+          colors,
+        ).copyWith(color: colors.textSecondary),
+      ),
+      onTap: () async {
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        final client = ref.read(supabaseClientProvider);
+        final userId = client.auth.currentUser?.id;
+        if (userId == null) return;
+
+        final next = !paused;
+        try {
+          await client
+              .from('profiles')
+              .update({'notifications_paused': next}).eq('id', userId);
+        } catch (e, st) {
+          // Same shape as _TemperatureUnitRow: a failed update used to throw
+          // into the zone and leave the row unchanged with no message, which
+          // reads as the setting being ignored.
+          log(
+            'Notification pause update failed',
+            error: e,
+            stackTrace: st,
+            name: 'SettingsTab',
+          );
+          messenger?.showSnackBar(
+            SnackBar(
+              backgroundColor: colors.cardBackground,
+              content: Text(
+                next
+                    ? 'Could not pause notifications.'
+                    : 'Could not resume notifications.',
+                style: OutAboutTypography.bodyMedium(colors),
+              ),
+            ),
+          );
+          return;
+        }
+        ref.invalidate(profileProvider);
+        OutAboutHaptics.onConditionToggle();
+        ref.read(behavioralEventServiceProvider).log(
+          'settings_changed',
+          extra: {
+            'setting': 'notifications_paused',
+            'new_value': next.toString(),
+          },
+        );
       },
       colors: colors,
     );
@@ -785,6 +905,17 @@ class _DeleteAccountDialogState extends ConsumerState<_DeleteAccountDialog> {
     if (!mounted) return;
 
     if (result.success) {
+      // Symmetric with the sign-out path, which already does both.
+      //
+      // The router's signedOut handler covers these too, but only if the
+      // local signOut() inside deleteAccount actually emitted that event —
+      // and it is wrapped in a try/catch precisely because it can throw once
+      // the server has deleted the user out from under it. Deletion is the
+      // case where leaving the previous user's activity names on the home
+      // screen matters most, so it does not rely on that.
+      ref.read(notificationServiceProvider).clearUserTag();
+      await ref.read(widgetSyncControllerProvider).clear();
+      if (!mounted) return;
       Navigator.of(context).pop(true);
       return;
     }

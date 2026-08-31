@@ -11,14 +11,13 @@
 	<!-- Required-reason APIs.
 	     Every linked SDK ships its own manifest (OneSignal, and each of the
 	     Flutter plugin pods), so only the app's own usage is declared here.
-	     1C8F.1 = read/write accessible only to the app itself, which is what
+	     CA92.1 = read/write accessible only to the app itself, which is what
 	     shared_preferences does.
-	     CA92.1 now applies too: the home-screen widget reads its payload from
+	     1C8F.1 applies too: the home-screen widget reads its payload from
 	     UserDefaults in the group.com.outabout.outabout App Group, written by
 	     the app. Both reasons are declared because both accesses happen — the
-	     app's own preferences are still 1C8F.1, and only the widget payload is
-	     CA92.1. The extension carries its own manifest declaring the read
-	     side. -->
+	     app's own preferences are CA92.1, and the widget payload is 1C8F.1.
+	     The extension carries its own manifest declaring the read side. -->
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>
 		<dict>

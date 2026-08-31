@@ -47,8 +47,18 @@ app.*.map.json
 # Environment variables
 .env
 
+# Android release signing - never commit these
+android/key.properties
+*.jks
+*.keystore
+*.p12
+
 # Git worktrees
 .worktrees/
 
 # Supabase CLI scratch state (project refs, cached versions)
 supabase/.temp/
+
+# Agent scratch: verify loop logs, queued commands, env backups.
+# Never committed — env.backup carries real keys.
+.agent/

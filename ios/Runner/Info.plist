@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Outabout</string>
+	<string>OutAbout</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>outabout</string>
+	<string>OutAbout</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -83,18 +83,19 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>UISupportedInterfaceOrientations~ipad</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
 	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
 	<string>OutAbout adds an activity to your calendar when you ask it to. It never reads your calendar.</string>
 	<key>NSCalendarsUsageDescription</key>
 	<string>OutAbout adds an activity to your calendar when you ask it to.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>OutAbout adds an activity to your calendar when you ask it to. It never reads your calendar.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>OutAbout uses your location to show weather conditions and activities near you.</string>
+	<!-- Coordinates are bucketed to two decimal places (~1 mile) before they
+	     leave the device, so the full-precision prompt asks for accuracy the
+	     app never uses. This also keeps the ask consistent with the
+	     CoarseLocation declaration in PrivacyInfo.xcprivacy. -->
+	<key>NSLocationDefaultAccuracyReduced</key>
+	<true/>
 </dict>
 </plist>

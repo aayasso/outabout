@@ -146,13 +146,22 @@ class BehavioralEventService {
   /// Where the user is, bucketed. Read at log time for the same reason.
   final GeographicContext Function() _geographicContext;
 
-  final String _appVersion;
+  /// Read at log time, for the same reason as the two closures above.
+  ///
+  /// `packageInfoProvider` is a FutureProvider, so watching it rebuilt this
+  /// provider the moment PackageInfo resolved — a few frames into launch — and
+  /// the replacement instance carried an empty `_pending` list, silently
+  /// dropping anything buffered before a session existed. It also froze
+  /// app_version at 'unknown' in the OneSignal click handler, which main.dart
+  /// captures exactly once and holds for the life of the process, so every
+  /// notification_opened row was written unversioned.
+  final String Function() _appVersion;
 
   BehavioralEventService({
     required SupabaseClient supabase,
     required String Function() activeThemeName,
     required GeographicContext Function() geographicContext,
-    required String appVersion,
+    required String Function() appVersion,
   }) : _supabase = supabase,
        _activeThemeName = activeThemeName,
        _geographicContext = geographicContext,
@@ -171,6 +180,7 @@ class BehavioralEventService {
     Map<String, dynamic>? extra,
     ConditionsAtEvent? conditions,
     DateTime? occurredAt,
+    String? monetizationEventId,
   }) {
     // A buffered event is written after the session exists, which can be
     // several screens later. The temporal context has to describe when it
@@ -222,7 +232,7 @@ class BehavioralEventService {
 
     final session = SessionContext(
       platform: platformName,
-      appVersion: _appVersion,
+      appVersion: _appVersion(),
       activeTheme: _activeThemeName(),
     );
 
@@ -233,6 +243,11 @@ class BehavioralEventService {
       'geographic_context': geographic.toJson(),
       'temporal_context': temporal.toJson(),
       'session_context': {...session.toJson(), if (extra != null) ...extra},
+      // Omitted rather than sent as null, so a row for a non-partner event is
+      // byte-identical to what this method produced before the column had a
+      // writer. Keeps the dataset free of a column that is explicitly null on
+      // every row but a handful.
+      'monetization_event_id': ?monetizationEventId,
     };
   }
 
@@ -247,6 +262,14 @@ class BehavioralEventService {
     String eventType, {
     Map<String, dynamic>? extra,
     ConditionsAtEvent? conditions,
+    /// The monetization_events row this event describes, when there is one.
+    ///
+    /// Only the partner surfaces pass it. It is the join the schema was built
+    /// around — behavioral_events.monetization_event_id — and until the Find &
+    /// book sheet started writing monetization rows, nothing could ever
+    /// populate it, so revenue and behaviour were two disconnected records of
+    /// the same tap.
+    String? monetizationEventId,
   }) async {
     try {
       // Validate event type.
@@ -274,6 +297,7 @@ class BehavioralEventService {
         userId: userId,
         extra: extra,
         conditions: conditions,
+        monetizationEventId: monetizationEventId,
       );
       await _supabase.from('behavioral_events').insert(data);
     } catch (e, st) {
@@ -448,8 +472,10 @@ final deviceTimezoneProvider = FutureProvider<String>((ref) async {
 final behavioralEventServiceProvider = Provider<BehavioralEventService>((ref) {
   final supabase = ref.watch(supabaseClientProvider);
   final themeNotifier = ref.watch(weatherThemeProvider.notifier);
-  final packageInfoAsync = ref.watch(packageInfoProvider);
-  final appVersion = packageInfoAsync.valueOrNull?.version ?? 'unknown';
+  // Read, not watched — see the _appVersion field docs. Watching this made
+  // the provider rebuild mid-launch and take the pending event buffer with it.
+  String appVersion() =>
+      ref.read(packageInfoProvider).valueOrNull?.version ?? 'unknown';
   return BehavioralEventService(
     supabase: supabase,
     // Read at log time — see the field docs. Capturing the value here is what

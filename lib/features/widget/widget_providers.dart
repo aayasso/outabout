@@ -38,6 +38,20 @@ class WidgetSyncController {
   /// again on its own, which for a stable schedule could be the next day.
   String? _lastWritten;
 
+  /// Wipes the payload, so the widget stops showing the departing user's
+  /// activity names.
+  ///
+  /// `_lastWritten` is reset too: without it the next user's first identical
+  /// payload would be deduplicated against the cleared one and never written.
+  Future<void> clear() async {
+    try {
+      await _gateway.clear();
+      _lastWritten = null;
+    } catch (e) {
+      debugPrint('WidgetSyncController: could not clear the widget — $e');
+    }
+  }
+
   Future<void> push(List<ScheduleDay> days, String temperatureUnit) async {
     final payload = buildWidgetPayload(
       days: days,

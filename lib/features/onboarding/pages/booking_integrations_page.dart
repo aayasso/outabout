@@ -169,21 +169,21 @@ class _ComingSoonCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(OutAboutSpacing.md),
       decoration: BoxDecoration(
-        color: colors.cardBackground.withOpacity(0.5),
+        color: colors.cardBackground.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(OutAboutRadius.cards),
       ),
       child: Row(
         children: [
           Icon(
             Icons.add_circle_outline,
-            color: colors.text.withOpacity(0.3),
+            color: colors.text.withValues(alpha: 0.3),
             size: 32,
           ),
           const SizedBox(width: OutAboutSpacing.md),
           Text(
             'More coming soon',
             style: OutAboutTypography.bodyLarge(colors).copyWith(
-              color: colors.text.withOpacity(0.5),
+              color: colors.text.withValues(alpha: 0.5),
             ),
           ),
         ],

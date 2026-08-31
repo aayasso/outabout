@@ -15,7 +15,9 @@ import 'package:outabout/features/widget/widget_providers.dart';
 class _FakeGateway implements HomeWidgetGateway {
   final List<String> saved = [];
   int reloads = 0;
+  int clears = 0;
   bool throwOnSave = false;
+  bool throwOnClear = false;
 
   @override
   Future<void> save(String payload) async {
@@ -25,6 +27,12 @@ class _FakeGateway implements HomeWidgetGateway {
 
   @override
   Future<void> reload() async => reloads += 1;
+
+  @override
+  Future<void> clear() async {
+    if (throwOnClear) throw Exception('no app group');
+    clears += 1;
+  }
 }
 
 final _now = DateTime(2026, 8, 23, 12);
@@ -79,6 +87,57 @@ void main() {
     await container.read(profileProvider.future);
     await Future<void>.delayed(Duration.zero);
   }
+
+  group('WidgetSyncController.clear', () {
+    test('wipes the payload so the departing user is not left on screen',
+        () async {
+      final container = build();
+      await run(container);
+      expect(gateway.saved, hasLength(1));
+
+      await container.read(widgetSyncControllerProvider).clear();
+
+      expect(gateway.clears, 1);
+    });
+
+    test('lets the next user write an identical payload', () async {
+      // The dedupe cache has to be reset alongside the wipe. Without it the
+      // next sign-in whose schedule happens to encode identically would be
+      // deduplicated against the payload that was just cleared, and the widget
+      // would sit empty until the forecast changed on its own.
+      //
+      // Driven through the controller rather than widgetSyncProvider: the
+      // provider's first write races profileProvider and lands on the 'F'
+      // fallback, which would make this about the unit rather than the cache.
+      final container = build();
+      final controller = container.read(widgetSyncControllerProvider);
+
+      await controller.push(_days(const ['Morning Run']), 'C');
+      expect(gateway.saved, hasLength(1));
+
+      // The dedupe itself: an unchanged payload is not rewritten.
+      await controller.push(_days(const ['Morning Run']), 'C');
+      expect(gateway.saved, hasLength(1));
+
+      await controller.clear();
+      await controller.push(_days(const ['Morning Run']), 'C');
+
+      expect(gateway.saved, hasLength(2));
+      expect(gateway.saved.first, gateway.saved.last);
+    });
+
+    test('a gateway that cannot be reached does not throw', () async {
+      // Same contract as push: the widget must never take down the caller.
+      // Here the caller is the sign-out teardown, which has to finish.
+      final container = build();
+      gateway.throwOnClear = true;
+
+      await expectLater(
+        container.read(widgetSyncControllerProvider).clear(),
+        completes,
+      );
+    });
+  });
 
   group('widgetSyncProvider', () {
     test('pushes today to the widget when the schedule resolves', () async {

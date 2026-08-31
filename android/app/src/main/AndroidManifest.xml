@@ -1,11 +1,41 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Declared here rather than inherited from a plugin's merged manifest:
+         the release build has no network at all without INTERNET, and the only
+         reason it worked was that a dependency happened to contribute it. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+
+    <!-- Foreground location only. The app never asks for
+         ACCESS_BACKGROUND_LOCATION: the recurring forecast check runs
+         server-side against a stored, mile-bucketed coordinate. Adding
+         background location here would trigger Play's prominent-disclosure
+         review; it is not needed and must not be added. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
+    <!-- CalendarService only ever creates events (it requests writeOnly). -->
+    <uses-permission android:name="android.permission.WRITE_CALENDAR"/>
+    <!-- device_calendar_plus_android may merge READ_CALENDAR in from its own
+         manifest. The app never reads the calendar, so if the merged manifest
+         contains it, uncomment the block below to drop it rather than
+         declaring calendar *read* on the Play Data Safety form. Verify first:
+           ./gradlew :app:processReleaseManifest
+           grep CALENDAR ../build/app/intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml
+         Left commented because removing it may break the plugin's own
+         permission check, which is untested here.
+    <uses-permission android:name="android.permission.READ_CALENDAR"
+        tools:node="remove"/>
+    -->
     <application
-        android:label="outabout"
+        android:label="@string/app_name"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:enableOnBackInvokedCallback="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -27,6 +57,21 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Supabase magic-link / OTP callback. Without this the emailed
+                 link opens a browser and never returns to the app, so the
+                 "Use Magic Link Instead" sign-in path dead-ends on Android.
+                 The scheme matches CFBundleURLSchemes in ios/Runner/Info.plist
+                 and the emailRedirectTo passed by AuthService.sendMagicLink;
+                 it must also be listed under Authentication > URL
+                 Configuration > Redirect URLs in the Supabase dashboard.
+                 No autoVerify: this is a custom scheme, not an App Link, so
+                 there is no assetlinks.json to verify against. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="outabout" android:host="login-callback"/>
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
@@ -43,6 +88,18 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Required on Android 11+ for url_launcher to resolve a browser.
+             Without these, launchUrl() cannot see any handler and the Privacy
+             Policy link, the Terms link and every booking link in the Find &amp;
+             book sheet silently fail. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="http"/>
         </intent>
     </queries>
 </manifest>

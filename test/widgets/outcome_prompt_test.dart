@@ -88,7 +88,7 @@ class _RecordingEventService extends BehavioralEventService {
           lngBucketed: 0.0,
           timezone: '',
         ),
-        appVersion: 'test',
+        appVersion: () => 'test',
       );
 
   final List<
@@ -101,6 +101,7 @@ class _RecordingEventService extends BehavioralEventService {
     String eventType, {
     Map<String, dynamic>? extra,
     ConditionsAtEvent? conditions,
+    String? monetizationEventId,
   }) async {
     logged.add((type: eventType, conditions: conditions, extra: extra));
   }

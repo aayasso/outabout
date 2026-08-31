@@ -81,6 +81,7 @@ class _FirstActivityPageState extends ConsumerState<FirstActivityPage> {
     // the auth page ensures one exists (email or anonymous) before
     // reaching this screen. Insert failure is non-blocking so the user
     // always completes onboarding.
+    var activitySaved = false;
     if (userId != null) {
       try {
         await supabase.from('activities').insert({
@@ -88,11 +89,29 @@ class _FirstActivityPageState extends ConsumerState<FirstActivityPage> {
           'name': name,
           'created_at': DateTime.now().toIso8601String(),
         });
+        activitySaved = true;
       } catch (e) {
         debugPrint('FirstActivityPage: activities insert failed — $e');
       }
     } else {
       debugPrint('FirstActivityPage: no auth session — skipping insert');
+    }
+
+    // Onboarding still completes either way — stranding the user on this page
+    // because a write failed is worse — but the failure is no longer silent.
+    // An RLS denial, a foreign-key violation or a dropped socket all produced
+    // the same outcome before this: the user named an activity, tapped Add to
+    // Wishlist, and landed on the empty-state schedule with nothing to explain
+    // where it went.
+    if (!activitySaved && mounted) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text(
+            "We couldn't save that yet. You can add it again from the "
+            'Activities tab.',
+          ),
+        ),
+      );
     }
 
     // Log behavioral events (fire-and-forget, never throws)

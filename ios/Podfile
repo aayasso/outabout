@@ -43,5 +43,40 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+
+    # permission_handler_apple compiles EVERY permission handler unless these
+    # macros switch them off. Left at their defaults the binary carries calls
+    # into Contacts, Photos, Camera, Microphone, Speech, Media Library,
+    # Bluetooth, Sensors, Reminders and App Tracking Transparency, and App
+    # Store Connect rejects the upload with ITMS-90683 for each missing
+    # NSxxxUsageDescription.
+    #
+    # OutAbout asks for exactly one permission through this plugin. Location
+    # goes through geolocator and calendar through device_calendar_plus, so
+    # permission_handler needs neither.
+    target.build_configurations.each do |config|
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [
+        '$(inherited)',
+
+        'PERMISSION_NOTIFICATIONS=1',
+
+        'PERMISSION_EVENTS=0',
+        'PERMISSION_EVENTS_FULL_ACCESS=0',
+        'PERMISSION_REMINDERS=0',
+        'PERMISSION_CONTACTS=0',
+        'PERMISSION_CAMERA=0',
+        'PERMISSION_MICROPHONE=0',
+        'PERMISSION_SPEECH_RECOGNIZER=0',
+        'PERMISSION_PHOTOS=0',
+        'PERMISSION_LOCATION=0',
+        'PERMISSION_LOCATION_WHENINUSE=0',
+        'PERMISSION_MEDIA_LIBRARY=0',
+        'PERMISSION_SENSORS=0',
+        'PERMISSION_BLUETOOTH=0',
+        'PERMISSION_APP_TRACKING_TRANSPARENCY=0',
+        'PERMISSION_CRITICAL_ALERTS=0',
+        'PERMISSION_ASSISTANT=0',
+      ]
+    end
   end
 end

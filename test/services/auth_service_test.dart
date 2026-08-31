@@ -15,6 +15,8 @@ class MockGoTrueClient extends Mock implements GoTrueClient {}
 
 class MockUser extends Mock implements User {}
 
+class MockSession extends Mock implements Session {}
+
 class MockFunctionsClient extends Mock implements FunctionsClient {}
 
 // ---------------------------------------------------------------------------
@@ -106,6 +108,7 @@ void main() {
       when(() => mockAuth.signUp(
             email: any(named: 'email'),
             password: any(named: 'password'),
+            emailRedirectTo: any(named: 'emailRedirectTo'),
           )).thenThrow(AuthException('User already registered'));
 
       final result = await authService.signUpWithEmail(
@@ -180,17 +183,18 @@ void main() {
   // -------------------------------------------------------------------------
 
   group('signUpWithEmail', () {
-    test('calls supabase.auth.signUp and returns success on valid response',
+    test('calls supabase.auth.signUp and returns success on a live session',
         () async {
       final mockUser = MockUser();
       final response = AuthResponse(
         user: mockUser,
-        session: null,
+        session: MockSession(),
       );
 
       when(() => mockAuth.signUp(
             email: any(named: 'email'),
             password: any(named: 'password'),
+            emailRedirectTo: any(named: 'emailRedirectTo'),
           )).thenAnswer((_) async => response);
 
       final result = await authService.signUpWithEmail(
@@ -203,7 +207,34 @@ void main() {
       verify(() => mockAuth.signUp(
             email: 'test@example.com',
             password: 'password123',
+            emailRedirectTo: authRedirectUrl,
           )).called(1);
+    });
+
+    // Previously asserted as success, which was the bug: a user with no
+    // session is the email-confirmation-pending state. The account exists but
+    // cannot act, so reporting success sent the caller on to the next
+    // onboarding step and then into an app whose router bounced them straight
+    // back out — currentUser is null — with nothing telling them why.
+    test('a user with no session reports confirmation, not success', () async {
+      final response = AuthResponse(user: MockUser(), session: null);
+
+      when(() => mockAuth.signUp(
+            email: any(named: 'email'),
+            password: any(named: 'password'),
+            emailRedirectTo: any(named: 'emailRedirectTo'),
+          )).thenAnswer((_) async => response);
+
+      final result = await authService.signUpWithEmail(
+        'test@example.com',
+        'password123',
+      );
+
+      expect(result.success, isFalse);
+      expect(
+        result.errorMessage,
+        'Please check your email to confirm your account.',
+      );
     });
   });
 
@@ -248,13 +279,18 @@ void main() {
     test('calls supabase.auth.signInWithOtp and returns success', () async {
       when(() => mockAuth.signInWithOtp(
             email: any(named: 'email'),
+            emailRedirectTo: any(named: 'emailRedirectTo'),
           )).thenAnswer((_) async {});
 
       final result = await authService.sendMagicLink('test@example.com');
 
       expect(result.success, isTrue);
+      // The redirect is the point of the link: without it Supabase falls back
+      // to the project's Site URL and the user lands on a web page instead of
+      // back in the app.
       verify(() => mockAuth.signInWithOtp(
             email: 'test@example.com',
+            emailRedirectTo: authRedirectUrl,
           )).called(1);
     });
   });

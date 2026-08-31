@@ -35,6 +35,17 @@ abstract interface class HomeWidgetGateway {
 
   /// Asks WidgetKit to re-render. Always after [save].
   Future<void> reload();
+
+  /// Wipes the shared payload and re-renders, dropping the widget back to its
+  /// empty state.
+  ///
+  /// Called on sign-out and on account deletion. The payload carries the
+  /// signed-in user's activity names, and a home screen is not a private
+  /// surface — so leaving it in place shows the previous user's data to
+  /// whoever holds the device next. Nothing else can clear it: after the
+  /// session ends `scheduleMatchProvider` errors, so [HomeWidgetGateway.save]
+  /// is never reached again.
+  Future<void> clear();
 }
 
 class RealHomeWidgetGateway implements HomeWidgetGateway {
@@ -47,6 +58,12 @@ class RealHomeWidgetGateway implements HomeWidgetGateway {
 
   @override
   Future<void> reload() async {
+    await HomeWidget.updateWidget(iOSName: widgetKind);
+  }
+
+  @override
+  Future<void> clear() async {
+    await HomeWidget.saveWidgetData<String>(widgetPayloadKey, null);
     await HomeWidget.updateWidget(iOSName: widgetKind);
   }
 }

@@ -306,11 +306,11 @@ void main() {
         routes: [
           GoRoute(
             path: '/onboarding',
-            builder: (_, __) => const Scaffold(body: FirstActivityPage()),
+            builder: (_, _) => const Scaffold(body: FirstActivityPage()),
           ),
           GoRoute(
             path: '/home',
-            builder: (_, __) {
+            builder: (_, _) {
               navigatedToHome = true;
               return const Scaffold(body: Text('Home'));
             },
@@ -377,11 +377,11 @@ void main() {
         routes: [
           GoRoute(
             path: '/onboarding',
-            builder: (_, __) => const Scaffold(body: FirstActivityPage()),
+            builder: (_, _) => const Scaffold(body: FirstActivityPage()),
           ),
           GoRoute(
             path: '/home',
-            builder: (_, __) => const Scaffold(body: Text('Home')),
+            builder: (_, _) => const Scaffold(body: Text('Home')),
           ),
         ],
       );

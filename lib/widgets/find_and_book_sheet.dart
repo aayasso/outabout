@@ -7,6 +7,8 @@ import '../core/weather_theme_provider.dart';
 import '../data/models/booking_provider.dart';
 import '../data/models/daily_forecast.dart';
 import '../features/home/home_providers.dart';
+import '../data/models/affiliate_link.dart';
+import '../data/repositories/affiliate_link_repository.dart';
 import '../services/behavioral_event_service.dart';
 
 /// Opens the Find & book sheet for an activity.
@@ -121,8 +123,20 @@ class _FindAndBookSheetState extends ConsumerState<_FindAndBookSheet> {
     final colors = ref.read(weatherThemeColorsProvider);
     final navigator = Navigator.of(context);
 
-    final url = bookingUrl(
+    final destination = bookingUrl(
       provider: provider,
+      activityName: activityName,
+      city: city,
+    );
+
+    // The attributed URL, when a link for this provider has been configured.
+    // Falls back to `destination` untouched otherwise — see
+    // resolveAffiliateUrl. Read, not watched: a config change mid-tap would
+    // send the user somewhere other than the row they pressed.
+    final link = linkFor(provider, ref.read(affiliateLinksProvider).valueOrNull ?? const []);
+    final url = resolveAffiliateUrl(
+      destination: destination,
+      link: link,
       activityName: activityName,
       city: city,
     );
@@ -130,6 +144,41 @@ class _FindAndBookSheetState extends ConsumerState<_FindAndBookSheet> {
     // Logged before launching, and not awaited on the launch result: the
     // intent is the signal. Whether the handset had a browser to hand is not
     // a fact about the user's behaviour.
+    final clickConditions = ref.read(conditionsSnapshotProvider)(
+      forecastDay: forecastDay,
+    );
+
+    // Written first so its id can be carried on the behavioral event.
+    // behavioral_events.monetization_event_id is the join the schema was built
+    // around and has never had a value in it; without it, revenue and
+    // behaviour are two datasets about the same tap with no way to connect
+    // them.
+    //
+    // Guarded at the call site as well as inside the repository. Reading the
+    // provider constructs a Supabase client, and that construction is itself
+    // a thing that can throw — before launch, in a widget test, or on a device
+    // whose session never initialised. The rule this file already follows for
+    // the behavioral event applies twice over here: the user tapped
+    // "OpenTable" and must reach OpenTable, whatever the revenue plumbing is
+    // doing behind them.
+    String? monetizationEventId;
+    try {
+      monetizationEventId = await ref
+          .read(affiliateLinkRepositoryProvider)
+          .logMonetizationEvent(
+            eventType: 'affiliate_link_clicked',
+            affiliateLinkId: link?.id,
+            activityId: activityId,
+            activityCategory:
+                categoryNames.isEmpty ? null : categoryNames.first,
+            conditions: clickConditions.toJson(),
+            region: city.isEmpty ? null : city,
+            now: DateTime.now(),
+          );
+    } catch (e) {
+      debugPrint('find_and_book_sheet: monetization event not recorded — $e');
+    }
+
     await ref
         .read(behavioralEventServiceProvider)
         .log(
@@ -137,10 +186,14 @@ class _FindAndBookSheetState extends ConsumerState<_FindAndBookSheet> {
           extra: {
             'provider': provider.name,
             if (activityId != null) 'activity_id': activityId,
+            // Whether the click was attributable at all, so an unattributed
+            // click is distinguishable from a missing monetization row.
+            'attributed': link != null,
+            if (link?.commissionType != null)
+              'commission_type': link!.commissionType,
           },
-          conditions: ref.read(conditionsSnapshotProvider)(
-            forecastDay: forecastDay,
-          ),
+          conditions: clickConditions,
+          monetizationEventId: monetizationEventId,
         );
 
     final opened = await ref.read(urlLauncherProvider)(url);

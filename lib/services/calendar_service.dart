@@ -57,14 +57,16 @@ String buildCalendarNotes({
 /// aggregate, not a local start time. Converting it to local can move it a day
 /// either way depending on what offset the API sent.
 ///
-/// So the rule is deliberately *not* "correct against UTC" — it is **the same
-/// calendar day the schedule heading names**. `_isSameDay` in `schedule_tab`
-/// compares raw `.year/.month/.day`, so a card reading "Tomorrow" must produce
-/// an event tomorrow. Consistency with the day the user tapped under is the
-/// thing that matters; a technically-truer date that disagrees with the screen
-/// would read as a bug.
-DateTime calendarDayFor(DailyForecast forecast) =>
-    DateTime(forecast.date.year, forecast.date.month, forecast.date.day);
+/// The rule is **the same calendar day the schedule heading names**, and both
+/// sides now resolve that the same way: `_isSameDay` in `schedule_tab`
+/// normalises to local before comparing, so this does too. Consistency with
+/// the day the user tapped under is the thing that matters — but the two must
+/// reach it by the same route, and while this compared raw UTC fields a card
+/// reading "Today" could produce an event dated yesterday.
+DateTime calendarDayFor(DailyForecast forecast) {
+  final local = forecast.date.toLocal();
+  return DateTime(local.year, local.month, local.day);
+}
 
 /// Creates one-shot calendar events. Never reads, updates or deletes.
 ///

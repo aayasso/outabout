@@ -29,6 +29,47 @@ class Activity {
     this.conditionProfile,
   });
 
+  /// This activity with the given fields replaced.
+  ///
+  /// Exists because the alternative — rebuilding an Activity by listing its
+  /// fields at the call site — is a list that can be incomplete, and was:
+  /// `insertWithConditions` reconstructed the saved activity to attach its
+  /// profile and silently dropped url, location and isArchived on the way.
+  ///
+  /// Nullable fields cannot be *cleared* through this method, since a null
+  /// argument is indistinguishable from an omitted one. Nothing needs to clear
+  /// them, and the sentinel-object trick that would allow it costs more
+  /// clarity than it buys here.
+  Activity copyWith({
+    String? id,
+    String? userId,
+    String? name,
+    String? notes,
+    String? url,
+    String? location,
+    List<String>? categoryIds,
+    bool? isArchived,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Map<String, dynamic>? geographicContext,
+    ConditionProfile? conditionProfile,
+  }) {
+    return Activity(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      name: name ?? this.name,
+      notes: notes ?? this.notes,
+      url: url ?? this.url,
+      location: location ?? this.location,
+      categoryIds: categoryIds ?? this.categoryIds,
+      isArchived: isArchived ?? this.isArchived,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      geographicContext: geographicContext ?? this.geographicContext,
+      conditionProfile: conditionProfile ?? this.conditionProfile,
+    );
+  }
+
   factory Activity.fromJson(Map<String, dynamic> json) {
     final rawCategoryIds = json['category_ids'];
     return Activity(

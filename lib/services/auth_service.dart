@@ -7,6 +7,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:outabout/core/providers.dart';
 import 'package:outabout/core/weather_theme_provider.dart';
 
+/// Where Supabase sends the user back to after they follow an emailed link.
+///
+/// Registered as a URL scheme in `ios/Runner/Info.plist` and as an Android
+/// intent filter. Without it Supabase falls back to the project's Site URL —
+/// a web page — so a magic link and a confirmation link both opened a browser
+/// and never returned to the app, stranding the account unconfirmed.
+const String authRedirectUrl = 'outabout://login-callback';
+
 // ---------------------------------------------------------------------------
 // AuthResult
 // ---------------------------------------------------------------------------
@@ -56,8 +64,20 @@ class AuthService {
       final response = await _supabase.auth.signUp(
         email: email,
         password: password,
+        emailRedirectTo: authRedirectUrl,
       );
       final user = response.user;
+      // A user with no session means email confirmation is on: the account
+      // exists but cannot act yet. Reporting that as success walked the caller
+      // into onboarding's next step and then into the app, which the router
+      // immediately bounced back out of — `currentUser` is null, so the
+      // redirect sends them to onboarding and the whole flow loops. Telling
+      // them to check their email is the only honest answer.
+      if (user != null && response.session == null) {
+        return AuthResult.failure(
+          'Please check your email to confirm your account.',
+        );
+      }
       if (user != null) {
         return AuthResult.success(user);
       }
@@ -91,7 +111,10 @@ class AuthService {
   /// Sends a magic link to the given email address.
   Future<AuthResult> sendMagicLink(String email) async {
     try {
-      await _supabase.auth.signInWithOtp(email: email);
+      await _supabase.auth.signInWithOtp(
+        email: email,
+        emailRedirectTo: authRedirectUrl,
+      );
       // OTP sends an email — there is no user object in the response.
       return const AuthResult._(success: true);
     } on AuthException catch (e) {

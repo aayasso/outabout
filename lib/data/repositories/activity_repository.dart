@@ -56,24 +56,29 @@ class ActivityRepository {
         .select()
         .single();
 
-    return Activity(
-      id: savedActivity.id,
-      userId: savedActivity.userId,
-      name: savedActivity.name,
-      notes: savedActivity.notes,
-      categoryIds: savedActivity.categoryIds,
-      createdAt: savedActivity.createdAt,
-      updatedAt: savedActivity.updatedAt,
-      geographicContext: savedActivity.geographicContext,
+    // copyWith, not a fresh constructor call: the previous version listed the
+    // fields by hand and omitted url, location and isArchived, so a newly
+    // created activity came back missing whatever the user had just typed
+    // into those two fields.
+    return savedActivity.copyWith(
       conditionProfile: ConditionProfile.fromJson(profileData),
     );
   }
 
-  Future<Activity?> fetchById(String activityId) async {
+  /// One activity by id, scoped to [userId].
+  ///
+  /// The owner filter is defence in depth, not decoration. RLS makes a foreign
+  /// id return nothing anyway — but this query is reachable from a
+  /// notification deep link, `/activity/<uuid>`, where the id is attacker
+  /// supplied, and while the app held a key that bypassed RLS it rendered
+  /// whatever row that id named regardless of who owned it. A filter here
+  /// keeps that closed independently of how the key is configured.
+  Future<Activity?> fetchById(String activityId, String userId) async {
     final data = await _client
         .from('activities')
         .select('*, condition_profiles(*)')
         .eq('id', activityId)
+        .eq('user_id', userId)
         .maybeSingle();
     if (data == null) return null;
     return Activity.fromJson(data);

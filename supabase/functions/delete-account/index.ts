@@ -12,6 +12,15 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// This project generates no Database types, so the client is genuinely
+// untyped. Saying so explicitly is what makes `deno check` pass: with the
+// default generic, every table name resolves to `never` and every .from()
+// call fails to type-check — which had left this function, the App Store
+// 5.1.1(v) deletion path, unable to be type-checked at all.
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// deno-lint-ignore no-explicit-any
+type UntypedClient = SupabaseClient<any, any, any>;
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -43,7 +52,7 @@ function json(status: number, body: Record<string, unknown>): Response {
  * which also makes the whole function idempotent on retry.
  */
 async function deleteUserData(
-  admin: ReturnType<typeof createClient>,
+  admin: UntypedClient,
   userId: string,
 ): Promise<Record<string, number>> {
   const counts: Record<string, number> = {};

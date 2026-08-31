@@ -14,6 +14,7 @@ import '../features/home/home_providers.dart';
 import '../services/behavioral_event_service.dart';
 import '../features/home/tabs/schedule_tab.dart';
 import '../features/onboarding/onboarding_screen.dart';
+import '../features/widget/widget_providers.dart';
 import 'providers.dart';
 import 'motion.dart';
 import 'theme.dart';
@@ -144,6 +145,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           // notifyListeners fire — and the redirect run — before a single key
           // was gone or a single provider invalidated.
           await clearUserScopedState(ref);
+          // The home-screen widget is not covered by clearUserScopedState:
+          // its payload lives in the iOS App Group, not SharedPreferences,
+          // and it holds the departing user's activity names on a surface
+          // anyone holding the phone can read. Both sign-out and account
+          // deletion end in this event — deleteAccount signs out locally
+          // whatever the server said — so one call here covers both.
+          await ref.read(widgetSyncControllerProvider).clear();
         case AuthChangeEvent.signedIn:
           // A new session must not inherit results the providers resolved
           // while signed out — those are cached and would otherwise persist

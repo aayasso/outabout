@@ -121,7 +121,10 @@ class _ActivityDetailScreenState extends ConsumerState<ActivityDetailScreen> {
   DailyForecast? _todaysMatch(List<ScheduleDay> days) {
     final now = ref.read(nowProvider)();
     for (final day in days) {
-      final date = day.forecast.date;
+      // Normalised for the reason localDateKeyOf documents: forecast dates are
+      // UTC instants, so comparing `.day` raw is the wrong day for part of
+      // every day in much of the world.
+      final date = day.forecast.date.toLocal();
       final isToday =
           date.year == now.year &&
           date.month == now.month &&
@@ -250,9 +253,15 @@ class _ActivityDetailScreenState extends ConsumerState<ActivityDetailScreen> {
       // `e` used to be bound and dropped, so an RLS denial, a constraint
       // violation and a dropped socket were indistinguishable in the field.
       log('Failed to save activity', error: e, stackTrace: st);
-      setState(() {
-        _errorMessage = 'Failed to save. Please try again.';
-      });
+      // Guarded like the finally block below. A session that ends mid-save
+      // redirects and disposes this screen before the failing write returns,
+      // and setState on a dead State is a null-check failure in release with
+      // no handler to catch it.
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Failed to save. Please try again.';
+        });
+      }
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
@@ -313,9 +322,12 @@ class _ActivityDetailScreenState extends ConsumerState<ActivityDetailScreen> {
       ref.invalidate(activitiesProvider);
       if (mounted) context.popOrGo();
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Failed to archive. Please try again.';
-      });
+      // Same reason as _onSave: the archive can outlive this screen.
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Failed to archive. Please try again.';
+        });
+      }
     }
   }
 

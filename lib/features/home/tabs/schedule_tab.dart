@@ -86,9 +86,23 @@ BoxDecoration _sceneSurface(WeatherThemeColors colors) => BoxDecoration(
 // Day label helper
 // -------------------------------------------------------------------
 
-/// Whether two instants fall on the same calendar day.
-bool _isSameDay(DateTime a, DateTime b) =>
-    a.year == b.year && a.month == b.month && a.day == b.day;
+/// Whether two instants fall on the same *local* calendar day.
+///
+/// Both sides are normalised first. DailyForecast.date is a UTC instant —
+/// Tomorrow.io hands back `...Z` — so reading `.day` off it directly gives the
+/// UTC calendar day, not the day the user is living in. That put this heading
+/// out of step with `localDateKeyOf` and `outcomePromptKey`, which do
+/// normalise: for users far enough east the card that never said "Today" was
+/// the one OutcomePrompt asked "did you go?" about, and the row the ledger
+/// wrote carried the other date. `toLocal()` on an already-local DateTime is a
+/// no-op, so the cache-age callers are unaffected.
+bool _isSameDay(DateTime a, DateTime b) {
+  final localA = a.toLocal();
+  final localB = b.toLocal();
+  return localA.year == localB.year &&
+      localA.month == localB.month &&
+      localA.day == localB.day;
+}
 
 /// The heading for a forecast day, derived from its own date.
 ///

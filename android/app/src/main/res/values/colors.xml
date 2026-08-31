@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches OutAboutColors.sunny.background in lib/core/theme.dart, so the
+         launch window and the app's first painted frame are the same colour. -->
+    <color name="launch_background">#FFF8EE</color>
+</resources>

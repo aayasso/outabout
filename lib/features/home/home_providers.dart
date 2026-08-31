@@ -21,6 +21,7 @@ import '../../data/repositories/activity_repository.dart';
 import '../../data/repositories/category_repository.dart';
 import '../../data/repositories/weather_repository.dart';
 import '../../data/models/activity.dart';
+import '../../services/behavioral_event_service.dart';
 import '../../services/location_service.dart';
 import '../onboarding/onboarding_provider.dart';
 
@@ -57,12 +58,41 @@ final userLocationProvider = FutureProvider<UserLocation?>((ref) async {
   final userId = client.auth.currentUser?.id;
   if (userId == null) return null;
 
+  final deviceZone = ref.read(deviceTimezoneProvider).valueOrNull ?? '';
+
   final data = await client
       .from('user_locations')
       .select()
       .eq('user_id', userId)
       .maybeSingle();
-  if (data != null) return UserLocation.fromJson(data);
+  if (data != null) {
+    final stored = UserLocation.fromJson(data);
+
+    // Backfill the zone for a row written before user_locations had the
+    // column. Without this the early return below means an existing user is
+    // never revisited, so every nudge they receive for the life of the install
+    // is scheduled off the longitude estimate — an hour or two out, and blind
+    // to DST — even though the device has known the real answer all along.
+    if ((stored.timezone ?? '').isEmpty && deviceZone.isNotEmpty) {
+      try {
+        await client
+            .from('user_locations')
+            .update({'timezone': deviceZone}).eq('user_id', userId);
+      } catch (e) {
+        debugPrint('userLocationProvider: could not backfill timezone — $e');
+      }
+      return UserLocation(
+        id: stored.id,
+        userId: stored.userId,
+        city: stored.city,
+        latitude: stored.latitude,
+        longitude: stored.longitude,
+        timezone: deviceZone,
+        updatedAt: stored.updatedAt,
+      );
+    }
+    return stored;
+  }
 
   final locationService = ref.read(locationServiceProvider);
 
@@ -88,12 +118,32 @@ final userLocationProvider = FutureProvider<UserLocation?>((ref) async {
     debugPrint('userLocationProvider: reverse geocode failed — $e');
   }
 
-  return UserLocation(
+  final resolved = UserLocation(
     userId: userId,
     latitude: pos.lat,
     longitude: pos.lng,
     city: city,
+    timezone: deviceZone,
   );
+
+  // Persisted, not merely returned. The check-weather edge function iterates
+  // user_locations to decide who to notify, and nothing in this app ever wrote
+  // a row — UserLocation.toJson had no call site at all — so the table was
+  // empty for every user and no notification could ever be sent. This is the
+  // write that makes the feature possible.
+  //
+  // Failure is non-fatal and swallowed: the resolved value still drives this
+  // session's forecast, and a schedule the user opened the app to read must
+  // not fail because a background write did.
+  try {
+    await client
+        .from('user_locations')
+        .upsert(resolved.toJson(), onConflict: 'user_id');
+  } catch (e) {
+    debugPrint('userLocationProvider: could not save location — $e');
+  }
+
+  return resolved;
 });
 
 // ---------------------------------------------------------------------------
@@ -146,10 +196,15 @@ final weatherDataProvider = FutureProvider<WeatherData>((ref) async {
     // On failure, try to load from cache
     final cachedJson = prefs.getString(cachedWeatherDataKey);
     final cachedAt = prefs.getString(cachedWeatherFetchedAtKey);
-    if (cachedJson != null && cachedAt != null) {
+    // tryParse, like dailyForecastProvider below: DateTime.parse throws a
+    // FormatException on a corrupt value, from inside the very catch block
+    // that exists to serve the cache — so a bad timestamp turned an offline
+    // fetch into a hard error instead of yesterday's weather.
+    final parsedCachedAt = cachedAt == null ? null : DateTime.tryParse(cachedAt);
+    if (cachedJson != null && parsedCachedAt != null) {
       data = WeatherData.fromCacheJson(
         jsonDecode(cachedJson) as Map<String, dynamic>,
-        DateTime.parse(cachedAt),
+        parsedCachedAt,
       );
     } else {
       _logWeatherFailure('weatherDataProvider', e);
@@ -406,8 +461,11 @@ final activityDetailProvider = FutureProvider.family<Activity?, String>((
   ref,
   activityId,
 ) async {
+  final client = ref.watch(supabaseClientProvider);
+  final userId = client.auth.currentUser?.id;
+  if (userId == null) return null;
   final repo = ref.watch(activityRepositoryProvider);
-  return repo.fetchById(activityId);
+  return repo.fetchById(activityId, userId);
 });
 
 // ---------------------------------------------------------------------------

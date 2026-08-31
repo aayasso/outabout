@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The Profile and Release configurations sign against this file; Debug
+	     keeps Runner.entitlements with aps-environment = development.
+
+	     Xcode usually rewrites aps-environment to "production" when it
+	     re-signs with an App Store distribution profile, but "usually" is the
+	     problem: when it does not, push is silently dead in TestFlight and
+	     production and nothing in the build reports it. Stating it explicitly
+	     removes the guess. -->
+	<key>aps-environment</key>
+	<string>production</string>
+
+	<!-- Byte-identical to the entry in Runner.entitlements and in
+	     OutaboutWidget/OutaboutWidget.entitlements. The app writes the widget
+	     payload into UserDefaults for this suite and the extension reads it;
+	     a mismatch fails silently against a container the widget cannot see. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.outabout.outabout</string>
+	</array>
+</dict>
+</plist>

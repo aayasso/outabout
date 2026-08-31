@@ -325,7 +325,7 @@ void main() {
           lngBucketed: 0.0,
           timezone: '',
         ),
-        appVersion: '1.0.0',
+        appVersion: () => '1.0.0',
       );
 
       // Valid event type, but no authenticated user.
@@ -349,7 +349,7 @@ void main() {
           lngBucketed: 0.0,
           timezone: '',
         ),
-        appVersion: '1.0.0',
+        appVersion: () => '1.0.0',
       );
 
       await service.log('unknown_event_type');
@@ -377,7 +377,7 @@ void main() {
           lngBucketed: 0.0,
           timezone: '',
         ),
-        appVersion: '1.0.0',
+        appVersion: () => '1.0.0',
       );
 
       // Should not throw.
@@ -404,7 +404,7 @@ void main() {
           lngBucketed: 0.0,
           timezone: '',
         ),
-        appVersion: '1.0.0',
+        appVersion: () => '1.0.0',
       );
 
       await service.log('wishlist_added');
@@ -426,7 +426,7 @@ void main() {
           lngBucketed: 0.0,
           timezone: '',
         ),
-        appVersion: '2.0.0',
+        appVersion: () => '2.0.0',
       );
 
       final payload = service.buildPayload(
@@ -471,7 +471,7 @@ void main() {
           lngBucketed: 0.0,
           timezone: '',
         ),
-        appVersion: '1.0.0',
+        appVersion: () => '1.0.0',
       );
 
       final payload = service.buildPayload(
@@ -514,7 +514,7 @@ void main() {
           lngBucketed: -122.42,
           timezone: 'PST',
         ),
-        appVersion: '1.0.0',
+        appVersion: () => '1.0.0',
       );
 
       final payload = service.buildPayload(
@@ -681,7 +681,7 @@ void main() {
             lngBucketed: 0.0,
             timezone: '',
           ),
-          appVersion: '1.0.0',
+          appVersion: () => '1.0.0',
         );
 
         final payload = service.buildPayload(
@@ -722,7 +722,7 @@ void main() {
           lngBucketed: 0.0,
           timezone: '',
         ),
-        appVersion: '1.0.0',
+        appVersion: () => '1.0.0',
       );
 
       final conditions =
@@ -766,7 +766,7 @@ void main() {
         lngBucketed: 0.0,
         timezone: '',
       ),
-      appVersion: '1.0.0',
+      appVersion: () => '1.0.0',
     );
 
     setUp(() {

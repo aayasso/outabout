@@ -105,11 +105,11 @@ Widget _buildApp({
     routes: [
       GoRoute(
         path: '/onboarding',
-        builder: (_, __) => const OnboardingScreen(),
+        builder: (_, _) => const OnboardingScreen(),
       ),
       GoRoute(
         path: '/home',
-        builder: (_, __) =>
+        builder: (_, _) =>
             const Scaffold(body: Text('Home')),
       ),
     ],
