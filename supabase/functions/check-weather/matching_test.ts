@@ -15,8 +15,11 @@ import {
 import {
   conditionProfileOf,
   conditionsMatch,
+  isAuthorized,
+  NOTIFY_SUPPRESSION_HOURS,
   PRECIP_DRY_THRESHOLD,
   PRECIP_RAIN_ONLY,
+  shouldNotify,
   windKmh,
 } from "./matching.ts";
 
@@ -174,4 +177,101 @@ Deno.test("precipitationProbability is accepted as a fallback spelling", () => {
   delete (d.values as any).precipitationProbabilityMax;
   (d.values as any).precipitationProbability = 80;
   assertEquals(conditionsMatch(d, avoid), false);
+});
+
+// ---------------------------------------------------------------------------
+// Notification throttling
+// ---------------------------------------------------------------------------
+
+const NOW = new Date("2026-08-31T12:00:00Z");
+
+/// `hours` before NOW, as the ISO string Postgres hands back.
+function hoursAgo(hours: number): string {
+  return new Date(NOW.getTime() - hours * 3_600_000).toISOString();
+}
+
+Deno.test("the first ever match notifies", () => {
+  assertEquals(shouldNotify(null, NOW), true);
+  assertEquals(shouldNotify(undefined, NOW), true);
+});
+
+Deno.test("a rerun an hour later stays silent", () => {
+  // The cron is hourly. Without this, one matching day is up to 24 pushes.
+  assertEquals(shouldNotify(hoursAgo(1), NOW), false);
+});
+
+Deno.test("the second day of a run stays silent", () => {
+  // The point of the streak rule: told once when the good weather starts.
+  assertEquals(shouldNotify(hoursAgo(24), NOW), false);
+});
+
+Deno.test("a run that breaks and recovers notifies again", () => {
+  // One non-matching day puts the next match at least 48h after the last
+  // notification, which is outside the window.
+  assertEquals(shouldNotify(hoursAgo(48), NOW), true);
+});
+
+Deno.test("the window boundary is exact and inclusive", () => {
+  assertEquals(NOTIFY_SUPPRESSION_HOURS, 36);
+  assertEquals(shouldNotify(hoursAgo(35.9), NOW), false);
+  assertEquals(shouldNotify(hoursAgo(36), NOW), true);
+  assertEquals(shouldNotify(hoursAgo(36.1), NOW), true);
+});
+
+Deno.test("the window sits strictly between the two gaps that matter", () => {
+  // Stated as a property rather than a constant, so changing the window to
+  // something that cannot express the rule fails here rather than in
+  // production.
+  assertEquals(NOTIFY_SUPPRESSION_HOURS > 24, true);
+  assertEquals(NOTIFY_SUPPRESSION_HOURS < 48, true);
+});
+
+Deno.test("a future timestamp suppresses rather than sends", () => {
+  // Clock skew between Postgres and the function host. Failing open here
+  // sends a push to a real device on the strength of a timestamp we know is
+  // wrong; failing closed costs at most one delayed notification.
+  assertEquals(shouldNotify(new Date(NOW.getTime() + 3_600_000), NOW), false);
+});
+
+Deno.test("an unreadable timestamp suppresses rather than sends", () => {
+  assertEquals(shouldNotify("not a date", NOW), false);
+});
+
+Deno.test("accepts both the ISO string and a Date", () => {
+  assertEquals(shouldNotify(new Date(NOW.getTime() - 48 * 3_600_000), NOW), true);
+  assertEquals(shouldNotify(hoursAgo(48), NOW), true);
+});
+
+// ---------------------------------------------------------------------------
+// Authorization
+// ---------------------------------------------------------------------------
+
+const KEY = "service-role-key-value";
+
+Deno.test("the service role key is accepted", () => {
+  assertEquals(isAuthorized(`Bearer ${KEY}`, KEY), true);
+});
+
+Deno.test("anything other than the service role key is refused", () => {
+  // The anon key is a valid project JWT and ships inside the app binary, so
+  // "has a token" is not authorization for a function that pushes to every
+  // user on the platform.
+  assertEquals(isAuthorized("Bearer anon-key-from-the-app", KEY), false);
+  assertEquals(isAuthorized("Bearer ", KEY), false);
+  assertEquals(isAuthorized(KEY, KEY), false); // no Bearer prefix
+  assertEquals(isAuthorized(null, KEY), false);
+  assertEquals(isAuthorized(undefined, KEY), false);
+});
+
+Deno.test("a misconfigured deployment refuses everything", () => {
+  // Must not fall open into "no auth required" — that is the state this
+  // replaces.
+  assertEquals(isAuthorized(`Bearer ${KEY}`, ""), false);
+  assertEquals(isAuthorized(`Bearer ${KEY}`, null), false);
+  assertEquals(isAuthorized("Bearer ", ""), false);
+});
+
+Deno.test("a near-miss key is refused", () => {
+  assertEquals(isAuthorized(`Bearer ${KEY}x`, KEY), false);
+  assertEquals(isAuthorized(`Bearer ${KEY.slice(0, -1)}`, KEY), false);
 });

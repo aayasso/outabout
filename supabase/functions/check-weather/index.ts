@@ -3,11 +3,20 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   conditionProfileOf,
   conditionsMatch,
+  isAuthorized,
+  NOTIFY_SUPPRESSION_HOURS,
+  shouldNotify,
   windKmh,
 } from "./matching.ts";
 
 const TOMORROW_API_KEY = Deno.env.get("TOMORROW_API_KEY")!;
-const SERVICE_ROLE_KEY = Deno.env.get("SERVICE_ROLE_KEY")!;
+// Either spelling. SUPABASE_SERVICE_ROLE_KEY is injected by the platform;
+// SERVICE_ROLE_KEY is the custom secret this function was originally written
+// against. Accepting both matters now that the key also gates authorization:
+// isAuthorized fails closed on an empty key, so depending on the wrong name
+// would 401 every caller forever, including the cron, with no clue why.
+const SERVICE_ROLE_KEY = Deno.env.get("SERVICE_ROLE_KEY") ??
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const ONESIGNAL_APP_ID = Deno.env.get("ONESIGNAL_APP_ID")!;
 const ONESIGNAL_REST_API_KEY = Deno.env.get("ONESIGNAL_REST_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -146,7 +155,18 @@ async function sendNotification(
   return data.id ?? null;
 }
 
-serve(async (_req) => {
+serve(async (req) => {
+  // Previously absent entirely. A deployed function accepts any valid project
+  // JWT, and the anon key is one that ships inside the app binary — so this
+  // endpoint was a "notify every user on the platform" button for anyone who
+  // read the key out of the app.
+  if (!isAuthorized(req.headers.get("Authorization"), SERVICE_ROLE_KEY)) {
+    return new Response(JSON.stringify({ error: "unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   try {
     const now = new Date();
 
@@ -171,6 +191,34 @@ serve(async (_req) => {
         location.state,
         location.country ?? "US"
       );
+
+      // Which of this user's activities were notified recently enough to stay
+      // silent. One query per user rather than per activity: the row count is
+      // small and bounded by the suppression window, and N+1 here would be a
+      // query per activity per user per hour.
+      //
+      // Reading behavioral_events back is only possible because this function
+      // runs as service_role; RLS SELECT on that table is false for every
+      // other role by design.
+      const suppressSince = new Date(
+        now.getTime() - NOTIFY_SUPPRESSION_HOURS * 3_600_000,
+      ).toISOString();
+      const { data: recentNotifications } = await supabase
+        .from("behavioral_events")
+        .select("activity_id, created_at")
+        .eq("user_id", location.user_id)
+        .eq("event_type", "condition_match_notified")
+        .gte("created_at", suppressSince);
+
+      // Keyed by activity, holding the most recent send. shouldNotify makes
+      // the final call so the window lives in exactly one place.
+      const lastNotified = new Map<string, string>();
+      for (const row of recentNotifications ?? []) {
+        const prior = lastNotified.get(row.activity_id);
+        if (!prior || row.created_at > prior) {
+          lastNotified.set(row.activity_id, row.created_at);
+        }
+      }
 
       // Get all activities with condition profiles
       const { data: activities } = await supabase
@@ -201,6 +249,11 @@ serve(async (_req) => {
         });
 
         if (!conditionsMatch(forecastDay, profile)) continue;
+
+        // Notify on the transition into a good run, then stay quiet until it
+        // breaks. Without this the hourly cron would push once an hour, all
+        // day, for every matching activity.
+        if (!shouldNotify(lastNotified.get(activity.id), now)) continue;
 
         const conditionsSnapshot = buildConditionsSnapshot(forecastDay, daysAhead);
         const temporalContext = buildTemporalContext(now, daysAhead);
