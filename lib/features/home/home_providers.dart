@@ -88,12 +88,31 @@ final userLocationProvider = FutureProvider<UserLocation?>((ref) async {
     debugPrint('userLocationProvider: reverse geocode failed — $e');
   }
 
-  return UserLocation(
+  final resolved = UserLocation(
     userId: userId,
     latitude: pos.lat,
     longitude: pos.lng,
     city: city,
   );
+
+  // Persisted, not merely returned. The check-weather edge function iterates
+  // user_locations to decide who to notify, and nothing in this app ever wrote
+  // a row — UserLocation.toJson had no call site at all — so the table was
+  // empty for every user and no notification could ever be sent. This is the
+  // write that makes the feature possible.
+  //
+  // Failure is non-fatal and swallowed: the resolved value still drives this
+  // session's forecast, and a schedule the user opened the app to read must
+  // not fail because a background write did.
+  try {
+    await client
+        .from('user_locations')
+        .upsert(resolved.toJson(), onConflict: 'user_id');
+  } catch (e) {
+    debugPrint('userLocationProvider: could not save location — $e');
+  }
+
+  return resolved;
 });
 
 // ---------------------------------------------------------------------------
