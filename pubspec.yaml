@@ -64,6 +64,12 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
   mocktail: ^1.0.4
+  # Declared because notification_service_test.dart uses PermissionHandlerPlatform
+  # and MockPlatformInterfaceMixin directly. They arrive transitively via
+  # permission_handler, but relying on a transitive import means a patch release
+  # of that package can break the test suite with no change here.
+  permission_handler_platform_interface: ^4.3.0
+  plugin_platform_interface: ^2.1.8
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

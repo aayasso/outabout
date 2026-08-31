@@ -56,15 +56,11 @@ class ActivityRepository {
         .select()
         .single();
 
-    return Activity(
-      id: savedActivity.id,
-      userId: savedActivity.userId,
-      name: savedActivity.name,
-      notes: savedActivity.notes,
-      categoryIds: savedActivity.categoryIds,
-      createdAt: savedActivity.createdAt,
-      updatedAt: savedActivity.updatedAt,
-      geographicContext: savedActivity.geographicContext,
+    // copyWith, not a fresh constructor call: the previous version listed the
+    // fields by hand and omitted url, location and isArchived, so a newly
+    // created activity came back missing whatever the user had just typed
+    // into those two fields.
+    return savedActivity.copyWith(
       conditionProfile: ConditionProfile.fromJson(profileData),
     );
   }

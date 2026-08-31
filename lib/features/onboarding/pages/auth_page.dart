@@ -220,7 +220,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                   Container(
                     padding: const EdgeInsets.all(OutAboutSpacing.md),
                     decoration: BoxDecoration(
-                      color: OutAboutColors.errorColor.withOpacity(0.1),
+                      color: OutAboutColors.errorColor.withValues(alpha: 0.1),
                       borderRadius:
                           BorderRadius.circular(OutAboutRadius.buttons),
                     ),
@@ -238,7 +238,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                   Container(
                     padding: const EdgeInsets.all(OutAboutSpacing.md),
                     decoration: BoxDecoration(
-                      color: OutAboutColors.success.withOpacity(0.1),
+                      color: OutAboutColors.success.withValues(alpha: 0.1),
                       borderRadius:
                           BorderRadius.circular(OutAboutRadius.buttons),
                     ),
@@ -303,7 +303,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                   child: Text(
                     'Skip for Now',
                     style: OutAboutTypography.labelMedium(colors).copyWith(
-                      color: colors.text.withOpacity(0.6),
+                      color: colors.text.withValues(alpha: 0.6),
                     ),
                   ),
                 ),
@@ -352,7 +352,7 @@ class _ToggleChip extends StatelessWidget {
           color: isSelected ? colors.primary : Colors.transparent,
           borderRadius: BorderRadius.circular(OutAboutRadius.full),
           border: Border.all(
-            color: isSelected ? colors.primary : colors.text.withOpacity(0.3),
+            color: isSelected ? colors.primary : colors.text.withValues(alpha: 0.3),
           ),
         ),
         child: Text(

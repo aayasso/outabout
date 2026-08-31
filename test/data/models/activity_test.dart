@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:outabout/data/models/activity.dart';
+import 'package:outabout/data/models/condition_profile.dart';
 
 void main() {
   group('Activity', () {
@@ -107,5 +108,67 @@ void main() {
         expect(activity.conditionProfile, isNull);
       },
     );
+  });
+
+  group('copyWith', () {
+    final full = Activity(
+      id: 'a1',
+      userId: 'u1',
+      name: 'Morning Run',
+      notes: 'notes',
+      url: 'https://example.com',
+      location: 'Dolores Park',
+      categoryIds: const ['c1'],
+      isArchived: true,
+      geographicContext: const {'metro': 'SF'},
+      conditionProfile: const ConditionProfile(
+        id: 'p1',
+        activityId: 'a1',
+        windEnabled: true,
+        windMax: 25,
+      ),
+    );
+
+    test('carries every field through an empty copy', () {
+      // The reason this exists: insertWithConditions hand-rebuilt an Activity
+      // field by field and silently dropped url, location and isArchived. A
+      // hand-written constructor call is a list that can be incomplete; a
+      // copyWith cannot be.
+      final copy = full.copyWith();
+
+      expect(copy.id, full.id);
+      expect(copy.userId, full.userId);
+      expect(copy.name, full.name);
+      expect(copy.notes, full.notes);
+      expect(copy.url, full.url);
+      expect(copy.location, full.location);
+      expect(copy.categoryIds, full.categoryIds);
+      expect(copy.isArchived, full.isArchived);
+      expect(copy.geographicContext, full.geographicContext);
+      expect(copy.conditionProfile, full.conditionProfile);
+    });
+
+    test('replaces only what it is given', () {
+      final copy = full.copyWith(name: 'Evening Walk');
+      expect(copy.name, 'Evening Walk');
+      expect(copy.url, full.url);
+      expect(copy.location, full.location);
+    });
+
+    test('attaches a condition profile without disturbing the rest', () {
+      // Exactly what insertWithConditions needs to do.
+      const profile = ConditionProfile(
+        id: 'p2',
+        activityId: 'a1',
+        tempEnabled: true,
+        tempMin: 10,
+      );
+      final copy = full.copyWith(conditionProfile: profile);
+
+      expect(copy.conditionProfile, profile);
+      expect(copy.url, 'https://example.com');
+      expect(copy.location, 'Dolores Park');
+      expect(copy.isArchived, isTrue);
+    });
   });
 }

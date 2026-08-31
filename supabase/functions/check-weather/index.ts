@@ -1,5 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  conditionProfileOf,
+  conditionsMatch,
+  windKmh,
+} from "./matching.ts";
 
 const TOMORROW_API_KEY = Deno.env.get("TOMORROW_API_KEY")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SERVICE_ROLE_KEY")!;
@@ -9,55 +14,12 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-// Tomorrow.io reports wind in m/s with units=metric, but condition profiles
-// store wind_max in km/h (the slider is 0-80 km/h). Convert before comparing.
-const METERS_PER_SECOND_TO_KMH = 3.6;
-
-// Precipitation is bidirectional: a profile either avoids rain or wants it.
-// Probability (%) at or below which a day counts as dry. Mirrors
-// PrecipLevel.dryThreshold in lib/data/models/condition_profile.dart.
-const PRECIP_DRY_THRESHOLD = 20;
-const PRECIP_RAIN_ONLY = "rain_only";
-
-function windKmh(day: any): number {
-  return (day.windSpeedMax ?? 0) * METERS_PER_SECOND_TO_KMH;
-}
-
 // Fetch weather forecast for a location
 async function getWeatherForecast(lat: number, lon: number) {
   const url = `https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lon}&apikey=${TOMORROW_API_KEY}&timesteps=1d&fields=temperatureMax,temperatureMin,precipitationProbabilityMax,windSpeedMax,uvIndexMax,weatherCodeMax`;
   const res = await fetch(url);
   const data = await res.json();
   return data.timelines?.daily || [];
-}
-
-// Check if weather conditions match an activity's profile
-function conditionsMatch(forecast: any, profile: any): boolean {
-  const day = forecast.values;
-
-  if (profile.temp_enabled) {
-    if (profile.temp_min !== null && day.temperatureMax < profile.temp_min) return false;
-    if (profile.temp_max !== null && day.temperatureMin > profile.temp_max) return false;
-  }
-
-  if (profile.precip_enabled) {
-    const precip = day.precipitationProbabilityMax ??
-      day.precipitationProbability;
-    const isDry = precip <= PRECIP_DRY_THRESHOLD;
-    const wantsRain = profile.precip_level === PRECIP_RAIN_ONLY;
-    // Wanting rain on a dry day fails, and avoiding rain on a wet day fails.
-    // Exhaustive by construction: anything that is not rain_only reads as
-    // avoid_rain. Must stay identical to evaluateDayMatch in the Flutter app.
-    if (wantsRain === isDry) return false;
-  }
-
-  if (profile.wind_enabled) {
-    if (profile.wind_max !== null && windKmh(day) > profile.wind_max) {
-      return false;
-    }
-  }
-
-  return true;
 }
 
 // Build full weather snapshot for behavioral event logging
@@ -221,7 +183,9 @@ serve(async (_req) => {
         .eq("is_archived", false);
 
       for (const activity of activities ?? []) {
-        const profile = activity.condition_profiles?.[0];
+        // Reads either embed shape. Indexing [0] unconditionally is what
+        // silently disabled every notification — see conditionProfileOf.
+        const profile = conditionProfileOf(activity);
         if (!profile) continue;
 
         // Check today's forecast only (index 0) — fire immediately on match
@@ -260,6 +224,10 @@ serve(async (_req) => {
 
     return new Response(JSON.stringify({ success: true }), { status: 200 });
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+    // `err` is `unknown` under Deno's strict checking, and a thrown non-Error
+    // — which `fetch` and the Supabase client can both produce — would make
+    // `err.message` undefined and hide the cause behind an empty 500.
+    const message = err instanceof Error ? err.message : String(err);
+    return new Response(JSON.stringify({ error: message }), { status: 500 });
   }
 });
