@@ -412,6 +412,49 @@ function candidatesForActivity(
 }
 
 // ---------------------------------------------------------------------------
+// Authorization
+// ---------------------------------------------------------------------------
+
+/// Constant-time string comparison.
+///
+/// A plain `===` on a secret leaks its prefix through timing: an attacker who
+/// can measure the difference between a first-byte mismatch and a
+/// twentieth-byte mismatch can recover the key a byte at a time. Cheap to
+/// avoid, so avoided.
+function timingSafeEqual(a: string, b: string): boolean {
+  const ab = new TextEncoder().encode(a);
+  const bb = new TextEncoder().encode(b);
+  // Length is compared without an early return, but an unequal length is still
+  // detectable; that is accepted, since the key's length is not the secret.
+  if (ab.length !== bb.length) return false;
+  let diff = 0;
+  for (let i = 0; i < ab.length; i++) diff |= ab[i] ^ bb[i];
+  return diff === 0;
+}
+
+/// Whether this request carries the service role key.
+///
+/// The platform's own `verify_jwt` is not sufficient here, and the reason is
+/// the same one 20260831212826 gives for the intelligence tables: the anon key
+/// ships inside the app binary, so "a valid JWT" includes a key that every
+/// installed copy of OutAbout is carrying and that anyone can read out of it.
+///
+/// This endpoint is not a read. It sends push notifications to real people and
+/// spends metered Tomorrow.io quota, and the cadence ceiling — two per user per
+/// day — only bounds the damage per user, not the number of users an attacker
+/// could walk through by hammering it. Only the caller that is supposed to run
+/// it, the cron job in 20260831213632, holds the service role key.
+///
+/// That migration already states this contract in its comments. It was
+/// describing behaviour that did not exist yet; this is it.
+function isServiceRole(req: Request): boolean {
+  const header = req.headers.get("Authorization") ?? "";
+  const token = header.replace(/^Bearer\s+/i, "").trim();
+  if (token.length === 0 || !SERVICE_ROLE_KEY) return false;
+  return timingSafeEqual(token, SERVICE_ROLE_KEY);
+}
+
+// ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
 
@@ -589,7 +632,16 @@ async function processUser(
   return sent;
 }
 
-serve(async (_req) => {
+serve(async (req) => {
+  if (!isServiceRole(req)) {
+    // Deliberately terse. A 401 that explains what it wanted is a 401 that
+    // helps whoever is probing.
+    return new Response(
+      JSON.stringify({ error: "unauthorized" }),
+      { status: 401, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
   const now = new Date();
   const forecastCache = new Map<string, any[] | null>();
   let usersProcessed = 0;
