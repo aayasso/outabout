@@ -24,6 +24,7 @@ import '../suggestions/suggestion_providers.dart';
 import 'widgets/activity_record_section.dart';
 import 'widgets/condition_suggestion_card.dart';
 import '../shared/condition_profile_form.dart';
+import '../shared/notification_timing_form.dart';
 
 const int maxNameLength = 50;
 const int maxNotesLength = 200;
@@ -612,6 +613,15 @@ class _ActivityDetailScreenState extends ConsumerState<ActivityDetailScreen> {
                 ),
               ),
               const SizedBox(height: OutAboutSpacing.lg),
+
+              // Directly under the conditions, because it answers the next
+              // question: those decide whether a day counts, this decides when
+              // you hear about it. The server has honoured all three nudge
+              // kinds since scheduling.ts shipped; until this section there was
+              // no way for a user to ask for any but the default.
+              NotificationTimingForm(activityId: widget.activityId),
+              const SizedBox(height: OutAboutSpacing.lg),
+
               _FindAndBookButton(
                 activity: activity,
                 colors: colors,
