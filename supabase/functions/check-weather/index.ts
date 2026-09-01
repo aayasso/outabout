@@ -61,17 +61,26 @@ const NUDGE_KINDS: NudgeKind[] = ["days_before", "night_before", "morning_of"];
 // Weather
 // ---------------------------------------------------------------------------
 
-/// Fetches the daily forecast, or null when Tomorrow.io cannot answer.
+/// Either the forecast days, or why there are none.
 ///
-/// Null rather than a throw: one place failing must cost only that place's
-/// users their run. The previous version let the rejection propagate to the
-/// top-level catch, which returned 500 and abandoned every user not yet
+/// A bare `null` conflated "the sky is quiet" with "the upstream rejected our
+/// key", and the caller could not tell them apart. It has to be able to.
+type ForecastResult =
+  | { ok: true; days: any[] }
+  | { ok: false; reason: string };
+
+/// Fetches the daily forecast, or the reason Tomorrow.io could not answer.
+///
+/// A result rather than a throw: one place failing must cost only that
+/// place's users their run. An earlier version let the rejection propagate to
+/// the top-level catch, which returned 500 and abandoned every user not yet
 /// reached — so a single upstream blip silently cancelled the whole cadence
-/// for everyone whose row happened to sort later.
+/// for everyone whose row happened to sort later. Returning the reason keeps
+/// that isolation while letting the caller tell a dead key from a quiet sky.
 async function getWeatherForecast(
   lat: number,
   lon: number,
-): Promise<any[] | null> {
+): Promise<ForecastResult> {
   const url =
     `https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lon}` +
     `&apikey=${TOMORROW_API_KEY}&timesteps=1d` +
@@ -79,17 +88,23 @@ async function getWeatherForecast(
   try {
     const res = await fetch(url);
     if (!res.ok) {
-      // 429 is the one worth naming: the previous per-user fetching made it
-      // reachable on a few hundred users, and its symptom was identical to
-      // "no day matched".
-      console.error(`tomorrow.io ${res.status} for ${lat},${lon}`);
-      return null;
+      // 401 and 429 are the two worth naming, and both used to be swallowed:
+      // the failure returned null, the caller read null as "no day matched",
+      // and the run reported success while every forecast call was being
+      // rejected. A stale API key is not quiet weather; the two must not look
+      // alike from the outside.
+      const reason = `tomorrow.io ${res.status}`;
+      console.error(`${reason} for ${lat},${lon}`);
+      return { ok: false, reason };
     }
     const data = await res.json();
-    return data.timelines?.daily ?? [];
+    return { ok: true, days: data.timelines?.daily ?? [] };
   } catch (err) {
-    console.error(`tomorrow.io fetch failed for ${lat},${lon}:`, err);
-    return null;
+    const reason = `tomorrow.io fetch failed: ${
+      err instanceof Error ? err.message : String(err)
+    }`;
+    console.error(`${reason} for ${lat},${lon}`);
+    return { ok: false, reason };
   }
 }
 
@@ -312,13 +327,20 @@ async function claimSend(
   return data?.id ?? null;
 }
 
+/// Whether OneSignal accepted the request, and the id if it named one.
+///
+/// `delivered: true` with a null id is the accepted-but-nobody-subscribed
+/// case, which is ordinary. `delivered: false` is auth or transport, which is
+/// a defect.
+type PushResult = { delivered: boolean; id: string | null };
+
 async function sendNotification(
   userId: string,
   activityId: string,
   activityName: string,
   dateLabel: string,
   daysAhead: number,
-): Promise<string | null> {
+): Promise<PushResult> {
   // Lead time is the whole reason days_before exists, so the copy has to carry
   // it. "Conditions are right for Hiking on Saturday" sent on Thursday is
   // actionable — you can book the court, tell the friend. The same sentence
@@ -346,11 +368,36 @@ async function sendNotification(
         data: { activity_id: activityId },
       }),
     });
-    const data = await res.json();
-    return data.id ?? null;
+    const data = await res.json().catch(() => ({} as Record<string, unknown>));
+    if (!res.ok) {
+      // An auth or transport failure. Previously this parsed the error body,
+      // found no `id`, and returned it as though the push had been handed
+      // over — so a dead REST key produced ledger rows forever and said
+      // nothing.
+      console.error(
+        `OneSignal ${res.status} for user ${userId}: ${JSON.stringify(data)}`,
+      );
+      return { delivered: false, id: null };
+    }
+    // A 200 is not a delivery. OneSignal answers 200 with an empty id and an
+    // errors array when the request was accepted but matched no subscribed
+    // device. That is not a fault to fail the run over — a user who turned
+    // push off is not a broken key — but it is not a sent notification
+    // either, and storing "" as an id claimed it was.
+    if (data.errors != null) {
+      console.error(
+        `OneSignal reported no recipients for user ${userId}: ${
+          JSON.stringify(data.errors)
+        }`,
+      );
+    }
+    const id = typeof data.id === "string" && data.id.length > 0
+      ? data.id
+      : null;
+    return { delivered: true, id };
   } catch (err) {
     console.error("OneSignal send failed:", err);
-    return null;
+    return { delivered: false, id: null };
   }
 }
 
@@ -458,12 +505,17 @@ function isServiceRole(req: Request): boolean {
 // Handler
 // ---------------------------------------------------------------------------
 
-/// Runs one user. Never throws: the caller must reach every other user.
+/// Runs one user, returning what was sent and what failed to send.
+///
+/// Throws only when this user cannot be processed at all — today, an
+/// unusable forecast for their location. The caller catches per user, so a
+/// throw here costs this user their run and nobody else theirs. Everything
+/// recoverable is reported in the return value instead.
 async function processUser(
   location: any,
-  forecastCache: Map<string, any[] | null>,
+  forecastCache: Map<string, ForecastResult>,
   now: Date,
-): Promise<number> {
+): Promise<{ sent: number; pushFailures: number }> {
   const tz = resolveZone(location.timezone, location.longitude);
   const today = localDateOf(now, tz);
 
@@ -477,7 +529,9 @@ async function processUser(
     .select("notifications_paused")
     .eq("id", location.user_id)
     .maybeSingle();
-  if (profile?.notifications_paused === true) return 0;
+  if (profile?.notifications_paused === true) {
+    return { sent: 0, pushFailures: 0 };
+  }
 
   // Activities first, weather second. A user with nothing on their wishlist
   // costs no Tomorrow.io call at all — which matters because the quota is per
@@ -489,7 +543,9 @@ async function processUser(
     .eq("is_archived", false);
 
   if (actErr) throw actErr;
-  if (!activities || activities.length === 0) return 0;
+  if (!activities || activities.length === 0) {
+    return { sent: 0, pushFailures: 0 };
+  }
 
   const bucket = forecastBucket(location.latitude, location.longitude);
   if (!forecastCache.has(bucket)) {
@@ -498,10 +554,19 @@ async function processUser(
       await getWeatherForecast(location.latitude, location.longitude),
     );
   }
-  const forecast = forecastCache.get(bucket);
-  // Null means Tomorrow.io could not answer for this place. Skip, and let the
-  // next run try again — a missing forecast is not a matched day.
-  if (forecast == null || forecast.length === 0) return 0;
+  const forecastResult = forecastCache.get(bucket)!;
+  // Raised, not swallowed. It travels the path built for per-user faults:
+  // counted in users_failed, logged with its cause, isolated to this user.
+  // The rejection stays cached, so the others in this bucket still cost no
+  // extra call.
+  if (!forecastResult.ok) {
+    throw new Error(
+      `forecast unavailable for ${bucket}: ${forecastResult.reason}`,
+    );
+  }
+  const forecast = forecastResult.days;
+  // An empty forecast really is "nothing to match against". Not a fault.
+  if (forecast.length === 0) return { sent: 0, pushFailures: 0 };
 
   const activityIds = activities.map((a: any) => a.id);
 
@@ -523,7 +588,9 @@ async function processUser(
     .gte("sent_at", localMidnight.toISOString());
 
   const sentTodayCount = sends?.length ?? 0;
-  if (sentTodayCount >= maxPushesPerUserPerDay) return 0;
+  if (sentTodayCount >= maxPushesPerUserPerDay) {
+    return { sent: 0, pushFailures: 0 };
+  }
 
   // Forward-looking dedupe has to reach past today: a day nudged about on
   // Thursday must stay silent on Friday and Saturday too.
@@ -541,8 +608,14 @@ async function processUser(
 
   const candidates: Candidate[] = [];
   for (const activity of activities) {
+    // A null profile means "no conditions set", which conditionsMatch already
+    // reads as "every day matches" — and which is what the create path writes
+    // when a user enables nothing. Skipping here contradicted both, and made
+    // the same visible state behave two opposite ways: an activity created
+    // with no conditions notified about everything, while one edited down to
+    // no conditions went silent forever, because clearing the last condition
+    // deletes the row rather than blanking it.
     const profile = conditionProfileOf(activity);
-    if (!profile) continue;
     candidates.push(
       ...candidatesForActivity(
         activity,
@@ -557,7 +630,7 @@ async function processUser(
   }
 
   const chosen = selectSendable(candidates, notifiedKeys, sentTodayCount);
-  if (chosen.length === 0) return 0;
+  if (chosen.length === 0) return { sent: 0, pushFailures: 0 };
 
   const cityParts = (location.city ?? "").split(",");
   const cityName = cityParts[0]?.trim() || undefined;
@@ -571,6 +644,7 @@ async function processUser(
   );
 
   let sent = 0;
+  let pushFailures = 0;
   for (const candidate of chosen) {
     // Claim before sending. If another run took this day, skip it rather than
     // sending a duplicate.
@@ -594,13 +668,15 @@ async function processUser(
       timeZone: tz,
     });
 
-    const notifId = await sendNotification(
+    const push = await sendNotification(
       location.user_id,
       candidate.activityId,
       candidate.activityName,
       dateLabel,
       candidate.daysAhead,
     );
+    if (!push.delivered) pushFailures += 1;
+    const notifId = push.id;
 
     if (notifId != null) {
       await supabase
@@ -629,7 +705,7 @@ async function processUser(
     sent += 1;
   }
 
-  return sent;
+  return { sent, pushFailures };
 }
 
 serve(async (req) => {
@@ -643,10 +719,11 @@ serve(async (req) => {
   }
 
   const now = new Date();
-  const forecastCache = new Map<string, any[] | null>();
+  const forecastCache = new Map<string, ForecastResult>();
   let usersProcessed = 0;
   let usersFailed = 0;
   let notificationsSent = 0;
+  let pushFailures = 0;
 
   try {
     const { data: locations, error: locError } = await supabase
@@ -657,7 +734,9 @@ serve(async (req) => {
 
     for (const location of locations ?? []) {
       try {
-        notificationsSent += await processUser(location, forecastCache, now);
+        const result = await processUser(location, forecastCache, now);
+        notificationsSent += result.sent;
+        pushFailures += result.pushFailures;
         usersProcessed += 1;
       } catch (err) {
         // The isolation that was missing. One user's bad row, missing profile
@@ -668,13 +747,22 @@ serve(async (req) => {
       }
     }
 
+    const forecastFailures =
+      [...forecastCache.values()].filter((f) => !f.ok).length;
+
     return new Response(
       JSON.stringify({
-        success: true,
+        // A run that could not reach Tomorrow.io, or could not hand a push to
+        // OneSignal, did not succeed — whatever its HTTP status. The old shape
+        // reported success:true through 4,185 runs and a 401 on every single
+        // forecast call.
+        success: usersFailed === 0 && pushFailures === 0,
         users_processed: usersProcessed,
         users_failed: usersFailed,
         notifications_sent: notificationsSent,
+        push_failures: pushFailures,
         forecast_calls: forecastCache.size,
+        forecast_failures: forecastFailures,
       }),
       { status: 200, headers: { "Content-Type": "application/json" } },
     );
