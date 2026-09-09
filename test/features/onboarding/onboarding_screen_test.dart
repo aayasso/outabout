@@ -168,7 +168,7 @@ void main() {
       final remainingPageLabels = [
         'Know what\'s happening near you',
         'Get notified when conditions are perfect',
-        'Book directly from OutAbout',
+        'We help you get there',
         'Create your account',
         'What do you love doing outside?',
       ];

@@ -67,38 +67,21 @@ gambling, horror, alcohol, drugs, sexual content, or
 user-generated content visible to others. Expected
 rating: 4+ (Everyone).
 
-### S4. Privacy policy — calendar description error
+### S4. Privacy policy — location description incomplete
 
-The hosted privacy policy at
-`https://aayasso.github.io/outabout/privacy-policy.html`
-says "calendar access (read-only)". The app is
-write-only (`calendar_service.dart:121` requests
-`CalendarAccessLevel.writeOnly`). This contradiction
-could confuse a reviewer. Fix the hosted document
-before submission.
+The hosted privacy policy described location as used
+only for weather — it omitted the analytics use and
+did not clarify that Tomorrow.io receives only
+approximate coordinates. Fixed in this branch.
+Calendar wording was already correct (write-only).
 
-### S5. OpenTable "Connect" button — dead
+### S5. Onboarding step 3 — FIXED
 
-`booking_integrations_page.dart:65` has
-`onAction: () {}`. The button is tappable and does
-nothing. This is onboarding step 3, which every new
-user sees. A reviewer may flag it as incomplete.
-
-The page has "Skip for Now" (line 84), and the "More
-coming soon" cards (lines 183-188) are styled as
-placeholder — but the OpenTable button looks like a
-real action.
-
-**Options:** Remove the button, or make it open the
-OpenTable app/site as a deep link.
-
-### S6. "More coming soon" cards
-
-Two `_ComingSoonCard` widgets on onboarding step 3
-(lines 68-70). Styled as muted placeholders. A strict
-reviewer might read them as unfinished features.
-Low risk but worth considering removal if the
-integrations are not planned for launch.
+OpenTable Connect button, both "More coming soon"
+cards, and the Skip button removed. Step 3 is now
+purely informational: it names the partners OutAbout
+hands off to (AllTrails, OpenTable, Playtomic,
+Mindbody) with only a Continue button.
 
 ---
 
@@ -130,7 +113,7 @@ Same as S2. Play Console requires:
 
 ### P5. Privacy policy — same as S4
 
-### P6. OpenTable button — same as S5
+### P6. Onboarding step 3 — FIXED (same as S5)
 
 ---
 

@@ -46,28 +46,20 @@ class _BookingIntegrationsPageState
                   children: [
                     const SizedBox(height: OutAboutSpacing.xxxl),
                     Text(
-                      'Book directly from OutAbout',
+                      'We help you get there',
                       style: OutAboutTypography.displayLarge(colors),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: OutAboutSpacing.md),
                     Text(
-                      'Connect your favorite services to book activities in one tap.',
+                      'When conditions match, OutAbout hands'
+                      ' you straight to the right place'
+                      ' \u2014 AllTrails for a hike, OpenTable'
+                      ' for dinner, Playtomic for a court,'
+                      ' Mindbody for a class, and more.',
                       style: OutAboutTypography.bodyLarge(colors),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: OutAboutSpacing.xl),
-                    _PartnerCard(
-                      name: 'OpenTable',
-                      icon: Icons.restaurant_outlined,
-                      colors: colors,
-                      actionLabel: 'Connect',
-                      onAction: () {},
-                    ),
-                    const SizedBox(height: OutAboutSpacing.md),
-                    _ComingSoonCard(colors: colors),
-                    const SizedBox(height: OutAboutSpacing.md),
-                    _ComingSoonCard(colors: colors),
                     const SizedBox(height: OutAboutSpacing.xl),
                   ],
                 ),
@@ -80,16 +72,6 @@ class _BookingIntegrationsPageState
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextButton(
-                    onPressed: widget.onNext,
-                    child: Text(
-                      'Skip for Now',
-                      style: OutAboutTypography.labelLarge(colors).copyWith(
-                        color: colors.primaryInteractive,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: OutAboutSpacing.sm),
                   OnboardingButton(
                     label: 'Continue',
                     onPressed: widget.onNext,
@@ -110,84 +92,5 @@ class _BookingIntegrationsPageState
           duration: OutAboutAnimations.standardDuration,
           curve: Curves.easeOutCubic,
         );
-  }
-}
-
-class _PartnerCard extends StatelessWidget {
-  final String name;
-  final IconData icon;
-  final WeatherThemeColors colors;
-  final String actionLabel;
-  final VoidCallback onAction;
-
-  const _PartnerCard({
-    required this.name,
-    required this.icon,
-    required this.colors,
-    required this.actionLabel,
-    required this.onAction,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(OutAboutSpacing.md),
-      decoration: BoxDecoration(
-        color: colors.cardBackground,
-        borderRadius: BorderRadius.circular(OutAboutRadius.cards),
-        boxShadow: OutAboutShadows.card,
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: colors.primaryInteractive, size: 32),
-          const SizedBox(width: OutAboutSpacing.md),
-          Expanded(
-            child: Text(name, style: OutAboutTypography.headingMedium(colors)),
-          ),
-          TextButton(
-            onPressed: onAction,
-            child: Text(
-              actionLabel,
-              style: OutAboutTypography.labelLarge(colors).copyWith(
-                color: colors.primaryInteractive,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ComingSoonCard extends StatelessWidget {
-  final WeatherThemeColors colors;
-
-  const _ComingSoonCard({required this.colors});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(OutAboutSpacing.md),
-      decoration: BoxDecoration(
-        color: colors.cardBackground.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(OutAboutRadius.cards),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.add_circle_outline,
-            color: colors.text.withValues(alpha: 0.3),
-            size: 32,
-          ),
-          const SizedBox(width: OutAboutSpacing.md),
-          Text(
-            'More coming soon',
-            style: OutAboutTypography.bodyLarge(colors).copyWith(
-              color: colors.text.withValues(alpha: 0.5),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
