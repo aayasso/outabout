@@ -49,31 +49,13 @@ void main() {
       );
     }
 
-    testWidgets('renders "Book directly from OutAbout" heading', (tester) async {
+    testWidgets('renders heading', (tester) async {
       final prefs = await mockPrefs();
 
       await tester.pumpWidget(buildSubject(prefs: prefs, onNext: () {}));
       await tester.pumpAndSettle();
 
-      expect(find.text('Book directly from OutAbout'), findsOneWidget);
-    });
-
-    testWidgets('renders OpenTable partner card', (tester) async {
-      final prefs = await mockPrefs();
-
-      await tester.pumpWidget(buildSubject(prefs: prefs, onNext: () {}));
-      await tester.pumpAndSettle();
-
-      expect(find.text('OpenTable'), findsOneWidget);
-    });
-
-    testWidgets('renders 2 "More coming soon" placeholder cards', (tester) async {
-      final prefs = await mockPrefs();
-
-      await tester.pumpWidget(buildSubject(prefs: prefs, onNext: () {}));
-      await tester.pumpAndSettle();
-
-      expect(find.text('More coming soon'), findsNWidgets(2));
+      expect(find.text('We help you get there'), findsOneWidget);
     });
 
     testWidgets('logs booking_integration_viewed on mount', (tester) async {
@@ -109,21 +91,6 @@ void main() {
       expect(nextCalled, isTrue);
     });
 
-    testWidgets('"Skip for Now" calls onNext', (tester) async {
-      final prefs = await mockPrefs();
-      var nextCalled = false;
-
-      await tester.pumpWidget(
-        buildSubject(prefs: prefs, onNext: () => nextCalled = true),
-      );
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Skip for Now'));
-      await tester.pumpAndSettle();
-
-      expect(nextCalled, isTrue);
-    });
-
     // Parameterized test for all 5 weather themes
     for (final theme in WeatherTheme.values) {
       testWidgets('renders correctly with ${theme.displayName} theme',
@@ -140,7 +107,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('Book directly from OutAbout'), findsOneWidget);
+        expect(find.text('We help you get there'), findsOneWidget);
 
         final coloredBoxes = tester.widgetList<ColoredBox>(
           find.byType(ColoredBox),

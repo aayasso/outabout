@@ -237,7 +237,7 @@ void main() {
       // Screen 4: Booking Integrations
       // ---------------------------------------------------------------
       expect(
-        find.text('Book directly from OutAbout'),
+        find.text('We help you get there'),
         findsOneWidget,
       );
 

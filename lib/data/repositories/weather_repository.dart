@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../models/behavioral_event.dart' show bucket;
 import '../models/daily_forecast.dart';
 import '../models/weather_data.dart';
 
@@ -27,40 +28,59 @@ class WeatherFetchException implements Exception {
 }
 
 class WeatherRepository {
-  WeatherRepository(this._apiKey);
+  WeatherRepository(this._apiKey, {http.Client? httpClient})
+      : _http = httpClient ?? http.Client();
   final String _apiKey;
+  final http.Client _http;
 
-  Future<WeatherData> fetchCurrent(double lat, double lng) async {
+  Future<WeatherData> fetchCurrent(
+    double lat,
+    double lng,
+  ) async {
+    final bLat = bucket(lat);
+    final bLng = bucket(lng);
     final uri = Uri.parse(
       'https://api.tomorrow.io/v4/weather/realtime'
-      '?location=$lat,$lng'
+      '?location=$bLat,$bLng'
       '&fields=weatherCode,temperature,windSpeed,humidity,'
       'precipitationIntensity,precipitationProbability,uvIndex'
       '&units=metric'
       '&apikey=$_apiKey',
     );
-    final response = await http.get(uri);
+    final response = await _http.get(uri);
     if (response.statusCode != 200) {
-      throw WeatherFetchException(response.statusCode, response.body);
+      throw WeatherFetchException(
+        response.statusCode,
+        response.body,
+      );
     }
     return WeatherData.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,
     );
   }
 
-  Future<List<DailyForecast>> fetchForecast(double lat, double lng) async {
+  Future<List<DailyForecast>> fetchForecast(
+    double lat,
+    double lng,
+  ) async {
+    final bLat = bucket(lat);
+    final bLng = bucket(lng);
     final uri = Uri.parse(
       'https://api.tomorrow.io/v4/weather/forecast'
       '?timesteps=1d'
       '&fields=temperatureMax,temperatureMin,'
-      'precipitationProbabilityMax,windSpeedMax,weatherCodeMax'
+      'precipitationProbabilityMax,windSpeedMax,'
+      'weatherCodeMax'
       '&units=metric'
       '&apikey=$_apiKey'
-      '&location=$lat,$lng',
+      '&location=$bLat,$bLng',
     );
-    final response = await http.get(uri);
+    final response = await _http.get(uri);
     if (response.statusCode != 200) {
-      throw WeatherFetchException(response.statusCode, response.body);
+      throw WeatherFetchException(
+        response.statusCode,
+        response.body,
+      );
     }
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     final timelines = json['timelines'] as Map<String, dynamic>;
