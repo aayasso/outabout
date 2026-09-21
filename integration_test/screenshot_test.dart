@@ -160,14 +160,11 @@ final _shotConfigs = <String, _ShotConfig>{
     forecast: sunnyForecast,
     now: _day1,
     navigate: (tester) async {
-      // Scroll down to show more of the 5-day spread.
+      // Scroll to show the mid-schedule spread: the
+      // rainy day with no matches and the windy day
+      // with partial matches.
       final scrollable = find.byType(Scrollable).first;
-      await tester.scrollUntilVisible(
-        find.text('Museum Afternoon').last,
-        200,
-        scrollable: scrollable,
-        maxScrolls: 20,
-      );
+      await tester.drag(scrollable, const Offset(0, -900));
     },
     printGrid: true,
   ),

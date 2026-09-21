@@ -62,3 +62,6 @@ supabase/.temp/
 # Agent scratch: verify loop logs, queued commands, env backups.
 # Never committed — env.backup carries real keys.
 .agent/
+
+# Screenshot debug captures — not for version control.
+marketing/screenshots/debug/

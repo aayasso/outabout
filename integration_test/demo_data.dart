@@ -16,9 +16,11 @@ import 'package:outabout/data/models/activity.dart';
 import 'package:outabout/data/models/category.dart';
 import 'package:outabout/data/models/condition_profile.dart';
 import 'package:outabout/data/models/daily_forecast.dart';
+import 'package:outabout/data/models/notification_preference.dart';
 import 'package:outabout/data/models/profile.dart';
 import 'package:outabout/data/models/user_location.dart';
 import 'package:outabout/data/models/weather_data.dart';
+import 'package:outabout/data/repositories/notification_preference_repository.dart';
 import 'package:outabout/features/home/home_providers.dart';
 import 'package:outabout/features/outcomes/outcome_providers.dart';
 import 'package:outabout/features/weather_scene/weather_scene_provider.dart';
@@ -443,6 +445,11 @@ List<Override> baseOverrides({
       (Uri url) async => true,
     ),
     appIsForegroundProvider.overrideWith((ref) => true),
+    // Notification preferences — Supabase source.
+    notificationPreferenceProvider.overrideWith(
+      (ref, activityId) async =>
+          NotificationPreference(activityId: activityId),
+    ),
     // Side-effect writers — no-op.
     matchedDayRecorderProvider.overrideWith((ref) {}),
     widgetSyncProvider.overrideWith((ref) {}),
