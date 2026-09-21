@@ -93,6 +93,58 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   }
 
+  testWidgets(
+    'content starts below the top safe-area inset '
+    'while the scene stays full-bleed',
+    (tester) async {
+      const topInset = 62.0;
+      final dpr = tester.view.devicePixelRatio;
+
+      tester.view.padding = FakeViewPadding(
+        top: topInset * dpr,
+      );
+      addTearDown(tester.view.reset);
+
+      await pumpSubject(
+        tester,
+        days: [
+          ScheduleDay(
+            forecast: forecast,
+            matchedActivities: const [activity],
+          ),
+        ],
+        activities: const [activity],
+      );
+
+      // The weather scene must start at y=0 (full-bleed).
+      final sceneFinder =
+          find.byType(WeatherSceneBackground);
+      expect(sceneFinder, findsOneWidget);
+      final sceneBox = tester.getRect(sceneFinder);
+      expect(
+        sceneBox.top,
+        equals(0),
+        reason: 'WeatherSceneBackground must be '
+            'full-bleed behind the status bar',
+      );
+
+      // Find the topmost schedule content. The day
+      // header contains the weather icon which is the
+      // first painted element below the scene.
+      final sunIconFinder = find.byIcon(Icons.wb_sunny);
+      expect(sunIconFinder, findsWidgets);
+      final sunIconBox = tester.getRect(
+        sunIconFinder.first,
+      );
+      expect(
+        sunIconBox.top,
+        greaterThanOrEqualTo(topInset),
+        reason: 'Day header must not draw behind '
+            'the top safe-area inset',
+      );
+    },
+  );
+
   testWidgets('renders the animated scene behind the day list', (tester) async {
     await pumpSubject(tester);
 
