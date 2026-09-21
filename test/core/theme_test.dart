@@ -275,4 +275,60 @@ void main() {
       expect(notifier.activeThemeName, 'rainy');
     });
   });
+
+  group('switch theme contrast', () {
+    double contrastRatio(Color a, Color b) {
+      final la = a.computeLuminance();
+      final lb = b.computeLuminance();
+      final lighter = la > lb ? la : lb;
+      final darker = la > lb ? lb : la;
+      return (lighter + 0.05) / (darker + 0.05);
+    }
+
+    test(
+      'off-state switch contrast >= 3:1 on every theme',
+      () {
+        for (final theme in WeatherTheme.values) {
+          final colors = WeatherThemeColors.forTheme(theme);
+          final data = outAboutTheme(theme);
+          final offStates = <WidgetState>{};
+
+          final outline = data.switchTheme.trackOutlineColor!
+              .resolve(offStates)!;
+          final thumb =
+              data.switchTheme.thumbColor!.resolve(offStates)!;
+
+          final outlineRatio = contrastRatio(
+            outline,
+            colors.cardBackground,
+          );
+          final thumbRatio = contrastRatio(
+            thumb,
+            colors.cardBackground,
+          );
+
+          // ignore: avoid_print
+          print(
+            '${theme.name}: outline '
+            '${outlineRatio.toStringAsFixed(2)}:1, '
+            'thumb '
+            '${thumbRatio.toStringAsFixed(2)}:1',
+          );
+
+          expect(
+            outlineRatio,
+            greaterThanOrEqualTo(3.0),
+            reason: '${theme.name} off-state outline '
+                'contrast must be >= 3:1',
+          );
+          expect(
+            thumbRatio,
+            greaterThanOrEqualTo(3.0),
+            reason: '${theme.name} off-state thumb '
+                'contrast must be >= 3:1',
+          );
+        }
+      },
+    );
+  });
 }

@@ -235,7 +235,22 @@ class _ScheduleTabState extends ConsumerState<ScheduleTab> {
           const Positioned.fill(child: WeatherSceneBackground()),
           SafeArea(
             bottom: false,
-            child: RefreshIndicator(
+            child: ShaderMask(
+              shaderCallback: (bounds) {
+                final fadeStop =
+                    OutAboutSpacing.md / bounds.height;
+                return LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: [0, fadeStop],
+                  colors: const [
+                    Colors.transparent,
+                    Colors.white,
+                  ],
+                ).createShader(bounds);
+              },
+              blendMode: BlendMode.dstIn,
+              child: RefreshIndicator(
               color: colors.primaryInteractive,
               backgroundColor: colors.surface,
               onRefresh: _onRefresh,
@@ -275,6 +290,7 @@ class _ScheduleTabState extends ConsumerState<ScheduleTab> {
                   temperatureUnit: temperatureUnit,
                 );
               },
+            ),
             ),
           ),
           ),
@@ -710,6 +726,7 @@ class _ScheduleActivityCard extends ConsumerWidget {
             excludeFromSemantics: true,
             onTap: openDetail,
             child: Container(
+              clipBehavior: Clip.antiAlias,
               constraints: const BoxConstraints(minHeight: 48),
               decoration: BoxDecoration(
                 color: colors.cardBackground.withValues(

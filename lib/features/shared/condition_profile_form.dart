@@ -67,8 +67,6 @@ class ConditionSection extends ConsumerWidget {
                 // language.
                 Switch(
                   value: enabled,
-                  activeTrackColor: colors.primary,
-                  activeThumbColor: colors.onPrimary,
                   onChanged: (value) {
                     OutAboutHaptics.onConditionToggle();
                     onToggled(value);

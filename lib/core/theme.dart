@@ -441,6 +441,27 @@ ThemeData outAboutTheme([WeatherTheme weatherTheme = WeatherTheme.sunny]) {
       thickness: 1,
       space: 0,
     ),
+    switchTheme: SwitchThemeData(
+      thumbColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return colors.onPrimary;
+        }
+        return colors.textSecondary;
+      }),
+      trackColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return colors.primary;
+        }
+        return colors.divider;
+      }),
+      trackOutlineColor:
+          WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return Colors.transparent;
+        }
+        return colors.textSecondary;
+      }),
+    ),
     bottomNavigationBarTheme: BottomNavigationBarThemeData(
       backgroundColor: colors.surface,
       selectedItemColor: colors.primaryInteractive,
