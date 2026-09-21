@@ -73,6 +73,10 @@ xcrun simctl ui "$UDID" appearance light
 
 mkdir -p "$OUT"
 
+DEBUG_DIR="$REPO_ROOT/marketing/screenshots/debug"
+mkdir -p "$DEBUG_DIR"
+LOG="$DEBUG_DIR/last_run.log"
+
 # -- Shots ----------------------------------------------------------
 
 SHOTS=(
@@ -90,6 +94,8 @@ SHOTS=(
 export SCREENSHOT_UDID="$UDID"
 export SCREENSHOT_DIR="$OUT"
 
+{
+
 for shot_name in "${SHOTS[@]}"; do
   # Extract the shot key (everything before the first _).
   shot_id="${shot_name%%_*}"
@@ -103,7 +109,7 @@ for shot_name in "${SHOTS[@]}"; do
     --device-id "$UDID" \
     --dart-define="SHOT=$shot_id" \
     --no-pub \
-    2>&1 | tail -20
+    2>&1
 
   echo "--- Done $shot_name ---"
 done
@@ -120,3 +126,5 @@ for f in "$OUT"/*.png; do
 done
 echo ""
 echo "Done. Screenshots in $OUT"
+
+} 2>&1 | tee "$LOG"
