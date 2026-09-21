@@ -456,7 +456,6 @@ class _TemperatureUnitRow extends ConsumerWidget {
       ),
       onTap: () async {
         final messenger = ScaffoldMessenger.maybeOf(context);
-        final colors = ref.read(weatherThemeColorsProvider);
         final newUnit = currentUnit == 'F' ? 'C' : 'F';
         final client = ref.read(supabaseClientProvider);
         // Identity comes from the session, not from the profile row. Guarding
@@ -467,12 +466,8 @@ class _TemperatureUnitRow extends ConsumerWidget {
         final userId = client.auth.currentUser?.id;
         if (userId == null) {
           messenger?.showSnackBar(
-            SnackBar(
-              backgroundColor: colors.cardBackground,
-              content: Text(
-                'Sign in again to change your settings.',
-                style: OutAboutTypography.bodyMedium(colors),
-              ),
+            const SnackBar(
+              content: Text('Sign in again to change your settings.'),
             ),
           );
           return;
@@ -497,11 +492,9 @@ class _TemperatureUnitRow extends ConsumerWidget {
             name: 'SettingsTab',
           );
           messenger?.showSnackBar(
-            SnackBar(
-              backgroundColor: colors.cardBackground,
+            const SnackBar(
               content: Text(
                 'Could not change the temperature unit.',
-                style: OutAboutTypography.bodyMedium(colors),
               ),
             ),
           );
@@ -578,12 +571,10 @@ class _NotificationsPausedRow extends ConsumerWidget {
           );
           messenger?.showSnackBar(
             SnackBar(
-              backgroundColor: colors.cardBackground,
               content: Text(
                 next
                     ? 'Could not pause notifications.'
                     : 'Could not resume notifications.',
-                style: OutAboutTypography.bodyMedium(colors),
               ),
             ),
           );
@@ -746,11 +737,9 @@ class _SignOutButton extends ConsumerWidget {
       // tag had already been detached by the line that used to run first.
       log('Sign out failed', error: e, stackTrace: st, name: 'SettingsTab');
       messenger?.showSnackBar(
-        SnackBar(
-          backgroundColor: colors.cardBackground,
+        const SnackBar(
           content: Text(
             'Could not sign out. Check your connection and try again.',
-            style: OutAboutTypography.bodyMedium(colors),
           ),
         ),
       );
@@ -1064,18 +1053,13 @@ class _LegalLinkRow extends ConsumerWidget {
 
   Future<void> _open(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.maybeOf(context);
-    final colors = ref.read(weatherThemeColorsProvider);
 
     final opened = await ref.read(urlLauncherProvider)(Uri.parse(url));
     if (opened) return;
 
     messenger?.showSnackBar(
       SnackBar(
-        backgroundColor: colors.cardBackground,
-        content: Text(
-          'Could not open $label.',
-          style: OutAboutTypography.bodyMedium(colors),
-        ),
+        content: Text('Could not open $label.'),
       ),
     );
   }

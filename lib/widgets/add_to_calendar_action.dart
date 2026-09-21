@@ -44,10 +44,7 @@ Future<void> addActivityToCalendar(
 
   void snack(String message) {
     messenger?.showSnackBar(
-      SnackBar(
-        backgroundColor: colors.cardBackground,
-        content: Text(message, style: OutAboutTypography.bodyMedium(colors)),
-      ),
+      SnackBar(content: Text(message)),
     );
   }
 

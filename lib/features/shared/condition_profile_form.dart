@@ -149,30 +149,23 @@ class TemperatureSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: OutAboutSpacing.xs),
-        SliderTheme(
-          data: SliderThemeData(
-            activeTrackColor: colors.primaryInteractive,
-            inactiveTrackColor: colors.divider,
-            thumbColor: colors.primaryInteractive,
-          ),
-          child: Semantics(
-            label: 'Temperature range',
-            child: RangeSlider(
-              values: RangeValues(min, max),
-              min: 0,
-              max: 50,
-              divisions: 50,
-              labels: RangeLabels('$minDisplay$unit', '$maxDisplay$unit'),
-              // Stored in Celsius, shown in the user's unit. Without this the
-              // screen reader announces "22" while the label reads "72 °F".
-              semanticFormatterCallback: (value) {
-                final shown = temperatureUnit == 'F'
-                    ? _celsiusToFahrenheit(value)
-                    : value.round();
-                return '$shown $unit';
-              },
-              onChanged: onChanged,
-            ),
+        Semantics(
+          label: 'Temperature range',
+          child: RangeSlider(
+            values: RangeValues(min, max),
+            min: 0,
+            max: 50,
+            divisions: 50,
+            labels: RangeLabels('$minDisplay$unit', '$maxDisplay$unit'),
+            // Stored in Celsius, shown in the user's unit. Without this the
+            // screen reader announces "22" while the label reads "72 °F".
+            semanticFormatterCallback: (value) {
+              final shown = temperatureUnit == 'F'
+                  ? _celsiusToFahrenheit(value)
+                  : value.round();
+              return '$shown $unit';
+            },
+            onChanged: onChanged,
           ),
         ),
       ],
@@ -282,29 +275,22 @@ class WindSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: OutAboutSpacing.xs),
-        SliderTheme(
-          data: SliderThemeData(
-            activeTrackColor: colors.primaryInteractive,
-            inactiveTrackColor: colors.divider,
-            thumbColor: colors.primaryInteractive,
-          ),
-          child: Semantics(
-            label: 'Maximum wind speed',
-            child: Slider(
-              value: maxWind,
-              min: 0,
-              max: 80,
-              divisions: 80,
-              label: '$windDisplay $windUnit',
-              // Stored in km/h, shown in mph on the Fahrenheit profile.
-              semanticFormatterCallback: (value) {
-                final shown = temperatureUnit == 'F'
-                    ? _kmhToMph(value)
-                    : value.round();
-                return 'Maximum $shown $windUnit';
-              },
-              onChanged: onChanged,
-            ),
+        Semantics(
+          label: 'Maximum wind speed',
+          child: Slider(
+            value: maxWind,
+            min: 0,
+            max: 80,
+            divisions: 80,
+            label: '$windDisplay $windUnit',
+            // Stored in km/h, shown in mph on the Fahrenheit profile.
+            semanticFormatterCallback: (value) {
+              final shown = temperatureUnit == 'F'
+                  ? _kmhToMph(value)
+                  : value.round();
+              return 'Maximum $shown $windUnit';
+            },
+            onChanged: onChanged,
           ),
         ),
       ],

@@ -52,14 +52,9 @@ class _NotificationTimingFormState
       // of failure here: the user believes they have turned something off.
       setState(() => _draft = null);
       ref.invalidate(notificationPreferenceProvider(widget.activityId));
-      final colors = ref.read(weatherThemeColorsProvider);
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(
-          backgroundColor: colors.cardBackground,
-          content: Text(
-            'Could not save when to notify you.',
-            style: OutAboutTypography.bodyMedium(colors),
-          ),
+        const SnackBar(
+          content: Text('Could not save when to notify you.'),
         ),
       );
       return;

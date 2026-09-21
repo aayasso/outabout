@@ -214,6 +214,49 @@ void main() {
     });
   });
 
+  group('slider value indicator', () {
+    palettes.forEach((name, c) {
+      test('$name indicator text clears AA (4.5:1)', () {
+        final theme = outAboutTheme(WeatherTheme.values.byName(name));
+        final sliderTheme = theme.sliderTheme;
+        final indicatorBg = sliderTheme.valueIndicatorColor!;
+        final indicatorStyle = sliderTheme.valueIndicatorTextStyle!;
+        final textColor = indicatorStyle.color!;
+        final ratio = contrast(textColor, indicatorBg);
+        // ignore: avoid_print
+        print('  slider indicator  $name: '
+            '${ratio.toStringAsFixed(2)}:1');
+        expect(
+          ratio,
+          greaterThanOrEqualTo(_aaNormal),
+          reason: '$name slider value indicator text',
+        );
+      });
+    });
+  });
+
+  group('snackbar text', () {
+    palettes.forEach((name, c) {
+      test('$name snackbar text clears AA (4.5:1)', () {
+        final theme = outAboutTheme(WeatherTheme.values.byName(name));
+        final snackTheme = theme.snackBarTheme;
+        final bg = snackTheme.backgroundColor!;
+        final contentStyle =
+            snackTheme.contentTextStyle!;
+        final textColor = contentStyle.color!;
+        final ratio = contrast(textColor, bg);
+        // ignore: avoid_print
+        print('  snackbar          $name: '
+            '${ratio.toStringAsFixed(2)}:1');
+        expect(
+          ratio,
+          greaterThanOrEqualTo(_aaNormal),
+          reason: '$name snackbar text on background',
+        );
+      });
+    });
+  });
+
   group('heat map cells', () {
     // Each cell is a small non-text block whose colour *is* the information.
     // WCAG treats that as a graphical object: 3:1 against what surrounds it.

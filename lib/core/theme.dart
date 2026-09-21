@@ -462,6 +462,21 @@ ThemeData outAboutTheme([WeatherTheme weatherTheme = WeatherTheme.sunny]) {
         return colors.textSecondary;
       }),
     ),
+    sliderTheme: SliderThemeData(
+      activeTrackColor: colors.primaryInteractive,
+      inactiveTrackColor: colors.divider,
+      thumbColor: colors.primaryInteractive,
+      valueIndicatorColor: colors.surface,
+      valueIndicatorTextStyle: OutAboutTypography.labelLarge(colors),
+    ),
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: colors.cardBackground,
+      contentTextStyle: OutAboutTypography.bodyMedium(colors),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(OutAboutRadius.md),
+      ),
+      behavior: SnackBarBehavior.floating,
+    ),
     bottomNavigationBarTheme: BottomNavigationBarThemeData(
       backgroundColor: colors.surface,
       selectedItemColor: colors.primaryInteractive,
