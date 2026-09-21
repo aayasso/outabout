@@ -233,11 +233,13 @@ class _ScheduleTabState extends ConsumerState<ScheduleTab> {
           // branch in a TickerMode, so the scene stops animating the moment the
           // user switches tabs.
           const Positioned.fill(child: WeatherSceneBackground()),
-          RefreshIndicator(
-            color: colors.primaryInteractive,
-            backgroundColor: colors.surface,
-            onRefresh: _onRefresh,
-            child: scheduleAsync.when(
+          SafeArea(
+            bottom: false,
+            child: RefreshIndicator(
+              color: colors.primaryInteractive,
+              backgroundColor: colors.surface,
+              onRefresh: _onRefresh,
+              child: scheduleAsync.when(
               loading: () => _ScheduleShimmer(colors: colors),
               error: (error, _) {
                 debugPrint(
@@ -274,6 +276,7 @@ class _ScheduleTabState extends ConsumerState<ScheduleTab> {
                 );
               },
             ),
+          ),
           ),
         ],
       ),
