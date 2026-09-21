@@ -214,6 +214,85 @@ void main() {
     });
   });
 
+  group('segmented button border', () {
+    palettes.forEach((name, c) {
+      test('$name border is explicit and clears 3:1 on card', () {
+        final theme = outAboutTheme(WeatherTheme.values.byName(name));
+        final sbTheme = theme.segmentedButtonTheme;
+        final side = sbTheme.style?.side?.resolve({});
+        expect(
+          side,
+          isNotNull,
+          reason:
+              '$name: segmentedButtonTheme must set an explicit side '
+              'so the border comes from our token palette, not from '
+              'the auto-generated ColorScheme.outline',
+        );
+        final borderColor = side!.color;
+        final ratio = contrast(borderColor, c.cardBackground);
+        // ignore: avoid_print
+        print('  segmented border  $name: '
+            '${ratio.toStringAsFixed(2)}:1');
+        expect(
+          ratio,
+          greaterThanOrEqualTo(_aaLarge),
+          reason: '$name segmented button border on card',
+        );
+      });
+    });
+  });
+
+  group('slider value indicator', () {
+    palettes.forEach((name, c) {
+      test('$name indicator text clears AA and bubble is visible', () {
+        final theme = outAboutTheme(WeatherTheme.values.byName(name));
+        final sliderTheme = theme.sliderTheme;
+        final indicatorBg = sliderTheme.valueIndicatorColor!;
+        final indicatorStyle = sliderTheme.valueIndicatorTextStyle!;
+        final textColor = indicatorStyle.color!;
+
+        final textRatio = contrast(textColor, indicatorBg);
+        final bubbleRatio = contrast(indicatorBg, c.cardBackground);
+        // ignore: avoid_print
+        print('  slider indicator  $name: '
+            'text ${textRatio.toStringAsFixed(2)}:1, '
+            'bubble ${bubbleRatio.toStringAsFixed(2)}:1');
+        expect(
+          textRatio,
+          greaterThanOrEqualTo(_aaNormal),
+          reason: '$name slider indicator text on bubble',
+        );
+        expect(
+          bubbleRatio,
+          greaterThanOrEqualTo(_aaLarge),
+          reason: '$name slider indicator bubble on card',
+        );
+      });
+    });
+  });
+
+  group('snackbar text', () {
+    palettes.forEach((name, c) {
+      test('$name snackbar text clears AA (4.5:1)', () {
+        final theme = outAboutTheme(WeatherTheme.values.byName(name));
+        final snackTheme = theme.snackBarTheme;
+        final bg = snackTheme.backgroundColor!;
+        final contentStyle =
+            snackTheme.contentTextStyle!;
+        final textColor = contentStyle.color!;
+        final ratio = contrast(textColor, bg);
+        // ignore: avoid_print
+        print('  snackbar          $name: '
+            '${ratio.toStringAsFixed(2)}:1');
+        expect(
+          ratio,
+          greaterThanOrEqualTo(_aaNormal),
+          reason: '$name snackbar text on background',
+        );
+      });
+    });
+  });
+
   group('heat map cells', () {
     // Each cell is a small non-text block whose colour *is* the information.
     // WCAG treats that as a graphical object: 3:1 against what surrounds it.

@@ -120,7 +120,6 @@ class _FindAndBookSheetState extends ConsumerState<_FindAndBookSheet> {
     String city,
   ) async {
     final messenger = ScaffoldMessenger.maybeOf(context);
-    final colors = ref.read(weatherThemeColorsProvider);
     final navigator = Navigator.of(context);
 
     final destination = bookingUrl(
@@ -204,11 +203,7 @@ class _FindAndBookSheetState extends ConsumerState<_FindAndBookSheet> {
 
     messenger?.showSnackBar(
       SnackBar(
-        backgroundColor: colors.cardBackground,
-        content: Text(
-          'Could not open ${provider.label}.',
-          style: OutAboutTypography.bodyMedium(colors),
-        ),
+        content: Text('Could not open ${provider.label}.'),
       ),
     );
   }
