@@ -4,6 +4,25 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
 
+/// Moon center and radius for a given canvas [size] and
+/// [topInset] (safe area).
+///
+/// Extracted so the geometry is testable without a canvas.
+@visibleForTesting
+({Offset center, double radius}) moonGeometry(
+  Size size, {
+  double topInset = 0,
+}) {
+  final radius = size.width * 0.055;
+  final minY = topInset + radius + OutAboutSpacing.xs;
+  final preferredY = size.height * 0.055;
+  final y = preferredY < minY ? minY : preferredY;
+  return (
+    center: Offset(size.width * 0.80, y),
+    radius: radius,
+  );
+}
+
 /// Star field and moon for the night scene.
 ///
 /// The `weather_animation` package has no star or moon widget, and its sun is a
@@ -13,9 +32,16 @@ import '../../core/theme.dart';
 /// Motion by construction rather than by being switched off. Star positions come
 /// from a fixed seed, so the sky is identical on every build and in every test.
 class NightSky extends StatelessWidget {
-  const NightSky({super.key, required this.colors});
+  const NightSky({
+    super.key,
+    required this.colors,
+    this.topInset = 0,
+  });
 
   final WeatherThemeColors colors;
+
+  /// Safe-area top padding. The moon is kept below this.
+  final double topInset;
 
   @override
   Widget build(BuildContext context) {
@@ -25,6 +51,7 @@ class NightSky extends StatelessWidget {
         starColor: colors.text,
         moonColor: colors.textSecondary,
         haloColor: colors.primary,
+        topInset: topInset,
       ),
     );
   }
@@ -35,11 +62,13 @@ class _NightSkyPainter extends CustomPainter {
     required this.starColor,
     required this.moonColor,
     required this.haloColor,
+    required this.topInset,
   });
 
   final Color starColor;
   final Color moonColor;
   final Color haloColor;
+  final double topInset;
 
   static const int _starCount = 54;
   static const int _seed = 20260822;
@@ -67,8 +96,10 @@ class _NightSkyPainter extends CustomPainter {
   }
 
   void _paintMoon(Canvas canvas, Size size) {
-    final center = Offset(size.width * 0.80, size.height * 0.055);
-    final radius = size.width * 0.055;
+    final (:center, :radius) = moonGeometry(
+      size,
+      topInset: topInset,
+    );
 
     canvas.drawCircle(
       center,
@@ -96,5 +127,6 @@ class _NightSkyPainter extends CustomPainter {
   bool shouldRepaint(_NightSkyPainter oldDelegate) =>
       oldDelegate.starColor != starColor ||
       oldDelegate.moonColor != moonColor ||
-      oldDelegate.haloColor != haloColor;
+      oldDelegate.haloColor != haloColor ||
+      oldDelegate.topInset != topInset;
 }

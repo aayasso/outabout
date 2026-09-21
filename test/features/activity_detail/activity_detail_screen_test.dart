@@ -318,4 +318,37 @@ void main() {
       },
     );
   });
+
+  testWidgets(
+    'text fields inherit the theme border, not underline',
+    (tester) async {
+      await tester.pumpWidget(buildSubject(
+        overrides: [
+          activityOutcomesProvider(testId)
+              .overrideWith((ref) async => const []),
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      final nameField = tester.widget<TextField>(
+        findNameField(),
+      );
+      expect(
+        nameField.decoration?.enabledBorder,
+        isNull,
+        reason: 'Name field should inherit '
+            'OutlineInputBorder from the theme',
+      );
+
+      final notesField = tester.widget<TextField>(
+        findNotesField(),
+      );
+      expect(
+        notesField.decoration?.enabledBorder,
+        isNull,
+        reason: 'Notes field should inherit '
+            'OutlineInputBorder from the theme',
+      );
+    },
+  );
 }

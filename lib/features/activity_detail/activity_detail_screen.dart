@@ -495,12 +495,6 @@ class _ActivityDetailScreenState extends ConsumerState<ActivityDetailScreen> {
                   errorStyle: OutAboutTypography.bodySmall(
                     colors,
                   ).copyWith(color: OutAboutColors.errorColor),
-                  enabledBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: colors.divider),
-                  ),
-                  focusedBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: colors.primaryInteractive),
-                  ),
                 ),
               ),
               const SizedBox(height: OutAboutSpacing.md),
@@ -514,14 +508,6 @@ class _ActivityDetailScreenState extends ConsumerState<ActivityDetailScreen> {
                     decoration: InputDecoration(
                       labelText: 'Notes (optional)',
                       labelStyle: OutAboutTypography.labelMedium(colors),
-                      enabledBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(color: colors.divider),
-                      ),
-                      focusedBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(
-                          color: colors.primaryInteractive,
-                        ),
-                      ),
                     ),
                   ),
                   if (_notesController.text.isNotEmpty) ...[

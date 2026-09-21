@@ -281,7 +281,10 @@ class _NightScene extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        NightSky(colors: colors),
+        NightSky(
+          colors: colors,
+          topInset: MediaQuery.of(context).padding.top,
+        ),
         _CloudBank(spec: spec, colors: colors, size: size, alpha: 0.16),
       ],
     );

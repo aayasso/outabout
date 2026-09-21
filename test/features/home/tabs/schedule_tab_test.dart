@@ -145,6 +145,65 @@ void main() {
     },
   );
 
+  testWidgets(
+    'schedule content fades at the top via ShaderMask',
+    (tester) async {
+      await pumpSubject(
+        tester,
+        days: [
+          ScheduleDay(
+            forecast: forecast,
+            matchedActivities: const [activity],
+          ),
+        ],
+        activities: const [activity],
+      );
+
+      expect(
+        find.byType(ShaderMask),
+        findsOneWidget,
+        reason: 'ShaderMask must fade scroll content '
+            'at the top edge',
+      );
+    },
+  );
+
+  testWidgets(
+    'day header card is fully below the fade zone',
+    (tester) async {
+      const topInset = 62.0;
+      tester.view.padding = FakeViewPadding(
+        top: topInset * tester.view.devicePixelRatio,
+      );
+      addTearDown(tester.view.reset);
+
+      await pumpSubject(
+        tester,
+        days: [
+          ScheduleDay(
+            forecast: forecast,
+            matchedActivities: const [activity],
+          ),
+        ],
+        activities: const [activity],
+      );
+
+      final cardFinder = find.ancestor(
+        of: find.byIcon(Icons.wb_sunny).first,
+        matching: find.byType(Container),
+      );
+      final cardBox = tester.getRect(cardFinder.first);
+      expect(
+        cardBox.top,
+        greaterThanOrEqualTo(
+          topInset + OutAboutSpacing.md,
+        ),
+        reason: 'Day header card top must be at or '
+            'below the ${OutAboutSpacing.md}dp fade',
+      );
+    },
+  );
+
   testWidgets('renders the animated scene behind the day list', (tester) async {
     await pumpSubject(tester);
 
@@ -172,6 +231,41 @@ void main() {
 
     expect(find.byType(RefreshIndicator), findsOneWidget);
   });
+
+  testWidgets(
+    'activity card clips children to its border radius',
+    (tester) async {
+      await pumpSubject(
+        tester,
+        days: [
+          ScheduleDay(
+            forecast: forecast,
+            matchedActivities: const [activity],
+          ),
+        ],
+        activities: const [activity],
+      );
+
+      final containers = tester.widgetList<Container>(
+        find.ancestor(
+          of: find.text('Trail run'),
+          matching: find.byType(Container),
+        ),
+      );
+      final card = containers.firstWhere(
+        (c) =>
+            c.decoration is BoxDecoration &&
+            (c.decoration! as BoxDecoration).borderRadius !=
+                null,
+      );
+      expect(
+        card.clipBehavior,
+        isNot(Clip.none),
+        reason: 'Card Container must clip children '
+            'to its border radius',
+      );
+    },
+  );
 
   group('activity cards carry no activity glyph', () {
     // Every activity rendered the same hardcoded running icon, so it carried
