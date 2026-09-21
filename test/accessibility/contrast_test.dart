@@ -214,22 +214,58 @@ void main() {
     });
   });
 
+  group('segmented button border', () {
+    palettes.forEach((name, c) {
+      test('$name border is explicit and clears 3:1 on card', () {
+        final theme = outAboutTheme(WeatherTheme.values.byName(name));
+        final sbTheme = theme.segmentedButtonTheme;
+        final side = sbTheme.style?.side?.resolve({});
+        expect(
+          side,
+          isNotNull,
+          reason:
+              '$name: segmentedButtonTheme must set an explicit side '
+              'so the border comes from our token palette, not from '
+              'the auto-generated ColorScheme.outline',
+        );
+        final borderColor = side!.color;
+        final ratio = contrast(borderColor, c.cardBackground);
+        // ignore: avoid_print
+        print('  segmented border  $name: '
+            '${ratio.toStringAsFixed(2)}:1');
+        expect(
+          ratio,
+          greaterThanOrEqualTo(_aaLarge),
+          reason: '$name segmented button border on card',
+        );
+      });
+    });
+  });
+
   group('slider value indicator', () {
     palettes.forEach((name, c) {
-      test('$name indicator text clears AA (4.5:1)', () {
+      test('$name indicator text clears AA and bubble is visible', () {
         final theme = outAboutTheme(WeatherTheme.values.byName(name));
         final sliderTheme = theme.sliderTheme;
         final indicatorBg = sliderTheme.valueIndicatorColor!;
         final indicatorStyle = sliderTheme.valueIndicatorTextStyle!;
         final textColor = indicatorStyle.color!;
-        final ratio = contrast(textColor, indicatorBg);
+
+        final textRatio = contrast(textColor, indicatorBg);
+        final bubbleRatio = contrast(indicatorBg, c.cardBackground);
         // ignore: avoid_print
         print('  slider indicator  $name: '
-            '${ratio.toStringAsFixed(2)}:1');
+            'text ${textRatio.toStringAsFixed(2)}:1, '
+            'bubble ${bubbleRatio.toStringAsFixed(2)}:1');
         expect(
-          ratio,
+          textRatio,
           greaterThanOrEqualTo(_aaNormal),
-          reason: '$name slider value indicator text',
+          reason: '$name slider indicator text on bubble',
+        );
+        expect(
+          bubbleRatio,
+          greaterThanOrEqualTo(_aaLarge),
+          reason: '$name slider indicator bubble on card',
         );
       });
     });
