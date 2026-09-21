@@ -19,6 +19,7 @@ import 'package:outabout/data/models/daily_forecast.dart';
 import 'package:outabout/data/models/notification_preference.dart';
 import 'package:outabout/data/models/profile.dart';
 import 'package:outabout/data/models/user_location.dart';
+import 'package:outabout/data/models/activity_day_outcome.dart';
 import 'package:outabout/data/models/weather_data.dart';
 import 'package:outabout/data/repositories/notification_preference_repository.dart';
 import 'package:outabout/features/home/home_providers.dart';
@@ -400,6 +401,59 @@ const demoLocation = UserLocation(
 // ------------------------------------------------------------------
 // Provider overrides shared across all shots
 // ------------------------------------------------------------------
+
+// ------------------------------------------------------------------
+// Outcome history for Morning Run (act-1)
+// ------------------------------------------------------------------
+
+/// 10 weeks of outcome history for the hero activity.
+///
+/// Mix: ~25 done, ~10 skipped, ~15 not-matched, rest expired.
+/// Last 5 days: consecutive done (current streak of 5).
+List<ActivityDayOutcome> buildMorningRunOutcomes() {
+  final today = DateTime(2026, 9, 21);
+  final outcomes = <ActivityDayOutcome>[];
+
+  for (var i = 69; i >= 0; i--) {
+    final day = today.subtract(Duration(days: i));
+    final dateStr =
+        '${day.year}-'
+        '${day.month.toString().padLeft(2, '0')}-'
+        '${day.day.toString().padLeft(2, '0')}';
+
+    String? outcome;
+    bool matched = true;
+
+    if (i < 5) {
+      // Last 5 days: all done (streak).
+      outcome = 'done';
+    } else if (i % 7 == 0 || i % 7 == 6) {
+      // Weekends: not matched (weather didn't suit).
+      matched = false;
+    } else if (i % 5 == 0) {
+      // Every 5th weekday: skipped.
+      outcome = 'skipped';
+    } else if (i % 3 == 0) {
+      // Every 3rd remaining: done.
+      outcome = 'done';
+    }
+    // Rest: matched but unanswered (expired).
+
+    outcomes.add(ActivityDayOutcome(
+      id: 'outcome-$i',
+      userId: demoUserId,
+      activityId: 'act-1',
+      localDate: dateStr,
+      matched: matched,
+      outcome: outcome,
+      answeredAt: outcome != null
+          ? day.add(const Duration(hours: 18))
+          : null,
+      createdAt: day,
+    ));
+  }
+  return outcomes;
+}
 
 /// Builds a [ForecastSnapshot] override.
 ForecastSnapshot forecastSnapshot(List<DailyForecast> days) =>

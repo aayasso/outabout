@@ -7,22 +7,40 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 OUT="$REPO_ROOT/marketing/screenshots/raw/iphone_17_pro_max"
 
 # -- Resolve UDID ---------------------------------------------------
+# Prefer an already-booted device. Otherwise pick the one on the
+# newest installed runtime (sorted explicitly, never dict order).
 
-UDID=$(xcrun simctl list devices "$DEVICE_NAME" available -j \
+read -r UDID RUNTIME < <(xcrun simctl list devices "$DEVICE_NAME" available -j \
   | python3 -c "
 import sys, json
+
 data = json.load(sys.stdin)
-for devs in data.get('devices', {}).values():
+candidates = []
+for runtime, devs in data.get('devices', {}).items():
     for d in devs:
         if d['name'] == '$DEVICE_NAME' and d.get('isAvailable'):
-            print(d['udid'])
-            sys.exit(0)
-sys.exit(1)
+            candidates.append((runtime, d['udid'], d.get('state', '')))
+
+if not candidates:
+    sys.exit(1)
+
+# Prefer Booted, then sort by runtime descending (newest first).
+candidates.sort(key=lambda c: (c[2] != 'Booted', c[0]), reverse=False)
+booted = [c for c in candidates if c[2] == 'Booted']
+if booted:
+    pick = booted[0]
+else:
+    # Sort by runtime descending so newest is first.
+    candidates.sort(key=lambda c: c[0], reverse=True)
+    pick = candidates[0]
+print(f'{pick[1]} {pick[0]}')
 " 2>/dev/null) || {
   echo "ERROR: $DEVICE_NAME simulator not installed."
   exit 1
 }
-echo "Using $DEVICE_NAME ($UDID)"
+echo "Using $DEVICE_NAME"
+echo "  UDID:    $UDID"
+echo "  Runtime: $RUNTIME"
 
 # -- Trap: always clear status bar on exit --------------------------
 
@@ -63,19 +81,20 @@ SHOTS=(
   "03_activity_library"
   "04_add_activity"
   "05_activity_detail"
+  "05b_activity_detail_conditions"
   "06_theme_rainy"
   "07_theme_night"
-  "08_onboarding"
+  "08_onboarding"  # Optional — omit with --skip-onboarding
 )
 
 export SCREENSHOT_UDID="$UDID"
 export SCREENSHOT_DIR="$OUT"
 
 for shot_name in "${SHOTS[@]}"; do
-  # Extract the two-digit shot ID (01, 02, ...)
-  shot_id="${shot_name:0:2}"
+  # Extract the shot key (everything before the first _).
+  shot_id="${shot_name%%_*}"
   echo ""
-  echo "--- Shot $shot_name ---"
+  echo "--- Shot $shot_name (key=$shot_id) ---"
   export SHOT="$shot_name"
 
   flutter drive \

@@ -6,6 +6,8 @@
 /// Run via tool/screenshots.sh, not directly.
 library;
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,10 +15,12 @@ import 'package:integration_test/integration_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:outabout/data/models/activity_day_outcome.dart';
 import 'package:outabout/data/models/daily_forecast.dart';
 import 'package:outabout/data/models/weather_data.dart';
 import 'package:outabout/features/home/home_providers.dart';
 import 'package:outabout/features/outcomes/outcome_providers.dart';
+import 'package:outabout/features/outcomes/outcome_stats.dart';
 
 import 'demo_data.dart';
 import 'screenshot_app.dart';
@@ -39,11 +43,11 @@ void main() {
     }
 
     // Build prefs
-    SharedPreferences.setMockInitialValues(
-      config.authenticated
-          ? <String, Object>{'onboarding_complete': true}
-          : <String, Object>{},
-    );
+    final prefsMap = <String, Object>{
+      if (config.authenticated) 'onboarding_complete': true,
+      ...config.extraPrefs,
+    };
+    SharedPreferences.setMockInitialValues(prefsMap);
     final prefs = await SharedPreferences.getInstance();
 
     // Build strict mock Supabase
@@ -74,9 +78,10 @@ void main() {
             .where((a) => a.id == id)
             .firstOrNull,
       ),
-      // Outcomes — empty (no history for screenshots)
+      // Outcomes — per-activity or empty.
       activityOutcomesProvider.overrideWith(
-        (ref, id) async => const [],
+        (ref, id) async =>
+            config.outcomes[id] ?? const [],
       ),
     ];
 
@@ -111,6 +116,30 @@ void main() {
       );
     }
 
+    // Print outcome stats if requested
+    if (config.printStats) {
+      for (final entry in config.outcomes.entries) {
+        final stats = computeOutcomeStats(
+          entry.value,
+          now: config.now,
+        );
+        final rate = stats.completionRate;
+        final rateStr = rate != null
+            ? rate.toStringAsFixed(2)
+            : 'n/a';
+        // ignore: avoid_print
+        print(
+          'STATS ${entry.key}: '
+          'completed=${stats.totalCompleted}, '
+          'skipped=${stats.totalSkipped}, '
+          'expired=${stats.totalExpired}, '
+          'streak=${stats.currentStreak}, '
+          'best=${stats.bestStreak}, '
+          'rate=$rateStr',
+        );
+      }
+    }
+
     // Verify Supabase isolation — the strict mock throws on
     // any unstubbed access. This assertion proves no provider
     // reached Supabase beyond the stubbed auth members.
@@ -136,6 +165,9 @@ class _ShotConfig {
     this.authenticated = true,
     this.navigate,
     this.printGrid = false,
+    this.printStats = false,
+    this.outcomes = const {},
+    this.extraPrefs = const {},
   });
 
   final WeatherData weatherData;
@@ -144,6 +176,13 @@ class _ShotConfig {
   final bool authenticated;
   final Future<void> Function(WidgetTester)? navigate;
   final bool printGrid;
+  final bool printStats;
+
+  /// Per-activity outcome overrides. Key = activity ID.
+  final Map<String, List<ActivityDayOutcome>> outcomes;
+
+  /// Extra SharedPreferences values (e.g. outcome prompts).
+  final Map<String, Object> extraPrefs;
 }
 
 final _day1 = DateTime(2026, 9, 21, 9, 0);
@@ -183,20 +222,80 @@ final _shotConfigs = <String, _ShotConfig>{
     forecast: sunnyForecast,
     now: _day1,
     navigate: (tester) async {
-      // Navigate to add-activity via the FAB
+      // Navigate to add-activity via the FAB.
       final fab = find.byType(FloatingActionButton).first;
       await tester.tap(fab);
+      await tester.pump(const Duration(seconds: 1));
+
+      // Fill the form with attractive values.
+      await tester.enterText(
+        find.byType(TextField).first,
+        'Sunset Kayak',
+      );
+      await tester.pump();
+
+      // Tap the "Social" category chip.
+      final social = find.text('Social');
+      if (social.evaluate().isNotEmpty) {
+        await tester.tap(social.first);
+        await tester.pump();
+      }
+
+      // Turn on all three condition switches.
+      final switches = find.byType(Switch);
+      for (var i = 0; i < switches.evaluate().length; i++) {
+        await tester.tap(switches.at(i));
+        await tester.pump(
+          const Duration(milliseconds: 200),
+        );
+      }
+
+      // Drag temperature range slider thumbs.
+      final sliders = find.byType(RangeSlider);
+      if (sliders.evaluate().isNotEmpty) {
+        final sliderBox = tester.getRect(sliders.first);
+        // Drag left thumb right (~60F position).
+        await tester.tapAt(Offset(
+          sliderBox.left + sliderBox.width * 0.3,
+          sliderBox.center.dy,
+        ));
+        await tester.pump();
+        // Drag right thumb left (~82F position).
+        await tester.tapAt(Offset(
+          sliderBox.left + sliderBox.width * 0.7,
+          sliderBox.center.dy,
+        ));
+        await tester.pump();
+      }
     },
   ),
   '05': _ShotConfig(
     weatherData: sunnyWeatherData,
     forecast: sunnyForecast,
     now: _day1,
+    outcomes: {'act-1': buildMorningRunOutcomes()},
+    printStats: true,
     navigate: (tester) async {
-      // Navigate to the first activity's detail screen.
-      // Tap the first activity card on the schedule.
       final firstActivity = find.text('Morning Run').first;
       await tester.tap(firstActivity);
+    },
+  ),
+  '05b': _ShotConfig(
+    weatherData: sunnyWeatherData,
+    forecast: sunnyForecast,
+    now: _day1,
+    outcomes: {'act-1': buildMorningRunOutcomes()},
+    navigate: (tester) async {
+      final firstActivity = find.text('Morning Run').first;
+      await tester.tap(firstActivity);
+      await tester.pump(const Duration(seconds: 1));
+      // Scroll past the heat map to show condition
+      // profile and notification timing.
+      final scrollable = find.byType(Scrollable).first;
+      await tester.drag(
+        scrollable,
+        const Offset(0, -600),
+      );
     },
   ),
   '06': _ShotConfig(
@@ -209,6 +308,14 @@ final _shotConfigs = <String, _ShotConfig>{
     weatherData: sunnyWeatherData,
     forecast: sunnyForecast,
     now: DateTime(2026, 9, 21, 21, 0),
+    extraPrefs: {
+      'outcome_prompt_handled': jsonEncode([
+        'act-1|2026-09-21',
+        'act-2|2026-09-21',
+        'act-3|2026-09-21',
+        'act-4|2026-09-21',
+      ]),
+    },
   ),
   '08': _ShotConfig(
     weatherData: sunnyWeatherData,
