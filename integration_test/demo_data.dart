@@ -408,11 +408,23 @@ const demoLocation = UserLocation(
 
 /// 10 weeks of outcome history for the hero activity.
 ///
-/// Mix: ~25 done, ~10 skipped, ~15 not-matched, rest expired.
-/// Last 5 days: consecutive done (current streak of 5).
+/// Targets: ~67% rate, 38 times out, best streak 9, current
+/// streak 5, scattered not-matched across all heat-map rows.
 List<ActivityDayOutcome> buildMorningRunOutcomes() {
   final today = DateTime(2026, 9, 21);
   final outcomes = <ActivityDayOutcome>[];
+
+  // Hand-tuned day-by-day pattern (i = days ago, 69..0).
+  // d = done, s = skipped, x = not-matched, e = expired.
+  // Designed so no heat-map row is blank, the grid looks
+  // organic, and stats land at ~67% / streak 5 / best 9.
+  const pattern = 'sxddsxsdds' // week 1 (oldest, i=69..60)
+      'dxsddddddd' // week 2 (i=59..50) — best streak 9
+      'ddsxsddxsd' // week 3 (i=49..40)
+      'dxdsdexdsd' // week 4 (i=39..30)
+      'xdsddxsdds' // week 5 (i=29..20)
+      'xddsxedsxd' // week 6 (i=19..10)
+      'dsdxsddddd'; // week 7 (i=9..0, current streak 5)
 
   for (var i = 69; i >= 0; i--) {
     final day = today.subtract(Duration(days: i));
@@ -421,23 +433,14 @@ List<ActivityDayOutcome> buildMorningRunOutcomes() {
         '${day.month.toString().padLeft(2, '0')}-'
         '${day.day.toString().padLeft(2, '0')}';
 
-    String? outcome;
-    bool matched = true;
-
-    if (i < 5) {
-      // Last 5 days: all done (streak).
-      outcome = 'done';
-    } else if (i % 7 == 0 || i % 7 == 6) {
-      // Weekends: not matched (weather didn't suit).
-      matched = false;
-    } else if (i % 5 == 0) {
-      // Every 5th weekday: skipped.
-      outcome = 'skipped';
-    } else if (i % 3 == 0) {
-      // Every 3rd remaining: done.
-      outcome = 'done';
-    }
-    // Rest: matched but unanswered (expired).
+    final code = pattern[69 - i];
+    final bool matched = code != 'x';
+    final String? outcome = switch (code) {
+      'd' => 'done',
+      's' => 'skipped',
+      'e' => null, // expired: matched but unanswered
+      _ => null, // x: not matched
+    };
 
     outcomes.add(ActivityDayOutcome(
       id: 'outcome-$i',

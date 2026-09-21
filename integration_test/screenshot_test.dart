@@ -234,6 +234,10 @@ final _shotConfigs = <String, _ShotConfig>{
       );
       await tester.pump();
 
+      // Unfocus the text field so cursor is hidden.
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pump();
+
       // Tap the "Social" category chip.
       final social = find.text('Social');
       if (social.evaluate().isNotEmpty) {
@@ -241,32 +245,23 @@ final _shotConfigs = <String, _ShotConfig>{
         await tester.pump();
       }
 
-      // Turn on all three condition switches.
+      // Turn on all three condition switches one at a
+      // time, waiting for AnimatedCrossFade (300ms) to
+      // finish before the next tap.
       final switches = find.byType(Switch);
       for (var i = 0; i < switches.evaluate().length; i++) {
         await tester.tap(switches.at(i));
-        await tester.pump(
-          const Duration(milliseconds: 200),
-        );
+        await tester.pump(const Duration(milliseconds: 400));
       }
 
-      // Drag temperature range slider thumbs.
-      final sliders = find.byType(RangeSlider);
-      if (sliders.evaluate().isNotEmpty) {
-        final sliderBox = tester.getRect(sliders.first);
-        // Drag left thumb right (~60F position).
-        await tester.tapAt(Offset(
-          sliderBox.left + sliderBox.width * 0.3,
-          sliderBox.center.dy,
-        ));
-        await tester.pump();
-        // Drag right thumb left (~82F position).
-        await tester.tapAt(Offset(
-          sliderBox.left + sliderBox.width * 0.7,
-          sliderBox.center.dy,
-        ));
-        await tester.pump();
-      }
+      // Let all expand animations fully settle.
+      await tester.pump(const Duration(seconds: 1));
+
+      // Scroll down so Temperature, Precipitation,
+      // and the Save button are all visible.
+      final scrollable = find.byType(Scrollable).first;
+      await tester.drag(scrollable, const Offset(0, -420));
+      await tester.pump(const Duration(milliseconds: 300));
     },
   ),
   '05': _ShotConfig(
@@ -290,11 +285,11 @@ final _shotConfigs = <String, _ShotConfig>{
       await tester.tap(firstActivity);
       await tester.pump(const Duration(seconds: 1));
       // Scroll past the heat map to show condition
-      // profile and notification timing.
+      // profile and "When to tell you" content.
       final scrollable = find.byType(Scrollable).first;
       await tester.drag(
         scrollable,
-        const Offset(0, -600),
+        const Offset(0, -900),
       );
     },
   ),
